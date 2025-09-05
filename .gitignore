@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+.env.production
+uploads/*
+transcriptions/*
+backend/qr-codes/*
+public/qr-codes/*
+world-cafe-embedded.tar
+database_export.sql
+*.log
+.DS_Store
+.vscode/
+*.tmp
+*.bak

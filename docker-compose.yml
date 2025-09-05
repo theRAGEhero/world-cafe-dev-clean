@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: world-cafe-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: your_secure_root_password
+      MYSQL_DATABASE: world_cafe_platform
+      MYSQL_USER: world_cafe_user
+      MYSQL_PASSWORD: your_secure_db_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database_export.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - world-cafe-network
+
+  # World Café Platform Application
+  app:
+    build: .
+    container_name: world-cafe-app
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    environment:
+      # Database Configuration
+      DB_HOST: mysql
+      DB_USER: world_cafe_user
+      DB_PASSWORD: your_secure_db_password
+      DB_NAME: world_cafe_platform
+      DB_PORT: 3306
+      DB_SSL: false
+      
+      # Server Configuration
+      PORT: 3000
+      NODE_ENV: production
+      
+      # API Keys (replace with your actual keys)
+      DEEPGRAM_API_KEY: your_deepgram_api_key_here
+      GROQ_API_KEY: your_groq_api_key_here
+      
+      # Admin Configuration
+      ADMIN_PASSWORD: your_secure_admin_password
+      
+      # QR Code Configuration - Update this to your domain/IP
+      BASE_URL: http://localhost:3005
+      
+      # Session Secret
+      SESSION_SECRET: your_secure_session_secret_here
+      
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+      - qr_data:/app/public/qr-codes
+    networks:
+      - world-cafe-network
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
+  qr_data:
+    driver: local
+
+networks:
+  world-cafe-network:
+    driver: bridge

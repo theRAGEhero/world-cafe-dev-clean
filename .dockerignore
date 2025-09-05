@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+world-cafe-embedded.tar
+.env.example
+*.md
+.DS_Store
+*.log
+coverage
+.nyc_output
+.vscode
+.idea

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Café Platform</title>
+    <link rel="stylesheet" href="styles.css?v=202509041831">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Main Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <h1 class="nav-title">World Café Platform</h1>
+                <div class="status-indicator">
+                    <div id="connectionStatus" class="status-circle disconnected" title="Connection status"></div>
+                </div>
+                <div class="nav-buttons">
+                    <button id="mobileMenuToggle" class="mobile-menu-toggle">☰</button>
+                    <div class="nav-menu">
+                        <button id="homeBtn" class="btn btn-secondary">🏠 Home</button>
+                        <button id="qrScanBtn" class="btn btn-secondary mobile-visible">📱 Scan QR</button>
+                        <button id="adminBtn" class="btn btn-secondary">Admin</button>
+                        <button id="createSessionBtn" class="btn btn-primary">New Session</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="screen active">
+                <div class="welcome-container">
+                    <h2>Welcome to World Café Platform</h2>
+                    <p>Facilitate meaningful conversations with digital recording and analysis</p>
+                    
+                    <div class="action-cards">
+                        <div class="card" onclick="showCreateSession()">
+                            <h3>Create New Session</h3>
+                            <p>Start a new World Café discussion session</p>
+                        </div>
+                        
+                        <div class="card" onclick="showJoinSession()">
+                            <h3>Join Session</h3>
+                            <p>Join an existing session at your table</p>
+                        </div>
+                        
+                        <div class="card" onclick="showSessionList()">
+                            <h3>View Sessions</h3>
+                            <p>Browse active and completed sessions</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Session Screen -->
+            <div id="createSessionScreen" class="screen">
+                <div class="form-container">
+                    <div class="mobile-header">
+                        <button class="mobile-back-btn" onclick="showWelcome()">← Back</button>
+                        <h2>Create New Session</h2>
+                    </div>
+                    <form id="createSessionForm">
+                        <div class="form-group">
+                            <label for="sessionTitle">Session Title</label>
+                            <input type="text" id="sessionTitle" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sessionDescription">Description</label>
+                            <textarea id="sessionDescription" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sessionLanguage">Transcription Language</label>
+                            <select id="sessionLanguage">
+                                <option value="en-US">English (US)</option>
+                                <option value="en-GB">English (UK)</option>
+                                <option value="es-ES">Spanish (Spain)</option>
+                                <option value="es-MX">Spanish (Mexico)</option>
+                                <option value="fr-FR">French</option>
+                                <option value="it-IT">Italian</option>
+                                <option value="de-DE">German</option>
+                                <option value="pt-PT">Portuguese (Portugal)</option>
+                                <option value="pt-BR">Portuguese (Brazil)</option>
+                                <option value="nl-NL">Dutch</option>
+                                <option value="ja-JP">Japanese</option>
+                                <option value="ko-KR">Korean</option>
+                                <option value="zh-CN">Chinese (Simplified)</option>
+                                <option value="zh-TW">Chinese (Traditional)</option>
+                                <option value="ar-SA">Arabic</option>
+                                <option value="ru-RU">Russian</option>
+                                <option value="hi-IN">Hindi</option>
+                                <option value="tr-TR">Turkish</option>
+                                <option value="pl-PL">Polish</option>
+                                <option value="sv-SE">Swedish</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="tableCount">Number of Tables</label>
+                                <input type="number" id="tableCount" value="20" min="1" max="50">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="maxParticipants">Max Participants</label>
+                                <input type="number" id="maxParticipants" value="100" min="5" max="500">
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" onclick="showWelcome()" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Session</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Join Session Screen -->
+            <div id="joinSessionScreen" class="screen">
+                <div class="form-container">
+                    <div class="mobile-header">
+                        <button class="mobile-back-btn" onclick="showWelcome()">← Back</button>
+                        <h2>Join Session</h2>
+                    </div>
+                    
+                    <div id="sessionSelector">
+                        <div class="form-group">
+                            <label for="sessionSelect">Select Session</label>
+                            <select id="sessionSelect">
+                                <option value="">Loading sessions...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="participantName">Your Name</label>
+                            <input type="text" id="participantName" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="tableSelect">Select Table</label>
+                            <select id="tableSelect">
+                                <option value="">First select a session</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" onclick="showWelcome()" class="btn btn-secondary">Back</button>
+                            <button id="joinTableBtn" class="btn btn-primary" disabled>Join Table</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Dashboard -->
+            <div id="sessionDashboard" class="screen">
+                <div class="dashboard-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2 id="dashboardTitle">Session Dashboard</h2>
+                        <button onclick="showWelcome()" class="btn btn-secondary">🏠 Home</button>
+                    </div>
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <span class="stat-value" id="participantCount">0</span>
+                            <span class="stat-label">Participants</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="activeTableCount">0</span>
+                            <span class="stat-label">Active Tables</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value" id="recordingCount">0</span>
+                            <span class="stat-label">Recordings</span>
+                        </div>
+                        <div class="stat-card">
+                            <button id="showQRCodesBtn" class="btn btn-primary">📱 QR Codes</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QR Codes Section -->
+                <div id="qrCodesSection" class="qr-section" style="display: none;">
+                    <h3>Session QR Codes</h3>
+                    <p>Share these QR codes to allow participants to join tables easily with their mobile devices.</p>
+                    
+                    <div class="qr-grid" id="qrCodesGrid">
+                        <!-- QR codes will be dynamically populated -->
+                    </div>
+                    
+                    <div class="qr-actions">
+                        <button id="downloadAllQRBtn" class="btn btn-secondary">📥 Download All</button>
+                        <button id="printQRBtn" class="btn btn-secondary">🖨️ Print QR Codes</button>
+                        <button id="hideQRCodesBtn" class="btn btn-secondary">✕ Hide</button>
+                    </div>
+                </div>
+
+                <div class="dashboard-content">
+                    <div class="tables-grid" id="tablesGrid">
+                        <!-- Tables will be dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Interface -->
+            <div id="tableInterface" class="screen">
+                <div class="table-header">
+                    <h2 id="tableTitle">Table 1</h2>
+                    <div class="table-status">
+                        <span id="tableStatus" class="status-badge">Waiting</span>
+                    </div>
+                </div>
+
+                <div class="participants-list">
+                    <h3>Participants</h3>
+                    <ul id="participantsList"></ul>
+                </div>
+
+                <!-- Join Table Section -->
+                <div id="joinTableSection" class="join-table-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="participantNameInput">Your Name</label>
+                        <input type="text" id="participantNameInput" placeholder="Enter your name to join this table">
+                    </div>
+                    <div class="form-group">
+                        <label for="participantEmailInput">Email (optional)</label>
+                        <input type="email" id="participantEmailInput" placeholder="Enter your email">
+                    </div>
+                    <button id="joinThisTableBtn" class="btn btn-primary">Join This Table</button>
+                </div>
+
+                <div class="recording-section">
+                    <div class="recording-controls">
+                        <button id="startRecordingBtn" class="btn btn-large btn-primary">
+                            <span class="icon">🎤</span>
+                            Start Recording
+                        </button>
+                        
+                        <button id="stopRecordingBtn" class="btn btn-large btn-danger" style="display: none;">
+                            <span class="icon">⏹️</span>
+                            Stop Recording
+                        </button>
+                        
+                        <button id="uploadMediaBtn" class="btn btn-large btn-secondary">
+                            <span class="icon">📁</span>
+                            Upload Media
+                        </button>
+                    </div>
+                    
+                    <!-- Hidden file input for media upload -->
+                    <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
+                    
+                    <div id="recordingStatus" class="recording-status"></div>
+                    
+                    <div id="audioVisualization" class="audio-visualization" style="display: none;"></div>
+                    
+                    <!-- Upload progress section -->
+                    <div id="uploadProgress" class="upload-progress" style="display: none;">
+                        <div class="upload-info">
+                            <span id="uploadFileName"></span>
+                            <span id="uploadStatus"></span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="uploadProgressBar" class="progress-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="transcription-section">
+                    <h3>Live Transcription</h3>
+                    <div id="liveTranscript" class="transcript-display"></div>
+                </div>
+
+                <div class="table-actions">
+                    <button onclick="showWelcome()" class="btn btn-secondary">🏠 Home</button>
+                    <button onclick="showSessionDashboard()" class="btn btn-secondary">Dashboard</button>
+                    <button id="generateReportBtn" class="btn btn-primary">Generate Analysis</button>
+                </div>
+            </div>
+
+            <!-- Session List -->
+            <div id="sessionListScreen" class="screen">
+                <div class="list-container">
+                    <div class="mobile-header">
+                        <button class="mobile-back-btn" onclick="showWelcome()">← Back</button>
+                        <h2>Active Sessions</h2>
+                    </div>
+                    <div id="sessionsList" class="sessions-list">
+                        <!-- Sessions will be loaded dynamically -->
+                    </div>
+                    <div class="form-actions">
+                        <button onclick="showWelcome()" class="btn btn-secondary">Back</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Transcriptions View -->
+            <div id="allTranscriptionsScreen" class="screen">
+                <div class="awesome-dashboard-container">
+                    <div class="dashboard-header">
+                        <div class="dashboard-nav">
+                            <button class="dashboard-back-btn" onclick="showSessionList()">← Back to Sessions</button>
+                            <div class="dashboard-title">
+                                <h1 id="allTranscriptionsTitle">📝 All Transcriptions</h1>
+                                <p id="allTranscriptionsSubtitle">Session Overview</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-stats-bar">
+                        <div class="stat-pill">
+                            <span class="stat-icon">📊</span>
+                            <span class="stat-text">Total: <strong id="totalTranscriptions">0</strong></span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">🏓</span>
+                            <span class="stat-text">Tables: <strong id="activeTables">0</strong></span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">⏱️</span>
+                            <span class="stat-text">Duration: <strong id="totalDuration">0min</strong></span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">👥</span>
+                            <span class="stat-text">Speakers: <strong id="totalSpeakers">0</strong></span>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-controls">
+                        <div class="filter-controls">
+                            <select id="tableFilter" class="awesome-select">
+                                <option value="">🌐 All Tables</option>
+                            </select>
+                            <select id="sortFilter" class="awesome-select">
+                                <option value="newest">🕐 Newest First</option>
+                                <option value="oldest">🕑 Oldest First</option>
+                                <option value="table">🏓 By Table</option>
+                                <option value="duration">⏱️ By Duration</option>
+                            </select>
+                        </div>
+                        <div class="action-controls">
+                            <button onclick="generateAIAnalysis()" class="awesome-btn ai" id="aiAnalysisBtn">🤖 AI Analysis</button>
+                            <button onclick="exportAllTranscriptions()" class="awesome-btn primary">📥 Export All</button>
+                            <button onclick="refreshTranscriptions()" class="awesome-btn secondary">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div id="aiAnalysisSection" class="ai-analysis-section" style="display: none;">
+                        <div class="ai-analysis-header">
+                            <h2>🤖 AI Analysis Results</h2>
+                            <button onclick="toggleAIAnalysis()" class="close-analysis-btn">✕ Hide</button>
+                        </div>
+                        <div id="aiAnalysisResults" class="ai-analysis-results">
+                            <!-- AI analysis results will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <div id="allTranscriptionsList" class="awesome-transcriptions-grid">
+                        <!-- All transcriptions will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Dashboard -->
+            <div id="adminDashboard" class="screen">
+                <div class="modern-admin-container">
+                    <!-- Admin Header -->
+                    <header class="admin-header">
+                        <div class="admin-header-content">
+                            <button onclick="showWelcome()" class="admin-back-btn">← Back</button>
+                            <div class="admin-branding">
+                                <h1>⚙️ Admin Dashboard</h1>
+                                <p>World Café Platform Administration</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <!-- Admin Login -->
+                    <div id="adminLogin" class="modern-admin-login">
+                        <div class="login-card">
+                            <div class="login-header">
+                                <div class="login-icon">🔒</div>
+                                <h2>Admin Access</h2>
+                                <p>Enter your admin credentials to continue</p>
+                            </div>
+                            <div class="login-form">
+                                <div class="form-field">
+                                    <input type="password" id="adminPassword" placeholder="Admin Password" class="modern-input">
+                                </div>
+                                <button onclick="adminLogin()" class="modern-btn modern-btn-primary">🚀 Access Dashboard</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modern Admin Panel -->
+                    <div id="adminPanel" class="modern-admin-panel" style="display: none;">
+                        <!-- Navigation Cards -->
+                        <div class="admin-nav-grid">
+                            <div class="admin-nav-card" onclick="showAdminTab('sessions')" id="sessionsNavCard">
+                                <div class="nav-card-icon">📊</div>
+                                <h3>Sessions</h3>
+                                <p>Manage active and completed sessions</p>
+                                <span class="nav-card-badge" id="sessionsCount">-</span>
+                            </div>
+                            <div class="admin-nav-card" onclick="showAdminTab('prompts')" id="promptsNavCard">
+                                <div class="nav-card-icon">🎯</div>
+                                <h3>AI Prompts</h3>
+                                <p>Configure analysis prompts</p>
+                            </div>
+                            <div class="admin-nav-card" onclick="showAdminTab('stats')" id="statsNavCard">
+                                <div class="nav-card-icon">📈</div>
+                                <h3>Analytics</h3>
+                                <p>Platform usage statistics</p>
+                            </div>
+                            <div class="admin-nav-card" onclick="showAdminTab('system')" id="systemNavCard">
+                                <div class="nav-card-icon">⚙️</div>
+                                <h3>System</h3>
+                                <p>Server status and logs</p>
+                            </div>
+                            <div class="admin-nav-card" onclick="showAdminTab('settings')" id="settingsNavCard">
+                                <div class="nav-card-icon">🔧</div>
+                                <h3>Settings</h3>
+                                <p>API keys and configuration</p>
+                            </div>
+                        </div>
+
+                        <!-- Sessions Panel -->
+                        <div id="adminSessionsTab" class="modern-admin-tab active">
+                            <div class="tab-header">
+                                <h2>📊 Session Management</h2>
+                                <p>Monitor and manage all platform sessions</p>
+                            </div>
+                            
+                            <!-- Quick Stats -->
+                            <div class="modern-stats-grid">
+                                <div class="modern-stat-card active">
+                                    <div class="stat-icon">🟢</div>
+                                    <div class="stat-content">
+                                        <span class="stat-number" id="adminActiveCount">-</span>
+                                        <span class="stat-label">Active Sessions</span>
+                                    </div>
+                                </div>
+                                <div class="modern-stat-card closed">
+                                    <div class="stat-icon">🖯️</div>
+                                    <div class="stat-content">
+                                        <span class="stat-number" id="adminClosedCount">-</span>
+                                        <span class="stat-label">Closed Sessions</span>
+                                    </div>
+                                </div>
+                                <div class="modern-stat-card deleted">
+                                    <div class="stat-icon">🗑️</div>
+                                    <div class="stat-content">
+                                        <span class="stat-number" id="adminDeletedCount">-</span>
+                                        <span class="stat-label">Deleted Sessions</span>
+                                    </div>
+                                </div>
+                                <div class="modern-stat-card recent">
+                                    <div class="stat-icon">📅</div>
+                                    <div class="stat-content">
+                                        <span class="stat-number" id="adminRecentCount">-</span>
+                                        <span class="stat-label">Recent (7 days)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modern Filters -->
+                            <div class="modern-filters-bar">
+                                <div class="filter-group">
+                                    <label>Status:</label>
+                                    <select id="statusFilter" onchange="filterAdminSessions()" class="modern-select">
+                                        <option value="">All Sessions</option>
+                                        <option value="active">Active</option>
+                                        <option value="closed">Closed</option>
+                                        <option value="deleted">Deleted</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label class="modern-checkbox">
+                                        <input type="checkbox" id="includeDeleted" onchange="filterAdminSessions()">
+                                        <span class="checkmark"></span>
+                                        Include Deleted
+                                    </label>
+                                </div>
+                                <button onclick="refreshAdminSessions()" class="modern-btn modern-btn-secondary">🔄 Refresh</button>
+                            </div>
+
+                            <div id="adminSessionsList" class="modern-sessions-grid">
+                                <!-- Sessions will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- AI Prompts Panel -->
+                        <div id="adminPromptsTab" class="modern-admin-tab">
+                            <div class="tab-header">
+                                <h2>🎯 AI Prompts Configuration</h2>
+                                <p>Configure analysis prompts for automated insights</p>
+                            </div>
+                            
+                            <div class="modern-prompts-grid">
+                                <div class="prompt-card">
+                                    <div class="prompt-header">
+                                        <div class="prompt-icon">⚡</div>
+                                        <h3>Conflict Detection</h3>
+                                    </div>
+                                    <textarea id="conflictPrompt" class="modern-textarea" placeholder="Enter conflict detection prompt..."></textarea>
+                                </div>
+                                
+                                <div class="prompt-card">
+                                    <div class="prompt-header">
+                                        <div class="prompt-icon">🤝</div>
+                                        <h3>Agreement Detection</h3>
+                                    </div>
+                                    <textarea id="agreementPrompt" class="modern-textarea" placeholder="Enter agreement detection prompt..."></textarea>
+                                </div>
+                                
+                                <div class="prompt-card">
+                                    <div class="prompt-header">
+                                        <div class="prompt-icon">🎨</div>
+                                        <h3>Theme Extraction</h3>
+                                    </div>
+                                    <textarea id="themePrompt" class="modern-textarea" placeholder="Enter theme extraction prompt..."></textarea>
+                                </div>
+                                
+                                <div class="prompt-card">
+                                    <div class="prompt-header">
+                                        <div class="prompt-icon">😊</div>
+                                        <h3>Sentiment Analysis</h3>
+                                    </div>
+                                    <textarea id="sentimentPrompt" class="modern-textarea" placeholder="Enter sentiment analysis prompt..."></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="modern-actions-bar">
+                                <button onclick="resetPrompts()" class="modern-btn modern-btn-secondary">🔄 Reset to Default</button>
+                                <button onclick="savePrompts()" class="modern-btn modern-btn-primary">💾 Save Prompts</button>
+                            </div>
+                        </div>
+
+                        <!-- Analytics Panel -->
+                        <div id="adminStatsTab" class="modern-admin-tab">
+                            <div class="tab-header">
+                                <h2>📈 Platform Analytics</h2>
+                                <p>Comprehensive platform usage and performance metrics</p>
+                            </div>
+                            
+                            <div class="analytics-dashboard">
+                                <div class="analytics-card">
+                                    <h3>📅 Usage Overview</h3>
+                                    <div id="platformStats" class="platform-stats">
+                                        <!-- Statistics will be loaded here -->
+                                    </div>
+                                </div>
+                                
+                                <div class="analytics-card">
+                                    <h3>📊 Performance Metrics</h3>
+                                    <div class="metrics-grid">
+                                        <div class="metric-item">
+                                            <span class="metric-label">Avg Session Duration</span>
+                                            <span class="metric-value">45 min</span>
+                                        </div>
+                                        <div class="metric-item">
+                                            <span class="metric-label">Total Transcriptions</span>
+                                            <span class="metric-value">1,247</span>
+                                        </div>
+                                        <div class="metric-item">
+                                            <span class="metric-label">Active Users</span>
+                                            <span class="metric-value">89</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- System Panel -->
+                        <div id="adminSystemTab" class="modern-admin-tab">
+                            <div class="tab-header">
+                                <h2>⚙️ System Status</h2>
+                                <p>Server health, database status, and system logs</p>
+                            </div>
+                            
+                            <div class="system-dashboard">
+                                <div class="system-card">
+                                    <h3>🟢 Server Health</h3>
+                                    <div class="health-indicators">
+                                        <div class="health-item">
+                                            <span class="health-label">Database</span>
+                                            <span class="health-status connected">✓ Connected</span>
+                                        </div>
+                                        <div class="health-item">
+                                            <span class="health-label">WebSocket</span>
+                                            <span class="health-status connected">✓ Active</span>
+                                        </div>
+                                        <div class="health-item">
+                                            <span class="health-label">Deepgram API</span>
+                                            <span class="health-status connected" id="deepgramStatus">✓ Available</span>
+                                        </div>
+                                        <div class="health-item">
+                                            <span class="health-label">Groq API</span>
+                                            <span class="health-status connected" id="groqStatus">✓ Available</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="system-card">
+                                    <h3>📄 Recent Activity</h3>
+                                    <div class="activity-log">
+                                        <div class="activity-item">
+                                            <span class="activity-time">2 min ago</span>
+                                            <span class="activity-desc">New session created</span>
+                                        </div>
+                                        <div class="activity-item">
+                                            <span class="activity-time">5 min ago</span>
+                                            <span class="activity-desc">Audio transcribed</span>
+                                        </div>
+                                        <div class="activity-item">
+                                            <span class="activity-time">12 min ago</span>
+                                            <span class="activity-desc">User joined table</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Settings Panel -->
+                        <div id="adminSettingsTab" class="modern-admin-tab">
+                            <div class="tab-header">
+                                <h2>🔧 Platform Settings</h2>
+                                <p>Configure API keys, admin credentials, and system settings</p>
+                            </div>
+                            
+                            <div class="settings-dashboard">
+                                <!-- API Configuration -->
+                                <div class="settings-section">
+                                    <div class="section-header">
+                                        <h3>🔑 API Configuration</h3>
+                                        <p>Configure external service API keys</p>
+                                    </div>
+                                    
+                                    <div class="settings-form">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="deepgramApiKey">Deepgram API Key</label>
+                                                <div class="api-key-input">
+                                                    <input type="password" id="deepgramApiKey" class="modern-input" placeholder="Enter Deepgram API key">
+                                                    <button type="button" class="toggle-visibility" onclick="toggleApiKeyVisibility('deepgramApiKey')">👁️</button>
+                                                </div>
+                                                <small class="form-hint">Used for speech-to-text transcription services</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="groqApiKey">Groq API Key</label>
+                                                <div class="api-key-input">
+                                                    <input type="password" id="groqApiKey" class="modern-input" placeholder="Enter Groq API key">
+                                                    <button type="button" class="toggle-visibility" onclick="toggleApiKeyVisibility('groqApiKey')">👁️</button>
+                                                </div>
+                                                <small class="form-hint">Used for AI analysis and content generation</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-actions">
+                                            <button onclick="updateApiKeys()" class="modern-btn modern-btn-primary">💾 Save API Keys</button>
+                                            <button onclick="testApiKeys()" class="modern-btn modern-btn-secondary">🧪 Test APIs</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Admin Security -->
+                                <div class="settings-section">
+                                    <div class="section-header">
+                                        <h3>🔐 Admin Security</h3>
+                                        <p>Change admin password and security settings</p>
+                                    </div>
+                                    
+                                    <div class="settings-form">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="currentPassword">Current Password</label>
+                                                <input type="password" id="currentPassword" class="modern-input" placeholder="Enter current admin password">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="newPassword">New Password</label>
+                                                <input type="password" id="newPassword" class="modern-input" placeholder="Enter new admin password">
+                                                <small class="form-hint">Minimum 8 characters, include letters and numbers</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="confirmPassword">Confirm New Password</label>
+                                                <input type="password" id="confirmPassword" class="modern-input" placeholder="Confirm new admin password">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-actions">
+                                            <button onclick="changeAdminPassword()" class="modern-btn modern-btn-primary">🔒 Change Password</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Platform Protection -->
+                                <div class="settings-section">
+                                    <div class="section-header">
+                                        <h3>🛡️ Platform Protection</h3>
+                                        <p>Enable password protection for the entire platform</p>
+                                    </div>
+                                    
+                                    <div class="settings-form">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label class="toggle-label">
+                                                    <input type="checkbox" id="platformPasswordEnabled" class="toggle-input">
+                                                    <span class="toggle-slider"></span>
+                                                    Enable Platform Password Protection
+                                                </label>
+                                                <small class="form-hint">When enabled, all users must enter a password to access the platform</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-row" id="platformPasswordRow" style="display: none;">
+                                            <div class="form-group">
+                                                <label for="platformPassword">Platform Password</label>
+                                                <input type="password" id="platformPassword" class="modern-input" placeholder="Enter platform access password">
+                                                <small class="form-hint">Default: testtesttest</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-actions">
+                                            <button onclick="savePlatformProtection()" class="modern-btn modern-btn-primary">💾 Save Protection Settings</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Configuration Status -->
+                                <div class="settings-section">
+                                    <div class="section-header">
+                                        <h3>📊 Configuration Status</h3>
+                                        <p>Current system configuration overview</p>
+                                    </div>
+                                    
+                                    <div class="config-status">
+                                        <div class="config-item">
+                                            <span class="config-label">Deepgram API</span>
+                                            <span class="config-status-badge" id="deepgramConfigStatus">Not Configured</span>
+                                        </div>
+                                        <div class="config-item">
+                                            <span class="config-label">Groq API</span>
+                                            <span class="config-status-badge" id="groqConfigStatus">Not Configured</span>
+                                        </div>
+                                        <div class="config-item">
+                                            <span class="config-label">Database</span>
+                                            <span class="config-status-badge configured">Configured</span>
+                                        </div>
+                                        <div class="config-item">
+                                            <span class="config-label">File Uploads</span>
+                                            <span class="config-status-badge configured">Enabled</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button onclick="showWelcome()" class="btn btn-secondary">Back</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Report -->
+            <div id="analysisReport" class="screen">
+                <div class="report-container">
+                    <h2>Session Analysis Report</h2>
+                    <div id="reportContent" class="report-content">
+                        <!-- Report content will be loaded dynamically -->
+                    </div>
+                    <div class="form-actions">
+                        <button onclick="downloadReport()" class="btn btn-primary">Download Report</button>
+                        <button onclick="showSessionDashboard()" class="btn btn-secondary">Back</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p id="loadingMessage">Processing...</p>
+        </div>
+
+        <!-- Mobile QR Scanner -->
+        <div id="mobileScanner" class="mobile-scanner" style="display: none;">
+            <div class="scanner-container">
+                <h3>Scan QR Code</h3>
+                <p>Point your camera at a World Café QR code to join a session or table</p>
+                <div class="scanner-viewfinder">
+                    <video id="qrVideo" style="width: 100%; height: 100%; object-fit: cover;"></video>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button id="closeScannerBtn" class="btn btn-secondary">✕ Close</button>
+                    <button id="manualJoinBtn" class="btn btn-primary">🔗 Enter Code</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Join Modal -->
+        <div id="manualJoinModal" class="mobile-scanner" style="display: none;">
+            <div class="scanner-container">
+                <h3>Enter Session/Table Code</h3>
+                <div class="form-group">
+                    <label for="manualCode">Session or Table Code</label>
+                    <input type="text" id="manualCode" placeholder="Enter session ID or scan URL" 
+                           style="margin-bottom: 1rem;">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button id="closeManualJoinBtn" class="btn btn-secondary">Cancel</button>
+                    <button id="submitManualJoinBtn" class="btn btn-primary">Join</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session Management Modals -->
+        <div id="sessionActionModal" class="mobile-scanner" style="display: none;">
+            <div class="scanner-container">
+                <h3 id="actionModalTitle">Session Action</h3>
+                <div class="form-group">
+                    <label for="actionReason">Reason (optional)</label>
+                    <textarea id="actionReason" rows="3" placeholder="Enter reason for this action..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="adminUser">Admin User</label>
+                    <input type="text" id="adminUser" value="admin" placeholder="Admin username">
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button id="cancelActionBtn" class="btn btn-secondary">Cancel</button>
+                    <button id="confirmActionBtn" class="btn btn-danger">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session History Modal -->
+        <div id="sessionHistoryModal" class="mobile-scanner" style="display: none;">
+            <div class="scanner-container" style="max-width: 600px;">
+                <h3>Session History</h3>
+                <div id="sessionHistoryContent" class="session-history">
+                    <!-- History will be loaded here -->
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button id="closeHistoryBtn" class="btn btn-secondary">✕ Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast notifications removed -->
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
