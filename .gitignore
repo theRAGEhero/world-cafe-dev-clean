@@ -7,6 +7,7 @@ transcriptions/*
 backend/qr-codes/*
 public/qr-codes/*
 world-cafe-embedded.tar
+# database_export.sql - keep schema file but exclude data exports
 database_export.sql
 *.log
 .DS_Store

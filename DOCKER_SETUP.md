@@ -15,7 +15,13 @@ Quick deployment using Docker Compose.
    cd world-cafe-dev-clean
    ```
 
-2. **Start the platform:**
+2. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys and passwords
+   ```
+
+3. **Start the platform:**
    ```bash
    docker-compose up -d
    ```
