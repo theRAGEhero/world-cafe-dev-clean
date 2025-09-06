@@ -32,14 +32,14 @@ class QRCode extends BaseModel {
 
     const qrCode = await super.create(qrData);
     
-    // Generate QR code image
-    await this.generateQRImage(qrCode.id, data.qrData);
+    // Generate QR code image (will be overridden by semantic naming in specific methods)
+    // await this.generateQRImage(qrCode.id, data.qrData);
     
     return qrCode;
   }
 
-  async generateQRImage(qrId, data, options = {}) {
-    const filename = `${qrId}.png`;
+  async generateQRImage(qrId, data, options = {}, semanticName = null) {
+    const filename = semanticName || `${qrId}.png`;
     const imagePath = path.join(this.qrCodesDir, filename);
     
     const qrOptions = {
@@ -70,11 +70,16 @@ class QRCode extends BaseModel {
   async createSessionQR(sessionId, baseUrl) {
     const qrData = `${baseUrl}/join/${sessionId}`;
     
-    return await this.create({
+    const qrCode = await this.create({
       entityType: 'session',
       entityId: sessionId,
       qrData: qrData
     });
+    
+    // Generate with semantic filename
+    await this.generateQRImage(qrCode.id, qrData, {}, `session-${sessionId}.png`);
+    
+    return qrCode;
   }
 
   async createTableQR(tableId, sessionId, baseUrl, tableNumber = null) {
@@ -82,11 +87,16 @@ class QRCode extends BaseModel {
     const urlIdentifier = tableNumber !== null ? tableNumber : tableId;
     const qrData = `${baseUrl}/join/${sessionId}/table/${urlIdentifier}`;
     
-    return await this.create({
+    const qrCode = await this.create({
       entityType: 'table',
       entityId: tableId.toString(),
       qrData: qrData
     });
+    
+    // Generate with semantic filename
+    await this.generateQRImage(qrCode.id, qrData, {}, `table-${sessionId}-${tableNumber}.png`);
+    
+    return qrCode;
   }
 
   async findByEntity(entityType, entityId) {

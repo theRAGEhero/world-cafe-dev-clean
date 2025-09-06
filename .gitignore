@@ -1,16 +1,41 @@
+# Dependencies
 node_modules/
+
+# Environment files
 .env
 .env.local
 .env.production
+
+# Generated content (keep structure via .gitkeep)
 uploads/*
 transcriptions/*
 backend/qr-codes/*
 public/qr-codes/*
+!*/.gitkeep
+
+# Build artifacts
 world-cafe-embedded.tar
-# database_export.sql - keep schema file but exclude data exports
+
+# Database exports (keep schema file but exclude data exports)
 database_export.sql
+
+# Logs
 *.log
+
+# IDE & OS files
 .DS_Store
 .vscode/
+.idea/
+
+# Temporary files
 *.tmp
 *.bak
+*~
+
+# Test files
+test_diarization.js
+
+# Docker volumes (if using local volumes)
+mysql_data/
+qr_data/
+uploads_data/

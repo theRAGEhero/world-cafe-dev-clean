@@ -229,6 +229,140 @@ For sentiment analysis:
     }
   }
 
+  async analyzeTable(tableId, tableTranscriptions) {
+    if (!tableTranscriptions || tableTranscriptions.length === 0) {
+      return {
+        conflicts: [],
+        agreements: [],
+        themes: [],
+        sentiment: { overall: 0, interpretation: 'No transcriptions available for this table' },
+        participationStats: {},
+        summary: "No transcriptions available for table analysis"
+      };
+    }
+
+    console.log(`Starting LLM analysis for table ${tableId}, ${tableTranscriptions.length} transcriptions`);
+
+    try {
+      // Aggregate multiple recordings from the same table
+      const aggregatedTranscription = this.aggregateTableTranscriptions(tableTranscriptions);
+      
+      // Run all analyses in parallel for better performance
+      const [conflictResults, agreementResults, themeResults, sentimentResults] = await Promise.all([
+        this.analyzeWithLLM(
+          this.prompts.conflictDetection.prompt,
+          [aggregatedTranscription],
+          'conflicts'
+        ),
+        this.analyzeWithLLM(
+          this.prompts.agreementDetection.prompt,
+          [aggregatedTranscription],
+          'agreements'
+        ),
+        this.analyzeWithLLM(
+          this.prompts.themeExtraction.prompt,
+          [aggregatedTranscription],
+          'themes'
+        ),
+        this.analyzeWithLLM(
+          this.prompts.sentimentAnalysis.prompt,
+          [aggregatedTranscription],
+          'sentiment'
+        )
+      ]);
+
+      // Process and structure the results
+      const analysis = {
+        conflicts: conflictResults.conflicts || [],
+        agreements: agreementResults.agreements || [],
+        themes: themeResults.themes || [],
+        sentiment: sentimentResults,
+        participationStats: this.calculateParticipationStats(tableTranscriptions),
+        tableId: tableId,
+        recordingCount: tableTranscriptions.length,
+        llmPowered: true,
+        analyzedAt: new Date().toISOString()
+      };
+
+      console.log(`LLM analysis completed successfully for table ${tableId}`);
+      return analysis;
+
+    } catch (error) {
+      console.error(`Table analysis failed for table ${tableId}:`, error);
+      
+      // Return basic structure if analysis fails
+      return {
+        conflicts: [],
+        agreements: [],
+        themes: [],
+        sentiment: { overall: 0, interpretation: 'Analysis failed', insights: [] },
+        participationStats: this.calculateParticipationStats(tableTranscriptions),
+        tableId: tableId,
+        recordingCount: tableTranscriptions.length,
+        error: error.message,
+        llmPowered: false
+      };
+    }
+  }
+
+  aggregateTableTranscriptions(tableTranscriptions) {
+    // Sort transcriptions chronologically
+    const sortedTranscriptions = tableTranscriptions.sort((a, b) => 
+      new Date(a.created_at || a.timestamp) - new Date(b.created_at || b.timestamp)
+    );
+
+    // Combine all transcriptions for this table
+    const combinedText = sortedTranscriptions.map((t, index) => {
+      const transcript = t.transcript || t.transcript_text || '';
+      const recordingBreak = index > 0 ? '\n\n--- [Recording Break] ---\n\n' : '';
+      
+      // Include speaker information if available
+      if (t.speakers && t.speakers.length > 0) {
+        const speakerText = t.speakers.map(s => `Speaker ${s.speaker}: ${s.transcript}`).join('\n');
+        return recordingBreak + speakerText;
+      }
+      
+      return recordingBreak + transcript;
+    }).join('');
+
+    // Create metadata about the aggregation
+    const metadata = {
+      recording_count: tableTranscriptions.length,
+      total_duration: tableTranscriptions.reduce((sum, t) => sum + (t.duration_seconds || 0), 0),
+      quality_scores: tableTranscriptions.map(t => t.confidence_score || 0),
+      time_span: {
+        start: sortedTranscriptions[0]?.created_at || sortedTranscriptions[0]?.timestamp,
+        end: sortedTranscriptions[sortedTranscriptions.length - 1]?.created_at || 
+             sortedTranscriptions[sortedTranscriptions.length - 1]?.timestamp
+      }
+    };
+
+    return {
+      tableId: tableTranscriptions[0]?.tableId || tableTranscriptions[0]?.table_id,
+      transcript: combinedText,
+      speakers: this.aggregateSpeakers(tableTranscriptions),
+      metadata: metadata
+    };
+  }
+
+  aggregateSpeakers(tableTranscriptions) {
+    const allSpeakers = [];
+    
+    tableTranscriptions.forEach((t, recordingIndex) => {
+      if (t.speakers && t.speakers.length > 0) {
+        t.speakers.forEach(speaker => {
+          allSpeakers.push({
+            ...speaker,
+            recordingIndex: recordingIndex,
+            recordingTimestamp: t.created_at || t.timestamp
+          });
+        });
+      }
+    });
+    
+    return allSpeakers;
+  }
+
   calculateParticipationStats(transcriptions) {
     const stats = {
       totalTables: new Set(transcriptions.map(t => t.tableId)).size,

@@ -18,8 +18,9 @@ const SessionAnalysis = require('./database/models/SessionAnalysis');
 // Services
 const TranscriptionService = require('./transcription');
 const AnalysisService = require('./analysis');
+const SessionChatService = require('./sessionChatService');
 const LLMAnalysisService = require('./llmAnalysis');
-const QRCodeService = require('./qrCodeService');
+const PasswordUtils = require('./passwordUtils');
 const { checkTableStructure } = require('./migrate');
 
 const app = express();
@@ -43,7 +44,7 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/qr-codes', express.static(path.join(__dirname, 'qr-codes')));
+app.use('/qr-codes', express.static(path.join(__dirname, 'public/qr-codes')));
 
 // Platform password protection middleware  
 async function platformPasswordMiddleware(req, res, next) {
@@ -153,13 +154,17 @@ const upload = multer({
 // Initialize services
 const transcriptionService = new TranscriptionService();
 const analysisService = new AnalysisService();
-const qrCodeService = new QRCodeService();
 let llmAnalysisService = null;
+let sessionChatService = null;
 
 // Initialize LLM service if API key is available
 try {
   llmAnalysisService = new LLMAnalysisService();
   console.log('LLM Analysis Service initialized with Groq');
+  
+  // Initialize chat service if LLM service is available
+  sessionChatService = new SessionChatService(llmAnalysisService.groq);
+  console.log('Session Chat Service initialized');
 } catch (error) {
   console.log('LLM Analysis Service not available:', error.message);
   console.log('Falling back to basic analysis service');
@@ -261,7 +266,7 @@ app.get('/api/health', async (req, res) => {
 // Session management
 app.post('/api/sessions', async (req, res) => {
   try {
-    const { title, description, language = 'en-US', tableCount = 20, maxParticipants = 100 } = req.body;
+    const { title, description, language = 'en-US', tableCount = 10 } = req.body;
     const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
     
     let session;
@@ -270,25 +275,25 @@ app.post('/api/sessions', async (req, res) => {
     // Try database first, fall back to memory
     if (await db.isHealthy()) {
       try {
+        // Generate admin password
+        const adminPassword = PasswordUtils.generatePassword(8);
+        const adminPasswordHash = PasswordUtils.hashPassword(adminPassword);
+        
         // Create session in database
         session = await Session.create({
           title,
           description,
           language,
           tableCount,
-          maxParticipants
+          admin_password: adminPassword,
+          admin_password_hash: adminPasswordHash
         });
         
         // Create tables for the session
         await Table.createTablesForSession(session.id, tableCount);
         
-        // Try database QR codes first
-        try {
-          await QRCode.generateSessionQRs(session.id, tableCount, baseUrl);
-        } catch (qrError) {
-          console.log('Database QR generation failed, using fallback service');
-          await qrCodeService.generateAllQRCodes(session.id, tableCount, baseUrl);
-        }
+        // Generate QR codes in database
+        await QRCode.generateSessionQRs(session.id, tableCount, baseUrl);
         
         sessionWithStats = await Session.findWithStats(session.id);
       } catch (dbError) {
@@ -303,14 +308,13 @@ app.post('/api/sessions', async (req, res) => {
         description,
         language,
         tableCount,
-        maxParticipants,
         status: 'active',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       
-      // Generate QR codes using fallback service
-      await qrCodeService.generateAllQRCodes(session.id, tableCount, baseUrl);
+      // This fallback path should not be used since database should always be available
+      throw new Error('Database unavailable - cannot create session');
       
       sessionWithStats = session;
     }
@@ -610,9 +614,14 @@ app.get('/api/qr/:entityType/:entityId', async (req, res) => {
 // QR Code API endpoints
 app.get('/api/qr/session/:sessionId', async (req, res) => {
   try {
-    const qrPath = await qrCodeService.getQRImagePath(req.params.sessionId);
-    if (qrPath) {
-      res.redirect(qrPath);
+    const { sessionId } = req.params;
+    
+    // Find QR code for this session
+    const qrCode = await QRCode.findActiveByEntity('session', sessionId);
+    
+    if (qrCode) {
+      const filename = `session-${sessionId}.png`;
+      res.redirect(`/qr-codes/${filename}`);
     } else {
       res.status(404).json({ error: 'QR code not found' });
     }
@@ -625,9 +634,23 @@ app.get('/api/qr/session/:sessionId', async (req, res) => {
 app.get('/api/qr/table/:sessionId/:tableNumber', async (req, res) => {
   try {
     const { sessionId, tableNumber } = req.params;
-    const qrPath = await qrCodeService.getQRImagePath(sessionId, parseInt(tableNumber));
-    if (qrPath) {
-      res.redirect(qrPath);
+    
+    // Find table by session and table number
+    const table = await db.queryOne(
+      'SELECT id FROM tables WHERE session_id = ? AND table_number = ?',
+      [sessionId, parseInt(tableNumber)]
+    );
+    
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    
+    // Find QR code for this table
+    const qrCode = await QRCode.findActiveByEntity('table', table.id.toString());
+    
+    if (qrCode) {
+      const filename = `table-${sessionId}-${tableNumber}.png`;
+      res.redirect(`/qr-codes/${filename}`);
     } else {
       res.status(404).json({ error: 'QR code not found' });
     }
@@ -669,7 +692,7 @@ app.get('/join/:sessionId', async (req, res) => {
     }
     
     // Redirect to main app with session pre-selected
-    res.redirect(`/?session=${session.id}&mobile=1`);
+    res.redirect(`/?session=${session.id}`);
   } catch (error) {
     console.error('Error handling QR join:', error);
     res.status(500).send(`
@@ -727,7 +750,7 @@ app.get('/join/:sessionId/table/:tableNumber', async (req, res) => {
     }
     
     // Redirect to main app with session and table pre-selected
-    res.redirect(`/?session=${sessionId}&table=${tableNumber}&mobile=1`);
+    res.redirect(`/?session=${sessionId}&table=${tableNumber}`);
   } catch (error) {
     console.error('Error handling table QR join:', error);
     res.status(500).send(`
@@ -749,6 +772,105 @@ app.get('/join/:sessionId/table/:tableNumber', async (req, res) => {
       </body>
       </html>
     `);
+  }
+});
+
+// Unified Entry Endpoint - Auto-detect code/password type and route accordingly
+app.post('/api/entry', async (req, res) => {
+  try {
+    const { code } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Code or password is required' });
+    }
+
+    // Detect what type of input this is
+    const detection = PasswordUtils.detectInputType(code);
+    
+    switch (detection.type) {
+      case 'session_code':
+        // Direct session code - check if session exists
+        const session = await Session.findById(detection.input);
+        if (!session) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+        return res.json({
+          success: true,
+          type: 'session',
+          sessionId: session.id,
+          redirect: `/?session=${session.id}`
+        });
+
+      case 'table_code':
+        // Table code format: sessionId/table/N
+        const [sessionId, , tableNumber] = detection.input.split('/');
+        const tableSession = await Session.findById(sessionId);
+        if (!tableSession) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+        return res.json({
+          success: true,
+          type: 'table',
+          sessionId: sessionId,
+          tableNumber: parseInt(tableNumber),
+          redirect: `/?session=${sessionId}&table=${tableNumber}`
+        });
+
+      case 'password':
+        // Check if it's a session admin password
+        const sessionByPassword = await Session.findByAdminPassword(detection.input);
+        if (sessionByPassword) {
+          return res.json({
+            success: true,
+            type: 'session_admin',
+            sessionId: sessionByPassword.id,
+            isAdmin: true,
+            redirect: `/?session=${sessionByPassword.id}&admin=1`
+          });
+        }
+
+        // Check if it's a table password
+        const tableByPassword = await Table.findByPassword(detection.input);
+        if (tableByPassword) {
+          return res.json({
+            success: true,
+            type: 'table_password',
+            sessionId: tableByPassword.session_id,
+            tableNumber: tableByPassword.table_number,
+            redirect: `/?session=${tableByPassword.session_id}&table=${tableByPassword.table_number}`
+          });
+        }
+
+        // Password not found
+        return res.status(401).json({ error: 'Invalid password or code' });
+
+      default:
+        return res.status(400).json({ error: 'Invalid code format' });
+    }
+  } catch (error) {
+    console.error('Error in unified entry:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get specific table data
+app.get('/api/sessions/:sessionId/tables/:tableNumber', async (req, res) => {
+  try {
+    const { sessionId, tableNumber } = req.params;
+    
+    // Find the table
+    const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    
+    // Get table with stats
+    const tableWithStats = await Table.getTableStats(table.id);
+    res.json(tableWithStats);
+    
+  } catch (error) {
+    console.error('Error fetching table:', error);
+    res.status(500).json({ error: 'Failed to fetch table data' });
   }
 });
 
@@ -1557,6 +1679,319 @@ app.post('/api/sessions/:sessionId/analysis/generate', async (req, res) => {
   } catch (error) {
     console.error('Error generating session analysis:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Table-level analysis endpoints
+app.get('/api/tables/:tableId/analysis', async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    
+    // Verify table exists
+    const table = await Table.findById(tableId);
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    
+    const sessionAnalysis = new SessionAnalysis(db);
+    const analyses = await sessionAnalysis.findByTableId(tableId);
+    
+    res.json(analyses);
+  } catch (error) {
+    console.error('Error fetching table analyses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/tables/:tableId/analysis/generate', async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const { types } = req.body; // Array of analysis types to generate
+    
+    // Verify table exists and get session info
+    const table = await Table.findById(tableId);
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+
+    const session = await Session.findById(table.session_id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Check if LLM service is available
+    if (!llmAnalysisService) {
+      return res.status(503).json({ error: 'AI Analysis service not available' });
+    }
+    
+    // Get all transcriptions for this specific table
+    const allTranscriptions = await Transcription.findBySessionId(table.session_id);
+    const tableTranscriptions = allTranscriptions.filter(t => t.table_id === parseInt(tableId));
+    
+    if (tableTranscriptions.length === 0) {
+      return res.status(400).json({ error: 'No transcriptions found for this table' });
+    }
+    
+    const sessionAnalysis = new SessionAnalysis(db);
+    const results = {};
+    
+    try {
+      // Adapt transcriptions format for LLM service
+      const adaptedTranscriptions = tableTranscriptions.map(t => ({
+        ...t,
+        transcript: t.transcript_text || t.transcript || '',
+        tableId: t.table_id,
+        speakers: t.speaker_segments ? 
+          (typeof t.speaker_segments === 'string' ? 
+            JSON.parse(t.speaker_segments) : 
+            t.speaker_segments) : []
+      }));
+      
+      console.log(`Generating table-level analysis for table ${tableId} with ${adaptedTranscriptions.length} transcriptions`);
+      
+      // Generate table-specific analysis
+      const tableAnalysis = await llmAnalysisService.analyzeTable(parseInt(tableId), adaptedTranscriptions);
+      
+      // Save each analysis type separately to database
+      const analysisTypes = types || ['summary', 'themes', 'sentiment', 'conflicts', 'agreements'];
+      
+      for (const analysisType of analysisTypes) {
+        try {
+          let analysisData;
+          
+          switch (analysisType) {
+            case 'summary':
+              analysisData = {
+                summary: `Table ${tableId} analysis: ${tableTranscriptions.length} recordings from this table were analyzed.`,
+                key_insights: [
+                  `Found ${tableAnalysis.themes?.length || 0} main themes in this table`,
+                  `Table sentiment: ${tableAnalysis.sentiment?.interpretation || 'Mixed'}`,
+                  `Identified ${tableAnalysis.conflicts?.length || 0} areas of disagreement`,
+                  `Found ${tableAnalysis.agreements?.length || 0} points of consensus`
+                ],
+                recording_stats: {
+                  total_recordings: tableAnalysis.recordingCount,
+                  table_id: tableId,
+                  analysis_scope: 'table'
+                },
+                llm_powered: true
+              };
+              break;
+            case 'themes':
+              analysisData = {
+                themes: tableAnalysis.themes || [],
+                theme_count: tableAnalysis.themes?.length || 0,
+                analysis_method: 'LLM-powered table-level theme extraction',
+                table_id: tableId
+              };
+              break;
+            case 'sentiment':
+              analysisData = {
+                ...tableAnalysis.sentiment,
+                table_id: tableId,
+                analysis_scope: 'table'
+              };
+              break;
+            case 'conflicts':
+              analysisData = {
+                conflicts: tableAnalysis.conflicts || [],
+                conflict_count: tableAnalysis.conflicts?.length || 0,
+                analysis_method: 'LLM-powered table-level conflict detection',
+                table_id: tableId
+              };
+              break;
+            case 'agreements':
+              analysisData = {
+                agreements: tableAnalysis.agreements || [],
+                agreement_count: tableAnalysis.agreements?.length || 0,
+                analysis_method: 'LLM-powered table-level agreement detection',
+                table_id: tableId
+              };
+              break;
+            default:
+              continue;
+          }
+          
+          // Save analysis to database with table scope
+          await sessionAnalysis.create(
+            table.session_id, 
+            analysisType, 
+            analysisData, 
+            {
+              transcription_count: tableTranscriptions.length,
+              recording_count: tableAnalysis.recordingCount,
+              generated_at: new Date().toISOString(),
+              session_title: session.title,
+              table_number: table.table_number,
+              analysis_version: '1.0'
+            },
+            parseInt(tableId), // tableId
+            'table' // analysisScope
+          );
+          
+          // Return the analysis data directly
+          results[analysisType] = {
+            analysis_type: analysisType,
+            analysis_scope: 'table',
+            analysis_data: analysisData,
+            created_at: new Date().toISOString(),
+            session_id: table.session_id,
+            table_id: tableId
+          };
+          
+        } catch (error) {
+          console.error(`Error saving ${analysisType} table analysis:`, error);
+          results[analysisType] = { error: error.message };
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error in table analysis:', error);
+      const basicAnalysisData = {
+        error: 'Table analysis failed',
+        message: error.message,
+        transcription_count: tableTranscriptions.length,
+        table_id: tableId
+      };
+      
+      results.summary = await sessionAnalysis.create(
+        table.session_id, 
+        'summary', 
+        basicAnalysisData, 
+        null,
+        parseInt(tableId), 
+        'table'
+      );
+    }
+    
+    res.json({
+      session_id: table.session_id,
+      table_id: tableId,
+      table_number: table.table_number,
+      analyses: results
+    });
+    
+  } catch (error) {
+    console.error('Error generating table analysis:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enhanced session analysis endpoint to support scope filtering
+app.get('/api/sessions/:sessionId/analysis/scope/:scope', async (req, res) => {
+  try {
+    const { sessionId, scope } = req.params;
+    
+    // Verify session exists
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    if (!['session', 'table'].includes(scope)) {
+      return res.status(400).json({ error: 'Invalid scope. Must be "session" or "table"' });
+    }
+    
+    const sessionAnalysis = new SessionAnalysis(db);
+    const analyses = await sessionAnalysis.findBySessionScope(sessionId, scope);
+    
+    res.json(analyses);
+  } catch (error) {
+    console.error('Error fetching scoped analyses:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Session Chat API endpoints
+app.post('/api/sessions/:sessionId/chat', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { message } = req.body;
+    
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if chat service is available
+    if (!sessionChatService) {
+      return res.status(503).json({ 
+        error: 'Chat service not available',
+        message: 'The chat feature requires an AI service. Please check if the GROQ_API_KEY is configured.'
+      });
+    }
+    
+    // Verify session exists
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Get all session data for context
+    const [transcriptions, tables, participants] = await Promise.all([
+      Transcription.findBySessionId(sessionId),
+      Table.findBySessionId(sessionId),
+      Participant.findBySessionId(sessionId)
+    ]);
+    
+    if (transcriptions.length === 0) {
+      return res.json({
+        success: true,
+        response: "This session doesn't have any transcriptions yet. Once participants start recording conversations, I'll be able to help you explore and analyze the discussions!",
+        usage: null
+      });
+    }
+    
+    const sessionData = {
+      session: { ...session, participants },
+      transcriptions,
+      tables
+    };
+    
+    // Process the chat request
+    const result = await sessionChatService.chatWithSession(sessionId, message, sessionData);
+    
+    if (result.error) {
+      return res.status(400).json({
+        error: result.message,
+        suggestion: result.suggestion,
+        details: result.details
+      });
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error in session chat:', error);
+    res.status(500).json({ 
+      error: 'Failed to process chat message',
+      details: error.message 
+    });
+  }
+});
+
+// Get chat availability status
+app.get('/api/sessions/:sessionId/chat/status', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    // Verify session exists
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Get transcription count
+    const transcriptions = await Transcription.findBySessionId(sessionId);
+    
+    res.json({
+      available: !!sessionChatService,
+      hasTranscriptions: transcriptions.length > 0,
+      transcriptionCount: transcriptions.length,
+      sessionTitle: session.title
+    });
+  } catch (error) {
+    console.error('Error checking chat status:', error);
+    res.status(500).json({ error: 'Failed to check chat status' });
   }
 });
 

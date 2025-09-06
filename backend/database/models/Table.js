@@ -150,6 +150,23 @@ class Table extends BaseModel {
     `;
     return await this.db.queryOne(sql, [qrCode]);
   }
+
+  async findByPassword(password) {
+    const sql = `SELECT * FROM ${this.tableName} WHERE password = ? AND is_password_protected = 1 LIMIT 1`;
+    return await this.db.queryOne(sql, [password]);
+  }
+
+  async setTablePassword(tableId, password) {
+    const PasswordUtils = require('../../passwordUtils');
+    const passwordHash = PasswordUtils.hashPassword(password);
+    
+    return await this.update(tableId, {
+      password: password,
+      password_hash: passwordHash,
+      is_password_protected: password ? true : false,
+      updated_at: new Date()
+    });
+  }
 }
 
 module.exports = new Table();

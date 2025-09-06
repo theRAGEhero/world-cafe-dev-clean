@@ -12,12 +12,13 @@ class Session extends BaseModel {
       title: data.title,
       description: data.description || null,
       language: data.language || 'en-US',
-      table_count: data.tableCount || 20,
-      max_participants: data.maxParticipants || 100,
+      table_count: data.tableCount || 10,
       status: 'active',
       session_duration: data.sessionDuration || 120,
       rotation_enabled: data.rotationEnabled || false,
       recording_enabled: data.recordingEnabled || true,
+      admin_password: data.admin_password || null,
+      admin_password_hash: data.admin_password_hash || null,
       created_at: new Date(),
       updated_at: new Date()
     };
@@ -270,6 +271,11 @@ class Session extends BaseModel {
       FROM ${this.tableName}
     `;
     return await this.db.queryOne(sql);
+  }
+
+  async findByAdminPassword(password) {
+    const sql = `SELECT * FROM ${this.tableName} WHERE admin_password = ? AND status = 'active' AND deleted_at IS NULL LIMIT 1`;
+    return await this.db.queryOne(sql, [password]);
   }
 }
 

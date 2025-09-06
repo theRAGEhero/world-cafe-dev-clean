@@ -313,32 +313,25 @@ function displayExistingTranscriptions(transcriptions) {
             
             // Check if there's actually multiple speakers
             const uniqueSpeakers = new Set(consolidatedSpeakers.map(s => s.speaker));
-            const hasMultipleSpeakers = uniqueSpeakers.size > 1;
             
-            // Display with speaker diarization only if multiple speakers detected
-            if (hasMultipleSpeakers) {
-                transcriptContent = consolidatedSpeakers.map(segment => {
-                    const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
-                    const speakerClass = `speaker-${speakerNum % 5}`;
-                    const startTime = segment.startTime ? `${Math.floor(segment.startTime)}s` : '';
-                    const endTime = segment.endTime ? `${Math.floor(segment.endTime)}s` : '';
-                    const timeRange = startTime && endTime ? `${startTime}-${endTime}` : '';
-                    
-                    return `
-                    <div class="speaker-segment ${speakerClass}">
-                        <div class="speaker-label">
-                            <strong>Speaker ${speakerNum}</strong>
-                            ${timeRange ? `<span class="speaker-timestamp">${timeRange}</span>` : ''}
-                        </div>
-                        <div class="speaker-text">${segment.consolidatedText}</div>
+            // Always display with speaker diarization (even for single speaker)
+            transcriptContent = consolidatedSpeakers.map(segment => {
+                const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
+                const speakerClass = `speaker-${speakerNum % 5}`;
+                const startTime = segment.startTime ? `${Math.floor(segment.startTime)}s` : '';
+                const endTime = segment.endTime ? `${Math.floor(segment.endTime)}s` : '';
+                const timeRange = startTime && endTime ? `${startTime}-${endTime}` : '';
+                
+                return `
+                <div class="speaker-segment ${speakerClass}">
+                    <div class="speaker-label">
+                        <strong>Speaker ${speakerNum}</strong>
+                        ${timeRange ? `<span class="speaker-timestamp">${timeRange}</span>` : ''}
                     </div>
-                `;
-                }).join('');
-            } else {
-                // Single speaker - show without speaker labels
-                const allText = consolidatedSpeakers.map(s => s.consolidatedText).join(' ');
-                transcriptContent = `<div class="transcript-text">${allText}</div>`;
-            }
+                    <div class="speaker-text">${segment.consolidatedText}</div>
+                </div>
+            `;
+            }).join('');
         } else {
             // Display without diarization - ensure we get text, not object
             const transcriptText = (typeof transcription.transcript === 'string' ? transcription.transcript : null) ||
@@ -381,15 +374,23 @@ function handleURLParams() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     const tableId = urlParams.get('table');
-    const isMobileJoin = urlParams.get('mobile');
 
     if (sessionId) {
+        console.log('URL params detected:', { sessionId, tableId });
         // Auto-load session from QR code
-        setTimeout(() => {
-            if (tableId) {
-                joinSpecificTable(sessionId, tableId);
-            } else {
-                loadSpecificSession(sessionId);
+        setTimeout(async () => {
+            try {
+                if (tableId) {
+                    console.log(`Attempting to join table ${tableId} in session ${sessionId}`);
+                    await joinSpecificTable(sessionId, tableId);
+                } else {
+                    console.log(`Attempting to load session ${sessionId}`);
+                    await loadSpecificSession(sessionId);
+                }
+            } catch (error) {
+                console.error('Error handling URL params:', error);
+                alert(`Unable to join session/table. The session may not exist or may have expired.`);
+                showWelcome();
             }
         }, 1000);
     }
@@ -572,6 +573,15 @@ function showTableInterface(tableId) {
     }
 }
 
+function backToSession() {
+    if (currentSession) {
+        loadSessionDashboard(currentSession.id);
+        showScreen('sessionDashboard');
+    } else {
+        showWelcome();
+    }
+}
+
 function showAdminDashboard() {
     loadAdminPrompts();
     showScreen('adminDashboard');
@@ -685,7 +695,6 @@ async function createSession(event) {
     const description = document.getElementById('sessionDescription').value;
     const language = document.getElementById('sessionLanguage').value;
     const tableCount = parseInt(document.getElementById('tableCount').value);
-    const maxParticipants = parseInt(document.getElementById('maxParticipants').value);
     
     if (!title.trim()) {
         console.log('Please enter a session title');
@@ -704,8 +713,7 @@ async function createSession(event) {
                 title,
                 description,
                 language,
-                tableCount,
-                maxParticipants
+                tableCount
             }),
         });
         
@@ -717,6 +725,11 @@ async function createSession(event) {
             activeSessions.push(session);
             
             console.log(`Session "${title}" created successfully!`);
+            
+            // Show admin password to user
+            if (session.admin_password) {
+                alert(`Session created successfully!\n\nAdmin Password: ${session.admin_password}\n\nSave this password - you'll need it to manage this session. Participants can use this password to access the session with admin privileges.`);
+            }
             
             // Join the socket room
             socket.emit('join-session', session.id);
@@ -823,11 +836,13 @@ async function loadSpecificSession(sessionId) {
             showScreen('sessionDashboard');
             console.log(`Joined session: ${session.title}`);
         } else {
-            console.error('Session not found or expired');
+            const error = response.status === 404 ? 'Session not found or expired' : 'Failed to load session';
+            console.error(error);
+            throw new Error(error);
         }
     } catch (error) {
         console.error('Error loading session:', error);
-        console.error('Error loading session');
+        throw error; // Re-throw so caller can handle it
     } finally {
         hideLoading();
     }
@@ -992,7 +1007,6 @@ function renderAwesomeTranscriptions(transcriptions) {
             
             const consolidatedSegments = consolidateSpeakerSegments(speakerSegments);
             const uniqueSpeakers = new Set(consolidatedSegments.map(s => s.speaker));
-            const hasMultipleSpeakers = uniqueSpeakers.size > 1;
             const recordingDate = new Date(transcription.created_at).toLocaleDateString();
             const recordingTime = new Date(transcription.created_at).toLocaleTimeString();
             const duration = Math.round(parseFloat(transcription.duration_seconds) || 0);
@@ -1008,7 +1022,6 @@ function renderAwesomeTranscriptions(transcriptions) {
                     </div>
                     <div class="awesome-speaker-segments">
                         ${consolidatedSegments.length > 0 ? 
-                            (hasMultipleSpeakers ? 
                                 consolidatedSegments.map(segment => `
                                     <div class="awesome-speaker-segment">
                                         <div class="awesome-speaker-label">Speaker ${(segment.speaker || 0) + 1}</div>
@@ -1019,18 +1032,7 @@ function renderAwesomeTranscriptions(transcriptions) {
                                             'No text available'
                                         }</div>
                                     </div>
-                                `).join('') :
-                                `<div class="awesome-speaker-segment">
-                                    <div class="awesome-speaker-text">${
-                                        consolidatedSegments.map(segment => 
-                                            (typeof segment.consolidatedText === 'string' ? segment.consolidatedText : null) ||
-                                            (typeof segment.transcript === 'string' ? segment.transcript : null) ||
-                                            (typeof segment.text === 'string' ? segment.text : null) ||
-                                            'No text available'
-                                        ).join(' ')
-                                    }</div>
-                                </div>`
-                            ) : 
+                                `).join('') : 
                             `<div class="awesome-speaker-segment">
                                 <div class="awesome-speaker-label">No Audio</div>
                                 <div class="awesome-speaker-text" style="font-style: italic; color: #999;">No transcription available for this recording</div>
@@ -1351,7 +1353,7 @@ async function loadSessionDashboard(sessionId) {
     } else {
         // Generate mock tables for display
         const mockTables = [];
-        const tableCount = session.tableCount || session.table_count || 20;
+        const tableCount = session.tableCount || session.table_count || 10;
         for (let i = 1; i <= tableCount; i++) {
             mockTables.push({
                 id: i,
@@ -1370,6 +1372,9 @@ async function loadSessionDashboard(sessionId) {
     
     // Setup QR codes section
     setupQRCodesSection(session);
+    
+    // Initialize simple chat
+    initializeSimpleChat();
 }
 
 function displayTables(tables) {
@@ -1420,7 +1425,7 @@ function setupQRCodesSection(session) {
             tables: {}
         };
         
-        const tableCount = session.tableCount || session.table_count || 20;
+        const tableCount = session.tableCount || session.table_count || 10;
         for (let i = 1; i <= tableCount; i++) {
             session.qrCodes.tables[i] = `/qr-codes/table-${session.id}-${i}.png`;
         }
@@ -1625,15 +1630,59 @@ function closeManualJoin() {
     document.getElementById('manualCode').value = '';
 }
 
-function submitManualJoin() {
+async function submitManualJoin() {
     const code = document.getElementById('manualCode').value.trim();
     if (!code) {
         console.error('Please enter a session or table code');
         return;
     }
     
-    closeManualJoin();
-    processQRCode(code);
+    try {
+        const response = await fetch('/api/entry', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeManualJoin();
+            
+            // Handle different entry types
+            switch (result.type) {
+                case 'session':
+                    // Regular session access
+                    loadSpecificSession(result.sessionId);
+                    break;
+                    
+                case 'session_admin':
+                    // Admin access to session
+                    loadSpecificSession(result.sessionId, true);
+                    break;
+                    
+                case 'table':
+                    // Direct table access via table code
+                    joinSpecificTable(result.sessionId, result.tableNumber);
+                    break;
+                    
+                case 'table_password':
+                    // Direct table access via password
+                    joinSpecificTable(result.sessionId, result.tableNumber);
+                    break;
+                    
+                default:
+                    console.error('Unknown entry type:', result.type);
+            }
+        } else {
+            alert(result.error || 'Unable to join. Please check your code and try again.');
+        }
+    } catch (error) {
+        console.error('Error joining session/table:', error);
+        alert('Connection error. Please try again.');
+    }
 }
 
 async function startCamera() {
@@ -1706,17 +1755,41 @@ async function joinSpecificTable(sessionId, tableId) {
     showLoading(`Joining Table ${tableId}...`);
     
     try {
-        // First load the session
-        await loadSpecificSession(sessionId);
-        
-        // Then navigate to the specific table
-        if (currentSession) {
-            showTableInterface(tableId);
-            console.log(`Joined Table ${tableId}!`);
+        // Load session data without showing session dashboard
+        const response = await fetch(`/api/sessions/${sessionId}`);
+        if (!response.ok) {
+            throw new Error('Session not found or expired');
         }
+        
+        const session = await response.json();
+        currentSession = session;
+        
+        // Join the socket room
+        socket.emit('join-session', sessionId);
+        
+        // Load table-specific data
+        const tableResponse = await fetch(`/api/sessions/${sessionId}/tables/${tableId}`);
+        if (tableResponse.ok) {
+            currentTable = await tableResponse.json();
+        } else {
+            // Fallback: create basic table object
+            currentTable = {
+                id: tableId,
+                table_number: parseInt(tableId),
+                session_id: sessionId,
+                name: `Table ${tableId}`,
+                status: 'waiting'
+            };
+        }
+        
+        // Setup and show table interface directly
+        setupTableInterface();
+        showScreen('tableInterface');
+        console.log(`Joined Table ${tableId} in session: ${session.title}`);
+        
     } catch (error) {
         console.error('Error joining table:', error);
-        console.error(`Error joining Table ${tableId}`);
+        throw new Error(`Unable to join Table ${tableId}. ${error.message}`);
     } finally {
         hideLoading();
     }
@@ -1782,14 +1855,14 @@ async function joinTable() {
         if (response.ok) {
             const result = await response.json();
             
-            // Load the session and go to table interface
-            await loadSpecificSession(sessionId);
-            showTableInterface(tableNumber);
+            // Go directly to the table interface (streamlined!)
+            await joinSpecificTable(sessionId, tableNumber);
             
             console.log(`Successfully joined Table ${tableNumber}!`);
         } else {
             const error = await response.json();
             console.error(`Error joining table: ${error.error}`);
+            alert(`Unable to join table: ${error.error}`);
         }
     } catch (error) {
         console.error('Error joining table:', error);
@@ -1833,9 +1906,8 @@ async function joinCurrentTable() {
             // Store participant ID
             localStorage.setItem('currentParticipantId', result.participant.id);
             
-            // Reload session and table data
-            await loadSpecificSession(currentSession.id);
-            showTableInterface(currentTable.id || currentTable.table_number);
+            // Simply refresh the current table interface (no redirect needed)
+            setupTableInterface();
             
             console.log(`Successfully joined ${currentTable.name || `Table ${currentTable.table_number}`}!`);
         } else {
@@ -2039,26 +2111,20 @@ function displayTranscription(data) {
             // Consolidate consecutive speaker segments for real-time display
             const consolidatedSpeakers = consolidateSpeakerSegments(speakers);
             const uniqueSpeakers = new Set(consolidatedSpeakers.map(s => s.speaker));
-            const hasMultipleSpeakers = uniqueSpeakers.size > 1;
             
-            if (hasMultipleSpeakers) {
-                transcriptContent = consolidatedSpeakers.map(segment => {
-                    const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
-                    const speakerClass = `speaker-${speakerNum % 5}`;
-                    return `
-                        <div class="speaker-segment ${speakerClass}">
-                            <div class="speaker-label">
-                                <strong>Speaker ${speakerNum}</strong>
-                            </div>
-                            <div class="speaker-text">${segment.consolidatedText}</div>
+            // Always display with speaker diarization (even for single speaker)
+            transcriptContent = consolidatedSpeakers.map(segment => {
+                const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
+                const speakerClass = `speaker-${speakerNum % 5}`;
+                return `
+                    <div class="speaker-segment ${speakerClass}">
+                        <div class="speaker-label">
+                            <strong>Speaker ${speakerNum}</strong>
                         </div>
-                    `;
-                }).join('');
-            } else {
-                // Single speaker - no speaker labels
-                const allText = consolidatedSpeakers.map(s => s.consolidatedText).join(' ');
-                transcriptContent = `<div class="speaker-text">${allText}</div>`;
-            }
+                        <div class="speaker-text">${segment.consolidatedText}</div>
+                    </div>
+                `;
+            }).join('');
         } else {
             // Handle different transcript field names and ensure we display text, not object
             const transcriptText = data.transcription.transcript || 
@@ -2107,23 +2173,83 @@ async function generateAnalysis() {
         return;
     }
     
-    showLoading('Generating AI-powered analysis...');
+    // Detect context: are we in table view or session view?
+    const currentScreen = document.querySelector('.screen.active');
+    const isTableInterface = currentScreen && currentScreen.id === 'tableInterface';
+    
+    if (isTableInterface && currentTable) {
+        // Generate table-level analysis
+        await generateTableAnalysis();
+    } else {
+        // Generate session-level analysis
+        await generateSessionAnalysis();
+    }
+}
+
+async function generateTableAnalysis() {
+    if (!currentTable) {
+        console.error('No table selected');
+        return;
+    }
+    
+    showLoading(`Generating analysis for ${currentTable.name}...`);
     
     try {
-        const response = await fetch(`/api/sessions/${currentSession.id}/analysis`);
+        const response = await fetch(`/api/tables/${currentTable.id}/analysis/generate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                types: ['summary', 'themes', 'sentiment', 'conflicts', 'agreements']
+            })
+        });
         
         if (response.ok) {
-            const analysis = await response.json();
-            displayAnalysisReport(analysis);
+            const analysisResult = await response.json();
+            displayTableAnalysisReport(analysisResult);
             showScreen('analysisReport');
-            console.log('Analysis completed!');
+            console.log('Table analysis completed!');
         } else {
             const error = await response.json();
-            console.error(`Analysis failed: ${error.error}`);
+            console.error(`Table analysis failed: ${error.error}`);
+            alert(`Analysis failed: ${error.error}`);
         }
     } catch (error) {
-        console.error('Error generating analysis:', error);
-        console.error('Error generating analysis');
+        console.error('Error generating table analysis:', error);
+        alert('Error generating table analysis. Please check console for details.');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function generateSessionAnalysis() {
+    showLoading('Generating session-wide analysis...');
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/analysis/generate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                types: ['summary', 'themes', 'sentiment', 'conflicts', 'agreements']
+            })
+        });
+        
+        if (response.ok) {
+            const analysisResult = await response.json();
+            displaySessionAnalysisReport(analysisResult);
+            showScreen('analysisReport');
+            console.log('Session analysis completed!');
+        } else {
+            const error = await response.json();
+            console.error(`Session analysis failed: ${error.error}`);
+            alert(`Analysis failed: ${error.error}`);
+        }
+    } catch (error) {
+        console.error('Error generating session analysis:', error);
+        alert('Error generating session analysis. Please check console for details.');
     } finally {
         hideLoading();
     }
@@ -2207,6 +2333,670 @@ function displayAnalysisReport(analysis) {
         ` : ''}
     `;
 }
+
+function displayTableAnalysisReport(analysisResult) {
+    const reportContent = document.getElementById('reportContent');
+    const { analyses, table_id, table_number } = analysisResult;
+    
+    // Extract analysis data from the response structure
+    const summary = analyses.summary?.analysis_data || {};
+    const themes = analyses.themes?.analysis_data?.themes || [];
+    const conflicts = analyses.conflicts?.analysis_data?.conflicts || [];
+    const agreements = analyses.agreements?.analysis_data?.agreements || [];
+    const sentiment = analyses.sentiment?.analysis_data || {};
+    
+    reportContent.innerHTML = `
+        <div class="analysis-header">
+            <h2>Table ${table_number} Analysis Report</h2>
+            <p class="analysis-scope">🏓 Table-Level Analysis</p>
+            <div class="analysis-meta">
+                <span>Table ID: ${table_id}</span>
+                <span>Generated: ${new Date().toLocaleString()}</span>
+                <span>🤖 AI-Powered Analysis</span>
+            </div>
+        </div>
+        
+        <div class="analysis-summary">
+            <h3>Analysis Summary</h3>
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <span class="stat-value">${conflicts.length || 0}</span>
+                    <span class="stat-label">Conflicts Detected</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${agreements.length || 0}</span>
+                    <span class="stat-label">Agreements Found</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${themes.length || 0}</span>
+                    <span class="stat-label">Main Themes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${summary.recording_stats?.total_recordings || 0}</span>
+                    <span class="stat-label">Recordings Analyzed</span>
+                </div>
+            </div>
+        </div>
+        
+        ${summary.key_insights ? `
+            <div class="analysis-section">
+                <h4>📋 Key Insights</h4>
+                <ul class="insights-list">
+                    ${summary.key_insights.map(insight => `<li>${insight}</li>`).join('')}
+                </ul>
+            </div>
+        ` : ''}
+        
+        ${sentiment.overall !== undefined ? `
+            <div class="analysis-section">
+                <h4>😊 Sentiment Analysis</h4>
+                <div class="sentiment-display">
+                    <div class="sentiment-score">
+                        <span class="score-value">${sentiment.overall > 0 ? '+' : ''}${(sentiment.overall * 100).toFixed(0)}%</span>
+                        <span class="score-label">${sentiment.interpretation || 'Mixed'}</span>
+                    </div>
+                    ${sentiment.insights ? `
+                        <div class="sentiment-insights">
+                            <h5>Sentiment Insights:</h5>
+                            <ul>${sentiment.insights.map(insight => `<li>${insight}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${themes.length > 0 ? `
+            <div class="analysis-section">
+                <h4>🎨 Main Themes</h4>
+                <div class="themes-list">
+                    ${themes.map(theme => `
+                        <div class="theme-item">
+                            <h5>${theme.theme}</h5>
+                            <p>${theme.description || 'No description available'}</p>
+                            <div class="theme-meta">
+                                <small>Mentioned ${theme.frequency || 0} times</small>
+                                ${theme.sentiment ? `<span class="theme-sentiment ${theme.sentiment > 0 ? 'positive' : theme.sentiment < 0 ? 'negative' : 'neutral'}">${theme.sentiment > 0 ? '😊' : theme.sentiment < 0 ? '😔' : '😐'}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${conflicts.length > 0 ? `
+            <div class="analysis-section">
+                <h4>⚡ Conflicts & Disagreements</h4>
+                <div class="conflicts-list">
+                    ${conflicts.map(conflict => `
+                        <div class="conflict-item">
+                            <div class="conflict-header">
+                                <span class="conflict-severity">Severity: ${((conflict.severity || 0) * 100).toFixed(0)}%</span>
+                                <span class="table-ref">Table ${table_number}</span>
+                            </div>
+                            <p class="conflict-text">"${conflict.text || 'No text available'}"</p>
+                            <p class="conflict-description">${conflict.description || 'No description available'}</p>
+                            ${conflict.context ? `<small class="conflict-context">Context: ${conflict.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${agreements.length > 0 ? `
+            <div class="analysis-section">
+                <h4>🤝 Agreements & Consensus</h4>
+                <div class="agreements-list">
+                    ${agreements.map(agreement => `
+                        <div class="agreement-item">
+                            <div class="agreement-header">
+                                <span class="agreement-strength">Strength: ${((agreement.strength || 0) * 100).toFixed(0)}%</span>
+                                <span class="table-ref">Table ${table_number}</span>
+                            </div>
+                            <p class="agreement-text">"${agreement.text || 'No text available'}"</p>
+                            <p class="agreement-description">${agreement.description || 'No description available'}</p>
+                            ${agreement.context ? `<small class="agreement-context">Context: ${agreement.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="analysis-actions">
+            <button onclick="viewSessionAnalysis()" class="btn btn-secondary">📊 View Session Analysis</button>
+            <button onclick="compareWithOtherTables()" class="btn btn-secondary">🏓 Compare Tables</button>
+        </div>
+    `;
+}
+
+function displaySessionAnalysisReport(analysisResult) {
+    const reportContent = document.getElementById('reportContent');
+    const { analyses, session_title } = analysisResult;
+    
+    // Extract analysis data from the response structure
+    const summary = analyses.summary?.analysis_data || {};
+    const themes = analyses.themes?.analysis_data?.themes || [];
+    const conflicts = analyses.conflicts?.analysis_data?.conflicts || [];
+    const agreements = analyses.agreements?.analysis_data?.agreements || [];
+    const sentiment = analyses.sentiment?.analysis_data || {};
+    
+    reportContent.innerHTML = `
+        <div class="analysis-header">
+            <h2>${session_title} - Session Analysis</h2>
+            <p class="analysis-scope">🌐 Session-Wide Analysis</p>
+            <div class="analysis-meta">
+                <span>Session: ${session_title}</span>
+                <span>Generated: ${new Date().toLocaleString()}</span>
+                <span>🤖 AI-Powered Analysis</span>
+            </div>
+        </div>
+        
+        <div class="analysis-summary">
+            <h3>Session Overview</h3>
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <span class="stat-value">${conflicts.length || 0}</span>
+                    <span class="stat-label">Total Conflicts</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${agreements.length || 0}</span>
+                    <span class="stat-label">Total Agreements</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${themes.length || 0}</span>
+                    <span class="stat-label">Main Themes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">${Object.keys(sentiment.byTable || {}).length}</span>
+                    <span class="stat-label">Tables Analyzed</span>
+                </div>
+            </div>
+        </div>
+        
+        ${summary.key_insights ? `
+            <div class="analysis-section">
+                <h4>📋 Session Insights</h4>
+                <ul class="insights-list">
+                    ${summary.key_insights.map(insight => `<li>${insight}</li>`).join('')}
+                </ul>
+            </div>
+        ` : ''}
+        
+        ${sentiment.overall !== undefined ? `
+            <div class="analysis-section">
+                <h4>😊 Overall Session Sentiment</h4>
+                <div class="sentiment-display">
+                    <div class="sentiment-score">
+                        <span class="score-value">${sentiment.overall > 0 ? '+' : ''}${(sentiment.overall * 100).toFixed(0)}%</span>
+                        <span class="score-label">${sentiment.interpretation || 'Mixed'}</span>
+                    </div>
+                    ${sentiment.byTable ? `
+                        <div class="table-sentiments">
+                            <h5>By Table:</h5>
+                            <div class="table-sentiment-grid">
+                                ${Object.entries(sentiment.byTable).map(([tableId, score]) => `
+                                    <div class="table-sentiment-item">
+                                        <span class="table-label">Table ${tableId}</span>
+                                        <span class="sentiment-bar">
+                                            <span class="sentiment-fill ${score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral'}" 
+                                                  style="width: ${Math.abs(score) * 100}%"></span>
+                                        </span>
+                                        <span class="sentiment-value">${(score * 100).toFixed(0)}%</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${themes.length > 0 ? `
+            <div class="analysis-section">
+                <h4>🎨 Cross-Table Themes</h4>
+                <div class="themes-list">
+                    ${themes.map(theme => `
+                        <div class="theme-item">
+                            <h5>${theme.theme}</h5>
+                            <p>${theme.description || 'No description available'}</p>
+                            <div class="theme-meta">
+                                <small>Mentioned ${theme.frequency || 0} times</small>
+                                ${theme.tables ? `<small>Tables: ${Object.keys(theme.tables).join(', ')}</small>` : ''}
+                                ${theme.sentiment ? `<span class="theme-sentiment ${theme.sentiment > 0 ? 'positive' : theme.sentiment < 0 ? 'negative' : 'neutral'}">${theme.sentiment > 0 ? '😊' : theme.sentiment < 0 ? '😔' : '😐'}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${conflicts.length > 0 ? `
+            <div class="analysis-section">
+                <h4>⚡ Session-Wide Conflicts</h4>
+                <div class="conflicts-list">
+                    ${conflicts.map(conflict => `
+                        <div class="conflict-item">
+                            <div class="conflict-header">
+                                <span class="conflict-severity">Severity: ${((conflict.severity || 0) * 100).toFixed(0)}%</span>
+                                ${conflict.tableId ? `<span class="table-ref">Table ${conflict.tableId}</span>` : ''}
+                            </div>
+                            <p class="conflict-text">"${conflict.text || 'No text available'}"</p>
+                            <p class="conflict-description">${conflict.description || 'No description available'}</p>
+                            ${conflict.context ? `<small class="conflict-context">Context: ${conflict.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${agreements.length > 0 ? `
+            <div class="analysis-section">
+                <h4>🤝 Session-Wide Agreements</h4>
+                <div class="agreements-list">
+                    ${agreements.map(agreement => `
+                        <div class="agreement-item">
+                            <div class="agreement-header">
+                                <span class="agreement-strength">Strength: ${((agreement.strength || 0) * 100).toFixed(0)}%</span>
+                                ${agreement.tableId ? `<span class="table-ref">Table ${agreement.tableId}</span>` : ''}
+                            </div>
+                            <p class="agreement-text">"${agreement.text || 'No text available'}"</p>
+                            <p class="agreement-description">${agreement.description || 'No description available'}</p>
+                            ${agreement.context ? `<small class="agreement-context">Context: ${agreement.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="analysis-actions">
+            <button onclick="viewTableAnalyses()" class="btn btn-secondary">🏓 View Individual Tables</button>
+            <button onclick="exportAnalysisData()" class="btn btn-secondary">📥 Export Data</button>
+        </div>
+    `;
+}
+
+async function viewSessionAnalysis() {
+    if (!currentSession) return;
+    
+    showLoading('Loading session analysis...');
+    try {
+        await generateSessionAnalysis();
+    } catch (error) {
+        console.error('Error loading session analysis:', error);
+    }
+}
+
+async function viewTableAnalyses() {
+    // This would show a list of all table analyses for the session
+    alert('Table analyses view - to be implemented');
+}
+
+async function compareWithOtherTables() {
+    // This would show a comparison view between different tables
+    alert('Table comparison view - to be implemented');
+}
+
+async function exportAnalysisData() {
+    // This would export the analysis data
+    alert('Export functionality - to be implemented');
+}
+
+// Session Dashboard AI Analysis Functions
+async function generateSessionAnalysisFromDashboard() {
+    if (!currentSession) {
+        alert('No session selected');
+        return;
+    }
+    
+    const analysisBtn = document.getElementById('sessionAIAnalysisBtn');
+    const sessionAIAnalysisSection = document.getElementById('sessionAIAnalysisSection');
+    const sessionAIAnalysisResults = document.getElementById('sessionAIAnalysisResults');
+    
+    // Disable button and show loading
+    analysisBtn.disabled = true;
+    analysisBtn.textContent = '🤖 Generating...';
+    
+    // Show analysis section with loading
+    sessionAIAnalysisSection.style.display = 'block';
+    sessionAIAnalysisResults.innerHTML = `
+        <div class="analysis-loading">
+            <div class="spinner"></div>
+            <p>AI is analyzing all session transcriptions...</p>
+            <small>This may take a few minutes depending on the amount of content.</small>
+        </div>
+    `;
+    
+    try {
+        const analysisResult = await generateSessionAnalysis();
+        
+        // Display the result in the session dashboard section
+        displaySessionAnalysisInDashboard(analysisResult);
+        
+        // Add success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'analysis-success';
+        successDiv.innerHTML = '✅ Session AI analysis completed successfully!';
+        sessionAIAnalysisResults.insertBefore(successDiv, sessionAIAnalysisResults.firstChild);
+        
+        // Remove success message after 3 seconds
+        setTimeout(() => {
+            if (successDiv.parentNode) {
+                successDiv.parentNode.removeChild(successDiv);
+            }
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Error generating session AI analysis:', error);
+        sessionAIAnalysisResults.innerHTML = `
+            <div class="analysis-error">
+                <h3>❌ Session Analysis Failed</h3>
+                <p>${error.message || 'An error occurred while generating the analysis.'}</p>
+                <small>Please try again or check if the AI service is available.</small>
+            </div>
+        `;
+    } finally {
+        // Re-enable button
+        analysisBtn.disabled = false;
+        analysisBtn.textContent = '🤖 AI Analysis';
+    }
+}
+
+function displaySessionAnalysisInDashboard(analysisResult) {
+    const sessionAIAnalysisResults = document.getElementById('sessionAIAnalysisResults');
+    const { analyses, session_title } = analysisResult;
+    
+    // Extract analysis data from the response structure
+    const summary = analyses.summary?.analysis_data || {};
+    const themes = analyses.themes?.analysis_data?.themes || [];
+    const conflicts = analyses.conflicts?.analysis_data?.conflicts || [];
+    const agreements = analyses.agreements?.analysis_data?.agreements || [];
+    const sentiment = analyses.sentiment?.analysis_data || {};
+    
+    sessionAIAnalysisResults.innerHTML = `
+        <div class="analysis-summary-dashboard">
+            <h3>📊 Session Analysis Summary</h3>
+            <div class="summary-stats-grid">
+                <div class="stat-card-mini">
+                    <span class="stat-value">${themes.length || 0}</span>
+                    <span class="stat-label">Main Themes</span>
+                </div>
+                <div class="stat-card-mini">
+                    <span class="stat-value">${conflicts.length || 0}</span>
+                    <span class="stat-label">Conflicts</span>
+                </div>
+                <div class="stat-card-mini">
+                    <span class="stat-value">${agreements.length || 0}</span>
+                    <span class="stat-label">Agreements</span>
+                </div>
+                <div class="stat-card-mini ${sentiment.overall > 0.1 ? 'positive' : sentiment.overall < -0.1 ? 'negative' : 'neutral'}">
+                    <span class="stat-value">${sentiment.overall ? (sentiment.overall * 100).toFixed(0) + '%' : 'N/A'}</span>
+                    <span class="stat-label">Sentiment</span>
+                </div>
+            </div>
+        </div>
+        
+        ${themes.length > 0 ? `
+            <div class="analysis-section-compact">
+                <h4>🎨 Top Session Themes</h4>
+                <div class="themes-compact">
+                    ${themes.slice(0, 3).map(theme => `
+                        <div class="theme-tag">
+                            <span class="theme-name">${theme.theme}</span>
+                            <span class="theme-frequency">${theme.frequency || 0}×</span>
+                        </div>
+                    `).join('')}
+                    ${themes.length > 3 ? `<div class="theme-tag more">+${themes.length - 3} more</div>` : ''}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${sentiment.byTable ? `
+            <div class="analysis-section-compact">
+                <h4>😊 Table Sentiments</h4>
+                <div class="table-sentiments-compact">
+                    ${Object.entries(sentiment.byTable).slice(0, 6).map(([tableId, score]) => `
+                        <div class="table-sentiment-compact">
+                            <span class="table-label">Table ${tableId}</span>
+                            <span class="sentiment-indicator ${score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral'}">
+                                ${score > 0.1 ? '😊' : score < -0.1 ? '😔' : '😐'}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="analysis-actions-dashboard">
+            <button onclick="viewFullSessionAnalysisReport()" class="btn btn-primary">📋 View Full Report</button>
+            <button onclick="viewTableAnalyses()" class="btn btn-secondary">🏓 Table Breakdown</button>
+        </div>
+    `;
+}
+
+async function viewFullSessionAnalysisReport() {
+    // Navigate to the full analysis report
+    await generateSessionAnalysis();
+}
+
+function toggleSessionAIAnalysis() {
+    const sessionAIAnalysisSection = document.getElementById('sessionAIAnalysisSection');
+    sessionAIAnalysisSection.style.display = sessionAIAnalysisSection.style.display === 'none' ? 'block' : 'none';
+}
+
+// Make sure the session dashboard analysis button calls the right function
+if (typeof window !== 'undefined') {
+    // Override the inline onclick for the session dashboard button
+    document.addEventListener('DOMContentLoaded', function() {
+        const sessionAnalysisBtn = document.getElementById('sessionAIAnalysisBtn');
+        if (sessionAnalysisBtn) {
+            sessionAnalysisBtn.onclick = generateSessionAnalysisFromDashboard;
+        }
+    });
+}
+
+// Simple Session Chat Functions
+let simpleChatAvailable = false;
+
+function initializeSimpleChat() {
+    if (currentSession) {
+        checkSimpleChatStatus();
+        
+        // Add Enter key handler
+        const input = document.getElementById('simpleChatInput');
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendSimpleChatMessage();
+                }
+            });
+        }
+    }
+}
+
+async function checkSimpleChatStatus() {
+    if (!currentSession) {
+        updateSimpleChatStatus('No session selected', false);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/chat/status`);
+        const status = await response.json();
+        
+        if (response.ok) {
+            simpleChatAvailable = status.available && status.hasTranscriptions;
+            
+            if (!status.available) {
+                updateSimpleChatStatus('Service unavailable', false);
+            } else if (!status.hasTranscriptions) {
+                updateSimpleChatStatus('No transcriptions yet', false);
+                updateSimpleTranscriptCount(0);
+            } else {
+                updateSimpleChatStatus('Ready to chat!', true);
+                updateSimpleTranscriptCount(status.transcriptionCount);
+            }
+        } else {
+            updateSimpleChatStatus('Connection error', false);
+        }
+    } catch (error) {
+        console.error('Error checking simple chat status:', error);
+        updateSimpleChatStatus('Connection error', false);
+    }
+}
+
+function updateSimpleChatStatus(message, available) {
+    const statusText = document.getElementById('simpleChatStatus');
+    const chatInput = document.getElementById('simpleChatInput');
+    const sendBtn = document.getElementById('simpleSendBtn');
+    
+    if (statusText) statusText.textContent = message;
+    if (chatInput) chatInput.disabled = !available;
+    if (sendBtn) sendBtn.disabled = !available;
+    
+    simpleChatAvailable = available;
+}
+
+function updateSimpleTranscriptCount(count) {
+    const countSpan = document.getElementById('simpleTranscriptCount');
+    if (countSpan) {
+        countSpan.textContent = `${count} transcription${count !== 1 ? 's' : ''}`;
+    }
+}
+
+async function sendSimpleChatMessage() {
+    const chatInput = document.getElementById('simpleChatInput');
+    const sendBtn = document.getElementById('simpleSendBtn');
+    const message = chatInput.value.trim();
+    
+    if (!message || !simpleChatAvailable || !currentSession) {
+        return;
+    }
+    
+    // Add user message
+    addSimpleMessage('user', message);
+    
+    // Clear input and disable controls
+    chatInput.value = '';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Thinking...';
+    
+    // Add loading message
+    const loadingId = addSimpleMessage('ai', '🤔 Analyzing...');
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+        
+        const result = await response.json();
+        
+        // Remove loading message
+        removeSimpleMessage(loadingId);
+        
+        if (response.ok && result.success) {
+            addSimpleMessage('ai', result.response);
+        } else {
+            let errorMsg = result.error || 'Failed to get response';
+            if (result.suggestion) {
+                errorMsg += '\n\n💡 ' + result.suggestion;
+            }
+            addSimpleMessage('error', errorMsg);
+        }
+        
+    } catch (error) {
+        console.error('Chat error:', error);
+        removeSimpleMessage(loadingId);
+        addSimpleMessage('error', 'Network error - please try again');
+    } finally {
+        // Re-enable controls
+        chatInput.disabled = !simpleChatAvailable;
+        sendBtn.disabled = !simpleChatAvailable;
+        sendBtn.textContent = 'Send';
+        if (simpleChatAvailable) {
+            chatInput.focus();
+        }
+    }
+}
+
+function addSimpleMessage(type, content) {
+    const messagesDiv = document.getElementById('simpleChatMessages');
+    const messageId = 'simple-msg-' + Date.now();
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.id = messageId;
+    messageDiv.className = `simple-msg simple-msg-${type}`;
+    messageDiv.innerHTML = content.replace(/\n/g, '<br>');
+    
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    return messageId;
+}
+
+function removeSimpleMessage(messageId) {
+    const message = document.getElementById(messageId);
+    if (message) {
+        message.remove();
+    }
+}
+
+function addMessageToChat(type, content, isLoading = false) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageId = 'msg-' + Date.now();
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    messageDiv.id = messageId;
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    if (type === 'error') {
+        contentDiv.innerHTML = `<div class="error-message">❌ ${content.replace(/\n/g, '<br>')}</div>`;
+    } else if (isLoading) {
+        contentDiv.innerHTML = `<div class="loading-message">${content}</div>`;
+    } else {
+        // Format the content with basic markdown-like formatting
+        const formattedContent = content
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        contentDiv.innerHTML = formattedContent;
+    }
+    
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return messageId;
+}
+
+function removeMessageFromChat(messageId) {
+    const message = document.getElementById(messageId);
+    if (message) {
+        message.remove();
+    }
+}
+
+// Handle Enter key in chat input
+document.addEventListener('DOMContentLoaded', function() {
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+    }
+});
 
 // Admin functionality
 async function loadAdminPrompts() {

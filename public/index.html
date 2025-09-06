@@ -102,12 +102,10 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="tableCount">Number of Tables</label>
-                                <input type="number" id="tableCount" value="20" min="1" max="50">
+                                <input type="number" id="tableCount" value="10" min="1" max="50">
                             </div>
                             
                             <div class="form-group">
-                                <label for="maxParticipants">Max Participants</label>
-                                <input type="number" id="maxParticipants" value="100" min="5" max="500">
                             </div>
                         </div>
                         
@@ -176,7 +174,10 @@
                             <span class="stat-label">Recordings</span>
                         </div>
                         <div class="stat-card">
-                            <button id="showQRCodesBtn" class="btn btn-primary">📱 QR Codes</button>
+                            <button id="sessionAIAnalysisBtn" class="btn btn-primary" onclick="generateSessionAnalysisFromDashboard()">🤖 AI Analysis</button>
+                        </div>
+                        <div class="stat-card">
+                            <button id="showQRCodesBtn" class="btn btn-secondary">📱 QR Codes</button>
                         </div>
                     </div>
                 </div>
@@ -197,9 +198,43 @@
                     </div>
                 </div>
 
+                <!-- Session AI Analysis Section -->
+                <div id="sessionAIAnalysisSection" class="ai-analysis-section" style="display: none;">
+                    <div class="ai-analysis-header">
+                        <h2>🤖 Session AI Analysis Results</h2>
+                        <button onclick="toggleSessionAIAnalysis()" class="close-analysis-btn">✕ Hide</button>
+                    </div>
+                    <div id="sessionAIAnalysisResults" class="ai-analysis-results">
+                        <!-- Session analysis results will be loaded here -->
+                    </div>
+                </div>
+
                 <div class="dashboard-content">
                     <div class="tables-grid" id="tablesGrid">
                         <!-- Tables will be dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Simple Session Chat -->
+                <div id="simpleChat" class="simple-chat-box">
+                    <div class="simple-chat-title">
+                        <span>💬 Chat with Session</span>
+                        <span id="simpleChatStatus" class="simple-status">Checking...</span>
+                    </div>
+                    
+                    <div id="simpleChatMessages" class="simple-messages">
+                        <div class="simple-intro">
+                            <p>👋 Ask me about this World Café session!</p>
+                        </div>
+                    </div>
+                    
+                    <div class="simple-input">
+                        <input type="text" id="simpleChatInput" placeholder="Ask about the discussions..." disabled>
+                        <button id="simpleSendBtn" onclick="sendSimpleChatMessage()" disabled>Send</button>
+                    </div>
+                    
+                    <div class="simple-info">
+                        <small><span id="simpleTranscriptCount">0 transcriptions</span> available</small>
                     </div>
                 </div>
             </div>
@@ -207,7 +242,12 @@
             <!-- Table Interface -->
             <div id="tableInterface" class="screen">
                 <div class="table-header">
-                    <h2 id="tableTitle">Table 1</h2>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button onclick="backToSession()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.9rem;">
+                            ← Session
+                        </button>
+                        <h2 id="tableTitle">Table 1</h2>
+                    </div>
                     <div class="table-status">
                         <span id="tableStatus" class="status-badge">Waiting</span>
                     </div>
@@ -813,11 +853,14 @@
         <!-- Manual Join Modal -->
         <div id="manualJoinModal" class="mobile-scanner" style="display: none;">
             <div class="scanner-container">
-                <h3>Enter Session/Table Code</h3>
+                <h3>Enter Code or Password</h3>
                 <div class="form-group">
-                    <label for="manualCode">Session or Table Code</label>
-                    <input type="text" id="manualCode" placeholder="Enter session ID or scan URL" 
+                    <label for="manualCode">Session/Table Code or Password</label>
+                    <input type="text" id="manualCode" placeholder="Enter session code, table code, or password" 
                            style="margin-bottom: 1rem;">
+                    <small style="color: #666; font-size: 0.9rem;">
+                        Accepts: Session codes, table codes, admin passwords, or table passwords
+                    </small>
                 </div>
                 <div style="display: flex; gap: 1rem;">
                     <button id="closeManualJoinBtn" class="btn btn-secondary">Cancel</button>
@@ -860,6 +903,7 @@
 
         <!-- Toast notifications removed -->
     </div>
+
 
     <script src="app.js"></script>
 </body>
