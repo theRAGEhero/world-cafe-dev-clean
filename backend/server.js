@@ -18,6 +18,7 @@ const SessionAnalysis = require('./database/models/SessionAnalysis');
 // Services
 const TranscriptionService = require('./transcription');
 const AnalysisService = require('./analysis');
+const logger = require('./utils/logger');
 const SessionChatService = require('./sessionChatService');
 const LLMAnalysisService = require('./llmAnalysis');
 const PasswordUtils = require('./passwordUtils');
@@ -177,13 +178,19 @@ async function initializeDatabase() {
     if (success) {
       console.log('Database connected successfully');
       
+      // Initialize logger with database connection
+      logger.initialize(db);
+      logger.info('Server starting up', { timestamp: new Date() });
+      
       // Run database migrations/checks
       try {
         await checkTableStructure();
         console.log('Database schema verified');
+        logger.info('Database schema verified');
       } catch (migrationError) {
         console.error('Database migration failed:', migrationError.message);
         console.warn('Some database features may not work properly');
+        logger.error('Database migration failed', { error: migrationError.message });
       }
       
       // Run pending migrations
@@ -252,6 +259,76 @@ io.on('connection', (socket) => {
 });
 
 // Routes
+
+// Logs endpoint for frontend logging
+app.post('/api/logs', (req, res) => {
+  try {
+    const { logs } = req.body;
+    
+    if (!logs || !Array.isArray(logs)) {
+      return res.status(400).json({ error: 'Invalid logs format' });
+    }
+
+    // Process each log entry
+    logs.forEach(logEntry => {
+      const { level, message, action, userId, sessionId, error, ...meta } = logEntry;
+      
+      // Extract request info
+      const requestInfo = {
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent'),
+        ...meta
+      };
+
+      // Log using appropriate method based on level
+      switch (level) {
+        case 'error':
+          logger.error(message, { action, userId, sessionId, error, ...requestInfo });
+          break;
+        case 'warn':
+          logger.warn(message, { action, userId, sessionId, ...requestInfo });
+          break;
+        case 'info':
+          if (action) {
+            logger.logUserAction(action, userId, { sessionId, ...requestInfo });
+          } else {
+            logger.info(message, { userId, sessionId, ...requestInfo });
+          }
+          break;
+        case 'debug':
+          logger.debug(message, { userId, sessionId, ...requestInfo });
+          break;
+        default:
+          logger.info(message, { userId, sessionId, ...requestInfo });
+      }
+    });
+
+    res.json({ success: true, processed: logs.length });
+  } catch (error) {
+    logger.error('Failed to process frontend logs', { error: error.message });
+    res.status(500).json({ error: 'Failed to process logs' });
+  }
+});
+
+// Admin endpoint to view activity logs
+app.get('/api/admin/logs', async (req, res) => {
+  try {
+    const { action, userId, sessionId, since, limit } = req.query;
+    
+    const filters = {};
+    if (action) filters.action = action;
+    if (userId) filters.userId = userId;
+    if (sessionId) filters.sessionId = sessionId;
+    if (since) filters.since = since;
+    if (limit) filters.limit = parseInt(limit);
+
+    const logs = await logger.getActivityLogs(filters);
+    res.json({ logs, total: logs.length });
+  } catch (error) {
+    logger.error('Failed to retrieve admin logs', { error: error.message });
+    res.status(500).json({ error: 'Failed to retrieve logs' });
+  }
+});
 
 // Health check
 app.get('/api/health', async (req, res) => {

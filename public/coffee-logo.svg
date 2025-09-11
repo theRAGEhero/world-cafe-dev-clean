@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Coffee cup gradient -->
+    <linearGradient id="cupGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8B4513"/>
+      <stop offset="50%" stop-color="#A0522D"/>
+      <stop offset="100%" stop-color="#6B3410"/>
+    </linearGradient>
+    
+    <!-- Coffee liquid gradient -->
+    <linearGradient id="coffeeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3E2723"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+    
+    <!-- Steam gradient -->
+    <linearGradient id="steamGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8E8E8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#F5F5F5" stop-opacity="0.3"/>
+    </linearGradient>
+    
+    <!-- Saucer gradient -->
+    <linearGradient id="saucerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#A0522D"/>
+      <stop offset="100%" stop-color="#8B4513"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Saucer -->
+  <ellipse cx="32" cy="52" rx="26" ry="6" fill="url(#saucerGradient)" opacity="0.8"/>
+  
+  <!-- Cup base -->
+  <path d="M12 48 L16 20 L48 20 L52 48 C52 52, 48 56, 44 56 L20 56 C16 56, 12 52, 12 48 Z" 
+        fill="url(#cupGradient)" stroke="#5D4037" stroke-width="1.5"/>
+  
+  <!-- Coffee liquid -->
+  <path d="M14 45 L17 25 L47 25 L50 45 C50 48, 47 50, 44 50 L20 50 C17 50, 14 48, 14 45 Z" 
+        fill="url(#coffeeGradient)"/>
+  
+  <!-- Cup handle -->
+  <path d="M52 30 C58 30, 62 34, 62 40 C62 46, 58 50, 52 50" 
+        fill="none" stroke="url(#cupGradient)" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Steam wisps -->
+  <g opacity="0.8">
+    <path d="M22 15 Q20 10, 22 5 Q24 10, 22 15" fill="url(#steamGradient)">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; 1,-1; -1,-0.5; 0,0" dur="3s" repeatCount="indefinite"/>
+    </path>
+    <path d="M32 12 Q30 7, 32 2 Q34 7, 32 12" fill="url(#steamGradient)">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; -1,-1.5; 1,-1; 0,0" dur="2.5s" repeatCount="indefinite"/>
+    </path>
+    <path d="M42 15 Q40 10, 42 5 Q44 10, 42 15" fill="url(#steamGradient)">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; 0.5,-1; -1.5,-0.5; 0,0" dur="3.5s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  
+  <!-- Coffee highlight -->
+  <ellipse cx="32" cy="30" rx="12" ry="3" fill="#4A2C2A" opacity="0.6"/>
+</svg>

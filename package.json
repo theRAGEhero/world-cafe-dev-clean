@@ -31,11 +31,13 @@
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.14.3",
     "natural": "^6.12.0",
+    "node-fetch": "^3.3.2",
     "qrcode": "^1.5.4",
     "sentiment": "^5.0.2",
     "sharp": "^0.34.3",
     "socket.io": "^4.7.2",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

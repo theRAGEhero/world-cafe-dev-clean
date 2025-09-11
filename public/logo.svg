@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <!-- Globe gradient -->
+    <radialGradient id="globeGradient" cx="0.3" cy="0.3">
+      <stop offset="0%" stop-color="#4A90E2"/>
+      <stop offset="50%" stop-color="#357ABD"/>
+      <stop offset="100%" stop-color="#2E6DA4"/>
+    </radialGradient>
+    
+    <!-- Coffee cup gradient -->
+    <linearGradient id="coffeeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8B4513"/>
+      <stop offset="50%" stop-color="#A0522D"/>
+      <stop offset="100%" stop-color="#6B3410"/>
+    </linearGradient>
+    
+    <!-- Coffee liquid gradient -->
+    <linearGradient id="liquidGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3E2723"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+    
+    <!-- Steam gradient -->
+    <linearGradient id="steamGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8E8E8" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#F5F5F5" stop-opacity="0.2"/>
+    </linearGradient>
+    
+    <!-- Globe continents -->
+    <linearGradient id="continentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2E7D32"/>
+      <stop offset="100%" stop-color="#1B5E20"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Main background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#globeGradient)" stroke="#1565C0" stroke-width="8"/>
+  
+  <!-- Globe continents (simplified world map) -->
+  <!-- North America -->
+  <path d="M180 180 C160 160, 140 180, 135 200 C130 220, 145 240, 160 245 C180 250, 200 235, 210 215 C215 195, 200 180, 180 180 Z" 
+        fill="url(#continentGradient)" opacity="0.9"/>
+  
+  <!-- Europe/Africa -->
+  <path d="M250 170 C245 150, 265 145, 285 155 C300 165, 310 185, 305 205 C300 225, 280 240, 260 245 C240 240, 235 220, 240 200 C245 185, 250 170, 250 170 Z" 
+        fill="url(#continentGradient)" opacity="0.9"/>
+  
+  <!-- Asia -->
+  <path d="M320 160 C340 150, 360 160, 375 180 C385 200, 380 220, 365 235 C350 245, 330 240, 315 225 C305 210, 310 190, 315 175 C318 165, 320 160, 320 160 Z" 
+        fill="url(#continentGradient)" opacity="0.9"/>
+  
+  <!-- Australia -->
+  <ellipse cx="340" cy="300" rx="25" ry="15" fill="url(#continentGradient)" opacity="0.9"/>
+  
+  <!-- South America -->
+  <path d="M200 280 C185 275, 175 290, 180 310 C185 330, 200 345, 215 340 C225 335, 230 320, 225 305 C220 290, 210 275, 200 280 Z" 
+        fill="url(#continentGradient)" opacity="0.9"/>
+  
+  <!-- Coffee cup positioned at bottom right -->
+  <g transform="translate(320, 320)">
+    <!-- Cup base -->
+    <path d="M0 80 L10 20 L90 20 L100 80 C100 90, 90 100, 80 100 L20 100 C10 100, 0 90, 0 80 Z" 
+          fill="url(#coffeeGradient)" stroke="#5D4037" stroke-width="2"/>
+    
+    <!-- Coffee liquid -->
+    <path d="M8 75 L15 25 L85 25 L92 75 C92 82, 87 87, 80 87 L20 87 C13 87, 8 82, 8 75 Z" 
+          fill="url(#liquidGradient)"/>
+    
+    <!-- Cup handle -->
+    <path d="M100 40 C115 40, 125 50, 125 65 C125 80, 115 90, 100 90" 
+          fill="none" stroke="url(#coffeeGradient)" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Saucer -->
+    <ellipse cx="50" cy="105" rx="65" ry="12" fill="url(#coffeeGradient)" opacity="0.8"/>
+    
+    <!-- Steam wisps -->
+    <path d="M25 15 Q20 5, 25 -5 Q30 5, 25 15" fill="url(#steamGradient)" opacity="0.6">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; 2,-2; -1,-1; 0,0" dur="3s" repeatCount="indefinite"/>
+    </path>
+    <path d="M50 10 Q45 0, 50 -10 Q55 0, 50 10" fill="url(#steamGradient)" opacity="0.7">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; -2,-3; 1,-2; 0,0" dur="2.5s" repeatCount="indefinite"/>
+    </path>
+    <path d="M75 15 Q70 5, 75 -5 Q80 5, 75 15" fill="url(#steamGradient)" opacity="0.6">
+      <animateTransform attributeName="transform" type="translate" 
+                        values="0,0; 1,-2; -2,-1; 0,0" dur="3.5s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  
+  <!-- Connecting lines/network effect around the globe -->
+  <g opacity="0.3" stroke="#FFFFFF" stroke-width="2" fill="none">
+    <path d="M150 200 Q250 150, 350 200"/>
+    <path d="M180 280 Q280 230, 380 280"/>
+    <path d="M200 160 Q300 110, 400 160"/>
+    <circle cx="150" cy="200" r="3" fill="#FFFFFF"/>
+    <circle cx="350" cy="200" r="3" fill="#FFFFFF"/>
+    <circle cx="180" cy="280" r="3" fill="#FFFFFF"/>
+    <circle cx="380" cy="280" r="3" fill="#FFFFFF"/>
+    <circle cx="200" cy="160" r="3" fill="#FFFFFF"/>
+    <circle cx="400" cy="160" r="3" fill="#FFFFFF"/>
+  </g>
+  
+  <!-- Outer ring decoration -->
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.3"/>
+  <circle cx="256" cy="256" r="250" fill="none" stroke="#1565C0" stroke-width="4" opacity="0.5"/>
+</svg>

@@ -4,15 +4,190 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>World Café Platform</title>
+    
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/png" href="/coffee-logo.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/coffee-logo.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/coffee-logo.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/coffee-logo.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/coffee-logo.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/coffee-logo.png">
+    <link rel="apple-touch-icon" href="/coffee-logo.png">
+    
+    <!-- Meta tags -->
+    <meta name="description" content="World Café Platform - Facilitating meaningful conversations and collaborative discussions across multiple tables">
+    <meta name="theme-color" content="#4A90E2">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
     <link rel="stylesheet" href="styles.css?v=202509041831">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="logger.js"></script>
+    <style>
+    /* NUCLEAR DESKTOP FIX - MAXIMUM SPECIFICITY */
+    html body div#app main.main-content div#joinSessionScreen.screen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef) !important;
+        z-index: 9999 !important;
+        padding: 80px 20px !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+    }
+    
+    html body div#app main.main-content div#joinSessionScreen.screen div.join-wizard-container {
+        max-width: 600px !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        padding: 40px !important;
+        background: white !important;
+        border-radius: 16px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+        position: relative !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        min-height: 400px !important;
+        box-sizing: border-box !important;
+    }
+    
+    html body div#app main.main-content div#joinSessionScreen.screen div.wizard-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        margin-bottom: 30px !important;
+        padding-bottom: 20px !important;
+        border-bottom: 1px solid #eee !important;
+    }
+    
+    html body div#app main.main-content div#joinSessionScreen.screen .method-card {
+        display: inline-block !important;
+        width: 160px !important;
+        height: 120px !important;
+        margin: 10px !important;
+        padding: 20px !important;
+        background: white !important;
+        border: 2px solid #e0e0e0 !important;
+        border-radius: 12px !important;
+        cursor: pointer !important;
+        vertical-align: top !important;
+        text-align: center !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Pulse animation for transcription card selection */
+    @keyframes pulse {
+        0% { transform: translateY(-4px) scale(1); }
+        50% { transform: translateY(-4px) scale(1.02); }
+        100% { transform: translateY(-4px) scale(1); }
+    }
+    
+    /* Responsive Join Session Boxes */
+    @media (max-width: 768px) {
+        html body div#app main.main-content div#joinSessionScreen.screen .join-method-container {
+            flex-direction: column !important;
+            gap: 16px !important;
+        }
+        html body div#app main.main-content div#joinSessionScreen.screen .join-method-box {
+            min-width: unset !important;
+            max-width: unset !important;
+        }
+    }
+    
+    @media (min-width: 769px) {
+        html body div#app main.main-content div#joinSessionScreen.screen .join-method-container {
+            flex-direction: row !important;
+            gap: 24px !important;
+        }
+    }
+    
+    /* Responsive Table Interface */
+    @media (max-width: 768px) {
+        /* Mobile adjustments for table interface */
+        div#tableInterface div[style*="grid-template-columns: 1fr 1fr"] {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+        }
+        
+        div#tableInterface div[style*="padding: 30px"] {
+            padding: 16px !important;
+        }
+        
+        div#tableInterface h1#tableTitle {
+            font-size: 24px !important;
+        }
+        
+        /* Mobile button layout improvements */
+        div#tableInterface div[style*="display: flex; gap: 16px; justify-content: center"] {
+            flex-wrap: wrap !important;
+            gap: 12px !important;
+            justify-content: center !important;
+        }
+        
+        div#tableInterface div[style*="display: flex"] button {
+            padding: 14px 20px !important;
+            font-size: 15px !important;
+            min-width: 160px !important;
+            flex: 1 1 160px !important;
+            max-width: 280px !important;
+        }
+        
+        /* Live transcription section mobile improvements */
+        div[style*="Live Transcription"] {
+            margin-top: 20px !important;
+            padding: 16px !important;
+        }
+        
+        #liveTranscript {
+            min-height: 200px !important;
+            font-size: 14px !important;
+            padding: 16px !important;
+        }
+        
+        /* Recording controls section mobile */
+        div[style*="Recording Controls"] + div {
+            flex-direction: column !important;
+            align-items: center !important;
+        }
+        
+        /* Better spacing for mobile */
+        div#tableInterface > div > div[style*="background: white"] {
+            margin-top: 20px !important;
+        }
+    }
+    
+    /* Chat animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Desktop Logo Styling */
+    @media (min-width: 768px) {
+        .nav-logo {
+            width: 96px !important;
+            height: 96px !important;
+        }
+    }
+    </style>
 </head>
 <body>
     <div id="app">
         <!-- Main Navigation -->
         <nav class="navbar">
             <div class="nav-container">
-                <h1 class="nav-title">World Café Platform</h1>
+                <div class="nav-brand">
+                    <img src="/coffee-logo.png" alt="World Café Platform" class="nav-logo" width="32" height="32" style="
+                        width: 32px;
+                        height: 32px;
+                        transition: all 0.2s ease;
+                    ">
+                    <h1 class="nav-title">World Café Platform</h1>
+                </div>
                 <div class="status-indicator">
                     <div id="connectionStatus" class="status-circle disconnected" title="Connection status"></div>
                 </div>
@@ -20,8 +195,7 @@
                     <button id="mobileMenuToggle" class="mobile-menu-toggle">☰</button>
                     <div class="nav-menu">
                         <button id="homeBtn" class="btn btn-secondary">🏠 Home</button>
-                        <button id="qrScanBtn" class="btn btn-secondary mobile-visible">📱 Scan QR</button>
-                        <button id="adminBtn" class="btn btn-secondary">Admin</button>
+                        <button id="adminBtn" class="btn btn-secondary" title="Settings">⚙️</button>
                         <button id="createSessionBtn" class="btn btn-primary">New Session</button>
                     </div>
                 </div>
@@ -118,353 +292,1871 @@
             </div>
 
             <!-- Join Session Screen -->
-            <div id="joinSessionScreen" class="screen">
-                <div class="form-container">
-                    <div class="mobile-header">
-                        <button class="mobile-back-btn" onclick="showWelcome()">← Back</button>
-                        <h2>Join Session</h2>
-                    </div>
-                    
-                    <div id="sessionSelector">
-                        <div class="form-group">
-                            <label for="sessionSelect">Select Session</label>
-                            <select id="sessionSelect">
-                                <option value="">Loading sessions...</option>
-                            </select>
+            <div id="joinSessionScreen" style="display: none;">
+                <!-- COMPLETELY ISOLATED JOIN SESSION SCREEN -->
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 20px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 500px;
+                        margin: 60px auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                        padding: 40px;
+                        box-sizing: border-box;
+                        min-height: 400px;
+                    ">
+                        <!-- Header -->
+                        <div style="
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            margin-bottom: 40px;
+                            padding-bottom: 20px;
+                            border-bottom: 1px solid #eee;
+                        ">
+                            <button onclick="showWelcome()" style="
+                                background: #f5f5f5;
+                                border: 1px solid #ddd;
+                                border-radius: 8px;
+                                width: 40px;
+                                height: 40px;
+                                cursor: pointer;
+                                font-size: 18px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">←</button>
+                            
+                            <div style="flex: 1; text-align: center; margin: 0 20px;">
+                                <h1 style="margin: 0; font-size: 24px; color: #333; font-weight: 600;">Join Session</h1>
+                                <p style="margin: 8px 0 0 0; color: #666; font-size: 14px;">Choose how you'd like to join</p>
+                            </div>
+                            
+                        </div>
+
+                        <!-- Step 1: Choose Method -->
+                        <div id="joinStep1" style="display: block;">
+                            <div class="join-method-container" style="
+                                display: flex;
+                                justify-content: center;
+                                align-items: stretch;
+                                gap: 24px;
+                                flex-wrap: wrap;
+                                max-width: 1000px;
+                                margin: 0 auto;
+                                padding: 0 20px;
+                            ">
+                                
+                                <!-- Session Code Box -->
+                                <div class="join-method-box" style="
+                                    flex: 1;
+                                    min-width: 280px;
+                                    max-width: 320px;
+                                    background: white;
+                                    border: 2px solid #e0e0e0;
+                                    border-radius: 16px;
+                                    padding: 24px;
+                                    text-align: center;
+                                    transition: all 0.2s ease;
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                                    display: flex;
+                                    flex-direction: column;
+                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
+                                    <div style="font-size: 32px; margin-bottom: 16px;">🔑</div>
+                                    <h4 style="margin: 0 0 20px 0; font-size: 16px; color: #333; font-weight: 600;">Session Code</h4>
+                                    
+                                    <input type="text" id="sessionCodeInput" placeholder="Enter session or table code" maxlength="60" style="
+                                        width: 100%;
+                                        padding: 12px;
+                                        border: 2px solid #e0e0e0;
+                                        border-radius: 8px;
+                                        font-size: 14px;
+                                        text-align: center;
+                                        font-family: monospace;
+                                        letter-spacing: 0.5px;
+                                        box-sizing: border-box;
+                                        font-weight: 500;
+                                        margin-bottom: 16px;
+                                    " onfocus="this.style.borderColor='#007bff'" onblur="this.style.borderColor='#e0e0e0'">
+                                    
+                                    <button onclick="joinWithSessionCode()" style="
+                                        width: 100%;
+                                        padding: 12px;
+                                        background: #007bff;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 8px;
+                                        font-size: 14px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                    " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">Join</button>
+                                    
+                                    <small style="color: #666; font-size: 11px; text-align: center; display: block; margin-top: 8px; line-height: 1.3;">
+                                        Accepts session codes, table codes (sessionId/table/N), or passwords
+                                    </small>
+                                </div>
+                                
+                                <!-- QR Code Scanner Box -->
+                                <div class="join-method-box" onclick="showJoinQRScanner()" style="
+                                    flex: 1;
+                                    min-width: 280px;
+                                    max-width: 320px;
+                                    background: white;
+                                    border: 2px solid #e0e0e0;
+                                    border-radius: 16px;
+                                    padding: 24px;
+                                    text-align: center;
+                                    cursor: pointer;
+                                    transition: all 0.2s ease;
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: center;
+                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
+                                    <div style="
+                                        width: 48px; 
+                                        height: 48px; 
+                                        margin: 0 auto 16px auto; 
+                                        background: #333; 
+                                        border-radius: 6px;
+                                        display: grid;
+                                        grid-template-columns: repeat(7, 1fr);
+                                        grid-template-rows: repeat(7, 1fr);
+                                        gap: 1px;
+                                        padding: 4px;
+                                        box-sizing: border-box;
+                                    ">
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: white;"></div>
+                                        <div style="background: #333;"></div>
+                                        <div style="background: #333;"></div>
+                                    </div>
+                                    <h4 style="margin: 0; font-size: 16px; color: #333; font-weight: 600;">Scan QR Code</h4>
+                                </div>
+                                
+                                <!-- Browse Sessions Box -->
+                                <div class="join-method-box" onclick="goToStep(2, 'browse')" style="
+                                    flex: 1;
+                                    min-width: 280px;
+                                    max-width: 320px;
+                                    background: white;
+                                    border: 2px solid #e0e0e0;
+                                    border-radius: 16px;
+                                    padding: 24px;
+                                    text-align: center;
+                                    cursor: pointer;
+                                    transition: all 0.2s ease;
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: center;
+                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
+                                    <div style="font-size: 32px; margin-bottom: 16px;">📋</div>
+                                    <h4 style="margin: 0; font-size: 16px; color: #333; font-weight: 600;">Browse Sessions</h4>
+                                </div>
+                                
+                            </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="participantName">Your Name</label>
-                            <input type="text" id="participantName" required>
+                        <!-- Duplicate Step 2: Code Input removed - using Step 1 direct input instead -->
+                        
+                        <!-- Step 2: Browse Sessions -->
+                        <div id="joinStep2Browse" style="display: none;">
+                            <div style="
+                                max-width: 400px;
+                                margin: 0 auto;
+                                background: white;
+                                border-radius: 16px;
+                                padding: 32px;
+                                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+                                border: 1px solid #e0e0e0;
+                            ">
+                                <div style="margin-bottom: 24px; text-align: center;">
+                                    <h3 style="margin: 0 0 24px 0; font-size: 20px; color: #333; font-weight: 600;">Select Session</h3>
+                                </div>
+                                
+                                <div style="margin-bottom: 24px;">
+                                    <select id="sessionSelect" onchange="handleSessionSelection()" style="
+                                        width: 100%;
+                                        padding: 16px;
+                                        border: 2px solid #e0e0e0;
+                                        border-radius: 8px;
+                                        font-size: 16px;
+                                        box-sizing: border-box;
+                                        background: white;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                    " onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'" onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                                        <option value="">Loading sessions...</option>
+                                    </select>
+                                    
+                                    <div style="
+                                        margin-top: 12px;
+                                        text-align: center;
+                                        font-size: 14px;
+                                        color: #666;
+                                        font-style: italic;
+                                    ">Select a session to continue automatically</div>
+                                </div>
+                                
+                                <div style="text-align: center;">
+                                    <button onclick="goToStep(1)" style="
+                                        padding: 12px 24px;
+                                        background: #f5f5f5;
+                                        border: 1px solid #ddd;
+                                        border-radius: 8px;
+                                        cursor: pointer;
+                                        font-size: 14px;
+                                        color: #666;
+                                        transition: all 0.2s ease;
+                                    " onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f5f5f5'">← Back to Options</button>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="tableSelect">Select Table</label>
-                            <select id="tableSelect">
-                                <option value="">First select a session</option>
-                            </select>
+                        <!-- Step 3: Select Table -->
+                        <div id="joinStep3" style="display: none;">
+                            <div style="margin-bottom: 20px;">
+                                <button onclick="goToStep(2, currentJoinMethod)" style="
+                                    background: transparent;
+                                    border: none;
+                                    color: #666;
+                                    cursor: pointer;
+                                    font-size: 14px;
+                                    padding: 8px 0;
+                                    margin-bottom: 20px;
+                                ">← Back</button>
+                                <h3 style="margin: 0 0 30px 0; font-size: 20px; color: #333; font-weight: 500;">Choose Table</h3>
+                            </div>
+                            
+                            <div id="selectedSessionInfo" style="
+                                background: #f8f9fa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 16px;
+                                margin-bottom: 24px;
+                            "></div>
+                            
+                            <div id="tableSelection" style="margin-bottom: 30px;"></div>
+                            
+                            <div style="display: flex; gap: 16px;">
+                                <button onclick="goToStep(2, currentJoinMethod)" style="
+                                    flex: 1;
+                                    padding: 16px;
+                                    background: #f5f5f5;
+                                    border: 1px solid #ddd;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    font-size: 16px;
+                                ">Back</button>
+                                <button onclick="finalJoinTable()" id="finalJoinBtn" disabled style="
+                                    flex: 2;
+                                    padding: 16px;
+                                    background: #007bff;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    font-size: 16px;
+                                    opacity: 0.5;
+                                ">Join Table</button>
+                            </div>
                         </div>
                         
-                        <div class="form-actions">
-                            <button type="button" onclick="showWelcome()" class="btn btn-secondary">Back</button>
-                            <button id="joinTableBtn" class="btn btn-primary" disabled>Join Table</button>
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Session Dashboard -->
-            <div id="sessionDashboard" class="screen">
-                <div class="dashboard-header">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h2 id="dashboardTitle">Session Dashboard</h2>
-                        <button onclick="showWelcome()" class="btn btn-secondary">🏠 Home</button>
-                    </div>
-                    <div class="dashboard-stats">
-                        <div class="stat-card">
-                            <span class="stat-value" id="participantCount">0</span>
-                            <span class="stat-label">Participants</span>
+            <!-- Session Dashboard - NUCLEAR ISOLATED -->
+            <div id="sessionDashboard" style="display: none;">
+                <!-- COMPLETELY ISOLATED SESSION DASHBOARD SCREEN -->
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 20px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 1400px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                        padding: 40px;
+                        box-sizing: border-box;
+                        min-height: calc(100vh - 40px);
+                    ">
+                        <!-- Header -->
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 30px;
+                            padding-bottom: 20px;
+                            border-bottom: 1px solid #eee;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <button onclick="showWelcome()" style="
+                                    background: #f5f5f5;
+                                    border: 1px solid #ddd;
+                                    border-radius: 8px;
+                                    width: 40px;
+                                    height: 40px;
+                                    cursor: pointer;
+                                    font-size: 18px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                ">🏠</button>
+                                
+                                <div>
+                                    <h1 id="dashboardTitle" style="margin: 0; font-size: 28px; color: #333; font-weight: 600;">Session Dashboard</h1>
+                                    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Manage your World Café session</p>
+                                    <div id="sessionCodeDisplay" style="
+                                        margin-top: 8px;
+                                        padding: 8px 12px;
+                                        background: #f8f9fa;
+                                        border: 1px solid #e0e0e0;
+                                        border-radius: 6px;
+                                        display: inline-block;
+                                    ">
+                                        <span style="font-size: 12px; color: #666; font-weight: 500;">Session Code: </span>
+                                        <span id="sessionCodeValue" style="font-family: monospace; font-weight: 600; color: #333; font-size: 13px; letter-spacing: 0.5px;">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Side - Language Indicator -->
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <!-- Language Indicator -->
+                                <div id="sessionLanguageIndicator" style="
+                                    background: linear-gradient(135deg, #ff6b6b, #feca57);
+                                    color: white;
+                                    padding: 8px 16px;
+                                    border-radius: 20px;
+                                    font-size: 14px;
+                                    font-weight: 600;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+                                    border: 2px solid rgba(255, 255, 255, 0.2);
+                                    backdrop-filter: blur(10px);
+                                    transition: all 0.3s ease;
+                                " 
+                                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255,107,107,0.4)'"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(255,107,107,0.3)'"
+                                title="Session Language">
+                                    <span style="font-size: 16px;">🌍</span>
+                                    <span id="sessionLanguageText">English</span>
+                                </div>
+                            </div>
+                            
                         </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="activeTableCount">0</span>
-                            <span class="stat-label">Active Tables</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-value" id="recordingCount">0</span>
-                            <span class="stat-label">Recordings</span>
-                        </div>
-                        <div class="stat-card">
-                            <button id="sessionAIAnalysisBtn" class="btn btn-primary" onclick="generateSessionAnalysisFromDashboard()">🤖 AI Analysis</button>
-                        </div>
-                        <div class="stat-card">
-                            <button id="showQRCodesBtn" class="btn btn-secondary">📱 QR Codes</button>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- QR Codes Section -->
-                <div id="qrCodesSection" class="qr-section" style="display: none;">
-                    <h3>Session QR Codes</h3>
-                    <p>Share these QR codes to allow participants to join tables easily with their mobile devices.</p>
-                    
-                    <div class="qr-grid" id="qrCodesGrid">
-                        <!-- QR codes will be dynamically populated -->
-                    </div>
-                    
-                    <div class="qr-actions">
-                        <button id="downloadAllQRBtn" class="btn btn-secondary">📥 Download All</button>
-                        <button id="printQRBtn" class="btn btn-secondary">🖨️ Print QR Codes</button>
-                        <button id="hideQRCodesBtn" class="btn btn-secondary">✕ Hide</button>
-                    </div>
-                </div>
-
-                <!-- Session AI Analysis Section -->
-                <div id="sessionAIAnalysisSection" class="ai-analysis-section" style="display: none;">
-                    <div class="ai-analysis-header">
-                        <h2>🤖 Session AI Analysis Results</h2>
-                        <button onclick="toggleSessionAIAnalysis()" class="close-analysis-btn">✕ Hide</button>
-                    </div>
-                    <div id="sessionAIAnalysisResults" class="ai-analysis-results">
-                        <!-- Session analysis results will be loaded here -->
-                    </div>
-                </div>
-
-                <div class="dashboard-content">
-                    <div class="tables-grid" id="tablesGrid">
-                        <!-- Tables will be dynamically populated -->
-                    </div>
-                </div>
-
-                <!-- Simple Session Chat -->
-                <div id="simpleChat" class="simple-chat-box">
-                    <div class="simple-chat-title">
-                        <span>💬 Chat with Session</span>
-                        <span id="simpleChatStatus" class="simple-status">Checking...</span>
-                    </div>
-                    
-                    <div id="simpleChatMessages" class="simple-messages">
-                        <div class="simple-intro">
-                            <p>👋 Ask me about this World Café session!</p>
+                        <!-- Stats Cards -->
+                        <div style="
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                            gap: 20px;
+                            margin-bottom: 40px;
+                        ">
+                            <div style="
+                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                color: white;
+                                padding: 24px;
+                                border-radius: 12px;
+                                text-align: center;
+                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                            ">
+                                <div style="font-size: 32px; font-weight: 700; margin-bottom: 8px;" id="participantCount">0</div>
+                                <div style="font-size: 14px; opacity: 0.9;">👥 Participants</div>
+                            </div>
+                            
+                            <div style="
+                                background: linear-gradient(135deg, #f093fb, #f5576c);
+                                color: white;
+                                padding: 24px;
+                                border-radius: 12px;
+                                text-align: center;
+                                box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
+                            ">
+                                <div style="font-size: 32px; font-weight: 700; margin-bottom: 8px;" id="activeTableCount">0</div>
+                                <div style="font-size: 14px; opacity: 0.9;">🏓 Active Tables</div>
+                            </div>
+                            
+                            <div style="
+                                background: linear-gradient(135deg, #4facfe, #00f2fe);
+                                color: white;
+                                padding: 24px;
+                                border-radius: 12px;
+                                text-align: center;
+                                box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+                            ">
+                                <div style="font-size: 32px; font-weight: 700; margin-bottom: 8px;" id="recordingCount">0</div>
+                                <div style="font-size: 14px; opacity: 0.9;">🎤 Recordings</div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="simple-input">
-                        <input type="text" id="simpleChatInput" placeholder="Ask about the discussions..." disabled>
-                        <button id="simpleSendBtn" onclick="sendSimpleChatMessage()" disabled>Send</button>
-                    </div>
-                    
-                    <div class="simple-info">
-                        <small><span id="simpleTranscriptCount">0 transcriptions</span> available</small>
+
+                        <!-- Action Controls -->
+                        <div style="
+                            display: flex;
+                            gap: 12px;
+                            margin-bottom: 40px;
+                            flex-wrap: wrap;
+                            justify-content: center;
+                        ">
+                            <button onclick="generateSessionAnalysisFromDashboard()" id="sessionAIAnalysisBtn" style="
+                                padding: 12px 24px;
+                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                font-weight: 500;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s ease;
+                            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                                <span style="font-size: 16px;">🤖</span>
+                                AI Analysis
+                            </button>
+                            
+                            <button onclick="viewAllTranscriptions(currentSession.id)" style="
+                                padding: 12px 24px;
+                                background: #28a745;
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                font-weight: 500;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s ease;
+                            " onmouseover="this.style.background='#1e7e34'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#28a745'; this.style.transform='translateY(0)'">
+                                <span style="font-size: 16px;">📝</span>
+                                All Transcriptions
+                            </button>
+                            
+                            <button onclick="toggleQRCodesSection()" id="showQRCodesBtn" style="
+                                padding: 12px 24px;
+                                background: #17a2b8;
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                font-weight: 500;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s ease;
+                            " onmouseover="this.style.background='#138496'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#17a2b8'; this.style.transform='translateY(0)'">
+                                <span style="font-size: 16px;">📱</span>
+                                QR Codes
+                            </button>
+                        </div>
+
+                        <!-- Chat with Session - Expanded Interface -->
+                        <div id="sessionChatSection" style="
+                            background: linear-gradient(135deg, #667eea, #764ba2);
+                            color: white;
+                            border-radius: 16px;
+                            padding: 30px;
+                            margin-bottom: 40px;
+                            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+                        ">
+                            <div style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                margin-bottom: 24px;
+                            ">
+                                <div>
+                                    <h3 style="margin: 0; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 12px;">
+                                        <span style="font-size: 28px;">💬</span>
+                                        Chat with Session
+                                    </h3>
+                                    <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">
+                                        Ask questions about your World Café discussions and insights
+                                    </p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span id="simpleChatStatus" style="
+                                        background: rgba(255,255,255,0.2);
+                                        padding: 8px 16px;
+                                        border-radius: 20px;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        display: inline-block;
+                                    ">Checking...</span>
+                                    <div style="
+                                        margin-top: 8px;
+                                        font-size: 13px;
+                                        color: rgba(255,255,255,0.8);
+                                    ">
+                                        <span id="simpleTranscriptCount">0 transcriptions</span> available
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Chat Messages Area -->
+                            <div id="simpleChatMessages" style="
+                                background: rgba(255,255,255,0.1);
+                                border-radius: 16px;
+                                padding: 24px;
+                                margin-bottom: 20px;
+                                min-height: 200px;
+                                max-height: 400px;
+                                overflow-y: auto;
+                                border: 1px solid rgba(255,255,255,0.2);
+                            ">
+                                <div style="
+                                    opacity: 0.9;
+                                    font-size: 16px;
+                                    text-align: center;
+                                    color: rgba(255,255,255,0.8);
+                                    padding: 40px 20px;
+                                ">
+                                    <div style="font-size: 48px; margin-bottom: 16px;">👋</div>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Ready to explore your session!</h4>
+                                    <p style="margin: 0; font-size: 15px; line-height: 1.5;">
+                                        Ask me about the discussions, themes, insights, or anything else from your World Café session.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- Chat Input Area -->
+                            <div style="
+                                display: flex;
+                                gap: 12px;
+                                align-items: stretch;
+                            ">
+                                <div style="flex: 1; position: relative;">
+                                    <input type="text" id="simpleChatInput" placeholder="Ask about the discussions, insights, themes..." disabled style="
+                                        width: 100%;
+                                        padding: 16px 20px;
+                                        border: none;
+                                        border-radius: 12px;
+                                        font-size: 16px;
+                                        background: rgba(255,255,255,0.9);
+                                        color: #333;
+                                        box-sizing: border-box;
+                                        outline: none;
+                                        transition: all 0.2s ease;
+                                    ">
+                                    <div style="
+                                        position: absolute;
+                                        bottom: -20px;
+                                        left: 0;
+                                        font-size: 12px;
+                                        color: rgba(255,255,255,0.7);
+                                    ">
+                                        Press Enter to send or use the Send button
+                                    </div>
+                                </div>
+                                <button id="simpleSendBtn" onclick="sendSimpleChatMessage()" disabled style="
+                                    padding: 16px 24px;
+                                    background: rgba(255,255,255,0.2);
+                                    color: white;
+                                    border: 2px solid rgba(255,255,255,0.3);
+                                    border-radius: 12px;
+                                    cursor: pointer;
+                                    font-weight: 600;
+                                    font-size: 16px;
+                                    transition: all 0.2s ease;
+                                    min-width: 80px;
+                                " onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.3)'">
+                                    Send
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- QR Codes Section -->
+                        <div id="qrCodesSection" style="
+                            display: none;
+                            background: #f8f9fa;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 12px;
+                            padding: 24px;
+                            margin-bottom: 30px;
+                        ">
+                            <div style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                margin-bottom: 16px;
+                            ">
+                                <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: 600;">Session QR Codes</h3>
+                                <button onclick="toggleQRCodesSection()" style="
+                                    background: none;
+                                    border: none;
+                                    font-size: 18px;
+                                    cursor: pointer;
+                                    color: #666;
+                                ">✕</button>
+                            </div>
+                            <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">Share these QR codes to allow participants to join tables easily with their mobile devices.</p>
+                            
+                            <div id="qrCodesGrid" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                                gap: 16px;
+                                margin-bottom: 20px;
+                            ">
+                                <!-- QR codes will be dynamically populated -->
+                            </div>
+                            
+                            <div style="
+                                display: flex;
+                                gap: 12px;
+                                flex-wrap: wrap;
+                                justify-content: center;
+                            ">
+                                <button onclick="downloadAllQRCodes()" id="downloadAllQRBtn" style="
+                                    padding: 10px 16px;
+                                    background: #6c757d;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                ">📥 Download All</button>
+                                <button onclick="printQRCodes()" id="printQRBtn" style="
+                                    padding: 10px 16px;
+                                    background: #6c757d;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                ">🖨️ Print QR Codes</button>
+                            </div>
+                        </div>
+
+                        <!-- Session AI Analysis Section -->
+                        <div id="sessionAIAnalysisSection" style="
+                            display: none;
+                            background: #f8f9fa;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 12px;
+                            padding: 24px;
+                            margin-bottom: 30px;
+                        ">
+                            <div style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                margin-bottom: 16px;
+                            ">
+                                <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: 600;">🤖 Session AI Analysis Results</h3>
+                                <button onclick="toggleSessionAIAnalysis()" style="
+                                    background: none;
+                                    border: none;
+                                    font-size: 18px;
+                                    cursor: pointer;
+                                    color: #666;
+                                ">✕</button>
+                            </div>
+                            <div id="sessionAIAnalysisResults">
+                                <!-- Session analysis results will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Tables Section -->
+                        <div>
+                            <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #333; font-weight: 600;">Tables</h2>
+                            <div id="tablesGrid" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                                gap: 20px;
+                                margin-bottom: 40px;
+                            ">
+                                <!-- Tables will be dynamically populated -->
+                            </div>
+                        </div>
+
+                        <!-- Simple Session Chat -->
                     </div>
                 </div>
             </div>
 
-            <!-- Table Interface -->
-            <div id="tableInterface" class="screen">
-                <div class="table-header">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <button onclick="backToSession()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.9rem;">
-                            ← Session
-                        </button>
-                        <h2 id="tableTitle">Table 1</h2>
-                    </div>
-                    <div class="table-status">
-                        <span id="tableStatus" class="status-badge">Waiting</span>
-                    </div>
-                </div>
+            <!-- Table Interface - NUCLEAR ISOLATED -->
+            <div id="tableInterface" style="display: none;">
+                <!-- COMPLETELY ISOLATED TABLE INTERFACE SCREEN -->
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 20px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 20px;
+                        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    ">
+                        <!-- Modern Header -->
+                        <div style="
+                            background: linear-gradient(135deg, #667eea, #764ba2);
+                            color: white;
+                            padding: 30px;
+                            position: relative;
+                        ">
+                            <div style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: flex-start;
+                                margin-bottom: 20px;
+                            ">
+                                <button onclick="backToSession()" style="
+                                    background: rgba(255,255,255,0.2);
+                                    color: white;
+                                    border: 1px solid rgba(255,255,255,0.3);
+                                    border-radius: 12px;
+                                    width: 50px;
+                                    height: 50px;
+                                    cursor: pointer;
+                                    font-size: 20px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    transition: all 0.2s ease;
+                                    backdrop-filter: blur(10px);
+                                " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">←</button>
+                                
+                                <div style="flex: 1; margin-left: 20px;">
+                                    <!-- Session Info -->
+                                    <div style="margin-bottom: 12px;">
+                                        <h3 id="sessionTitleHeader" style="
+                                            margin: 0;
+                                            font-size: 16px;
+                                            color: rgba(255,255,255,0.9);
+                                            font-weight: 500;
+                                        ">Session Name</h3>
+                                        <p id="sessionDescriptionHeader" style="
+                                            margin: 4px 0 0 0;
+                                            font-size: 14px;
+                                            color: rgba(255,255,255,0.7);
+                                            font-style: italic;
+                                            display: none;
+                                        ">Session Description</p>
+                                    </div>
+                                    
+                                    <!-- Table Title -->
+                                    <h1 id="tableTitle" style="
+                                        margin: 0 0 12px 0;
+                                        font-size: 32px;
+                                        color: white;
+                                        font-weight: 700;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                    ">
+                                        <span style="font-size: 36px;">🏓</span>
+                                        Table 1
+                                    </h1>
+                                    
+                                    <!-- Table Code -->
+                                    <div id="tableCodeDisplay" style="
+                                        padding: 8px 16px;
+                                        background: rgba(255,255,255,0.15);
+                                        border: 1px solid rgba(255,255,255,0.2);
+                                        border-radius: 8px;
+                                        display: inline-block;
+                                        backdrop-filter: blur(10px);
+                                    ">
+                                        <span style="font-size: 12px; color: rgba(255,255,255,0.8); font-weight: 500;">Table Code: </span>
+                                        <span id="tableCodeValue" style="
+                                            font-family: 'Monaco', 'Menlo', monospace;
+                                            font-weight: 600;
+                                            color: white;
+                                            font-size: 12px;
+                                            letter-spacing: 0.5px;
+                                        ">-</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Table Status -->
+                                <div style="text-align: right;">
+                                    <span id="tableStatus" style="
+                                        background: rgba(255,255,255,0.2);
+                                        color: white;
+                                        padding: 8px 16px;
+                                        border-radius: 20px;
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        text-transform: uppercase;
+                                        letter-spacing: 0.5px;
+                                        backdrop-filter: blur(10px);
+                                        border: 1px solid rgba(255,255,255,0.3);
+                                    ">Waiting</span>
+                                </div>
+                            </div>
+                        </div>
 
-                <div class="participants-list">
-                    <h3>Participants</h3>
-                    <ul id="participantsList"></ul>
-                </div>
-
-                <!-- Join Table Section -->
-                <div id="joinTableSection" class="join-table-section" style="display: none;">
-                    <div class="form-group">
-                        <label for="participantNameInput">Your Name</label>
-                        <input type="text" id="participantNameInput" placeholder="Enter your name to join this table">
-                    </div>
-                    <div class="form-group">
-                        <label for="participantEmailInput">Email (optional)</label>
-                        <input type="email" id="participantEmailInput" placeholder="Enter your email">
-                    </div>
-                    <button id="joinThisTableBtn" class="btn btn-primary">Join This Table</button>
-                </div>
-
-                <div class="recording-section">
-                    <div class="recording-controls">
-                        <button id="startRecordingBtn" class="btn btn-large btn-primary">
-                            <span class="icon">🎤</span>
-                            Start Recording
-                        </button>
+                        <!-- Content Area -->
+                        <div style="padding: 30px;">
+                            <div style="
+                                display: grid;
+                                grid-template-columns: 1fr 1fr;
+                                gap: 30px;
+                                margin-bottom: 30px;
+                            ">
+                                <!-- Participants Card -->
+                                <div style="
+                                    background: white;
+                                    border: 1px solid #e0e0e0;
+                                    border-radius: 16px;
+                                    padding: 24px;
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 20px;
+                                        padding-bottom: 16px;
+                                        border-bottom: 1px solid #f0f0f0;
+                                    ">
+                                        <span style="font-size: 24px;">👥</span>
+                                        <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Participants</h3>
+                                    </div>
+                                    <ul id="participantsList" style="
+                                        margin: 0;
+                                        padding: 0;
+                                        list-style: none;
+                                    "></ul>
+                                </div>
+                                
+                                <!-- Join Table Section -->
+                                <div id="joinTableSection" style="
+                                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                                    border: 1px solid #e0e0e0;
+                                    border-radius: 16px;
+                                    padding: 24px;
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                                    display: none;
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 20px;
+                                        padding-bottom: 16px;
+                                        border-bottom: 1px solid #f0f0f0;
+                                    ">
+                                        <span style="font-size: 24px;">🎯</span>
+                                        <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Join Table</h3>
+                                    </div>
+                                    
+                                    <div style="margin-bottom: 20px;">
+                                        <label for="participantEmailInput" style="
+                                            display: block;
+                                            margin-bottom: 8px;
+                                            font-size: 14px;
+                                            font-weight: 500;
+                                            color: #333;
+                                        ">Email (optional)</label>
+                                        <input type="email" id="participantEmailInput" placeholder="Enter your email" style="
+                                            width: 100%;
+                                            padding: 12px 16px;
+                                            border: 2px solid #e0e0e0;
+                                            border-radius: 8px;
+                                            font-size: 16px;
+                                            box-sizing: border-box;
+                                            transition: all 0.2s ease;
+                                        " onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'" onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                                    </div>
+                                    
+                                    <button id="joinThisTableBtn" style="
+                                        width: 100%;
+                                        padding: 16px;
+                                        background: #007bff;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 12px;
+                                        font-size: 16px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                    " onmouseover="this.style.background='#0056b3'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,123,255,0.3)'" onmouseout="this.style.background='#007bff'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                                        <span style="font-size: 18px;">🎯</span>
+                                        Join This Table
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Recording Section -->
+                            <div style="
+                                background: white;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 16px;
+                                padding: 24px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                            ">
+                                <div style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 12px;
+                                    margin-bottom: 20px;
+                                    padding-bottom: 16px;
+                                    border-bottom: 1px solid #f0f0f0;
+                                ">
+                                    <span style="font-size: 24px;">🎤</span>
+                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Recording Controls</h3>
+                                </div>
+                                
+                                <div style="
+                                    display: flex;
+                                    gap: 16px;
+                                    justify-content: center;
+                                ">
+                                    <button id="startRecordingBtn" style="
+                                        padding: 20px 40px;
+                                        background: linear-gradient(135deg, #28a745, #20c997);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 16px;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        box-shadow: 0 4px 12px rgba(40,167,69,0.3);
+                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(40,167,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(40,167,69,0.3)'">
+                                        <span style="font-size: 24px;">🎤</span>
+                                        Start Recording
+                                    </button>
+                                    
+                                    <button id="stopRecordingBtn" style="
+                                        padding: 20px 40px;
+                                        background: linear-gradient(135deg, #dc3545, #c82333);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 16px;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: none;
+                                        align-items: center;
+                                        gap: 12px;
+                                        box-shadow: 0 4px 12px rgba(220,53,69,0.3);
+                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(220,53,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(220,53,69,0.3)'">
+                                        <span style="font-size: 24px;">⏹️</span>
+                                        Stop Recording
+                                    </button>
+                                    
+                                    <button id="uploadMediaBtn" style="
+                                        padding: 20px 40px;
+                                        background: linear-gradient(135deg, #6c757d, #5a6268);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 16px;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        box-shadow: 0 4px 12px rgba(108,117,125,0.3);
+                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(108,117,125,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(108,117,125,0.3)'">
+                                        <span style="font-size: 24px;">📁</span>
+                                        Upload Media
+                                    </button>
+                                    
+                                    <button id="liveTranscriptionBtn" style="
+                                        padding: 20px 40px;
+                                        background: linear-gradient(135deg, #17a2b8, #138496);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 16px;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        box-shadow: 0 4px 12px rgba(23,162,184,0.3);
+                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(23,162,184,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(23,162,184,0.3)'">
+                                        <span style="font-size: 24px;">🎙️</span>
+                                        Live Transcription
+                                    </button>
+                                    
+                                    <button id="stopTranscriptionBtn" style="
+                                        padding: 20px 40px;
+                                        background: linear-gradient(135deg, #dc3545, #c82333);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 16px;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: none;
+                                        align-items: center;
+                                        gap: 12px;
+                                        box-shadow: 0 4px 12px rgba(220,53,69,0.3);
+                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(220,53,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(220,53,69,0.3)'">
+                                        <span style="font-size: 24px;">⏹️</span>
+                                        Stop Transcription
+                                    </button>
+                                </div>
+                                
+                                <!-- Recording Status -->
+                                <div id="recordingStatus" style="
+                                    margin-top: 20px;
+                                    padding: 16px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    text-align: center;
+                                    color: #666;
+                                    font-size: 14px;
+                                    display: none;
+                                "></div>
+                                
+                                <!-- Audio Visualization -->
+                                <div id="audioVisualization" style="
+                                    margin-top: 20px;
+                                    padding: 20px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    text-align: center;
+                                    display: none;
+                                "></div>
+                                
+                                <!-- Upload Progress -->
+                                <div id="uploadProgress" style="
+                                    margin-top: 20px;
+                                    padding: 20px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    display: none;
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 12px;
+                                    ">
+                                        <span id="uploadFileName" style="
+                                            font-weight: 600;
+                                            color: #333;
+                                            font-size: 14px;
+                                        "></span>
+                                        <span id="uploadStatus" style="
+                                            color: #666;
+                                            font-size: 12px;
+                                        "></span>
+                                    </div>
+                                    <div style="
+                                        width: 100%;
+                                        height: 8px;
+                                        background: #e0e0e0;
+                                        border-radius: 4px;
+                                        overflow: hidden;
+                                    ">
+                                        <div id="uploadProgressBar" style="
+                                            height: 100%;
+                                            background: linear-gradient(135deg, #007bff, #0056b3);
+                                            width: 0%;
+                                            transition: width 0.3s ease;
+                                        "></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Live Transcription Section -->
+                            <div style="
+                                background: white;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 16px;
+                                padding: 24px;
+                                margin-top: 30px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                            ">
+                                <div style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 12px;
+                                    margin-bottom: 20px;
+                                    padding-bottom: 16px;
+                                    border-bottom: 1px solid #f0f0f0;
+                                ">
+                                    <span style="font-size: 24px;">📝</span>
+                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Live Transcription</h3>
+                                </div>
+                                <div id="liveTranscript" style="
+                                    min-height: 200px;
+                                    padding: 20px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    color: #666;
+                                    font-size: 14px;
+                                    line-height: 1.6;
+                                    border: 2px dashed #ddd;
+                                    overflow-y: auto;
+                                    max-height: 400px;
+                                ">
+                                    <div style="text-align: center; margin-top: 40px; opacity: 0.7;">
+                                        <div style="font-size: 32px; margin-bottom: 16px;">💬</div>
+                                        <p><strong>Live Transcription</strong></p>
+                                        <p style="font-size: 12px; color: #999;">Start Recording, Upload Media, or use Live Transcription<br>Chat bubbles will appear here with speaker diarization</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         
-                        <button id="stopRecordingBtn" class="btn btn-large btn-danger" style="display: none;">
-                            <span class="icon">⏹️</span>
-                            Stop Recording
-                        </button>
-                        
-                        <button id="uploadMediaBtn" class="btn btn-large btn-secondary">
-                            <span class="icon">📁</span>
-                            Upload Media
-                        </button>
-                    </div>
-                    
-                    <!-- Hidden file input for media upload -->
-                    <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
-                    
-                    <div id="recordingStatus" class="recording-status"></div>
-                    
-                    <div id="audioVisualization" class="audio-visualization" style="display: none;"></div>
-                    
-                    <!-- Upload progress section -->
-                    <div id="uploadProgress" class="upload-progress" style="display: none;">
-                        <div class="upload-info">
-                            <span id="uploadFileName"></span>
-                            <span id="uploadStatus"></span>
-                        </div>
-                        <div class="progress-bar">
-                            <div id="uploadProgressBar" class="progress-fill"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="transcription-section">
-                    <h3>Live Transcription</h3>
-                    <div id="liveTranscript" class="transcript-display"></div>
-                </div>
-
-                <div class="table-actions">
-                    <button onclick="showWelcome()" class="btn btn-secondary">🏠 Home</button>
-                    <button onclick="showSessionDashboard()" class="btn btn-secondary">Dashboard</button>
-                    <button id="generateReportBtn" class="btn btn-primary">Generate Analysis</button>
-                </div>
-            </div>
-
-            <!-- Session List -->
-            <div id="sessionListScreen" class="screen">
-                <div class="list-container">
-                    <div class="mobile-header">
-                        <button class="mobile-back-btn" onclick="showWelcome()">← Back</button>
-                        <h2>Active Sessions</h2>
-                    </div>
-                    <div id="sessionsList" class="sessions-list">
-                        <!-- Sessions will be loaded dynamically -->
-                    </div>
-                    <div class="form-actions">
-                        <button onclick="showWelcome()" class="btn btn-secondary">Back</button>
+                        <!-- Hidden file input for media upload -->
+                        <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
                     </div>
                 </div>
             </div>
 
-            <!-- All Transcriptions View -->
-            <div id="allTranscriptionsScreen" class="screen">
-                <div class="awesome-dashboard-container">
-                    <div class="dashboard-header">
-                        <div class="dashboard-nav">
-                            <button class="dashboard-back-btn" onclick="showSessionList()">← Back to Sessions</button>
-                            <div class="dashboard-title">
-                                <h1 id="allTranscriptionsTitle">📝 All Transcriptions</h1>
-                                <p id="allTranscriptionsSubtitle">Session Overview</p>
+
+            <!-- Active Sessions - Compact Modern Layout -->
+            <div id="sessionListScreen" class="screen" style="display: none;">
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 16px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 1000px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                        min-height: calc(100vh - 32px);
+                        display: flex;
+                        flex-direction: column;
+                    ">
+                        <!-- Compact Header -->
+                        <div style="
+                            background: linear-gradient(135deg, #667eea, #764ba2);
+                            color: white;
+                            border-radius: 16px 16px 0 0;
+                            padding: 20px 24px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            flex-shrink: 0;
+                        ">
+                            <div>
+                                <h1 style="margin: 0; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 24px;">📋</span>
+                                    Active Sessions
+                                </h1>
+                                <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">
+                                    Join existing World Café sessions
+                                </p>
+                            </div>
+                            <button onclick="showWelcome()" style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 8px 16px;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-weight: 500;
+                                transition: all 0.2s ease;
+                                font-size: 14px;
+                            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                                ← Back
+                            </button>
+                        </div>
+
+                        <!-- Compact Search -->
+                        <div style="padding: 20px 24px 0 24px; flex-shrink: 0;">
+                            <div style="
+                                display: flex;
+                                align-items: center;
+                                background: #f8f9fa;
+                                border: 2px solid #e0e0e0;
+                                border-radius: 12px;
+                                padding: 12px 16px;
+                                transition: all 0.2s ease;
+                            " id="searchInputContainer" onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#e0e0e0'">
+                                <span style="color: #667eea; margin-right: 12px; font-size: 18px;">🔍</span>
+                                <input 
+                                    type="text" 
+                                    id="sessionsSearchInput"
+                                    placeholder="Search sessions..."
+                                    oninput="filterSessions()"
+                                    onfocus="handleSearchFocus()"
+                                    onblur="handleSearchBlur()"
+                                    style="
+                                        border: none;
+                                        outline: none;
+                                        flex: 1;
+                                        font-size: 16px;
+                                        color: #333;
+                                        background: transparent;
+                                        font-weight: 500;
+                                    "
+                                />
+                                <button 
+                                    onclick="clearSearch()"
+                                    id="clearSearchBtn"
+                                    style="
+                                        background: #667eea;
+                                        border: none;
+                                        color: white;
+                                        cursor: pointer;
+                                        font-size: 12px;
+                                        padding: 6px 10px;
+                                        border-radius: 6px;
+                                        font-weight: 600;
+                                        display: none;
+                                        transition: all 0.2s ease;
+                                    "
+                                    onmouseover="this.style.background='#5a67d8'" onmouseout="this.style.background='#667eea'"
+                                    title="Clear search"
+                                >Clear</button>
+                            </div>
+                            <div id="searchResults" style="
+                                margin-top: 8px;
+                                font-size: 12px;
+                                color: #667eea;
+                                font-weight: 500;
+                                display: none;
+                            "></div>
+                        </div>
+
+                        <!-- Sessions Grid -->
+                        <div style="
+                            padding: 20px 24px;
+                            flex: 1;
+                            overflow-y: auto;
+                        ">
+                            <div id="sessionsList" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                                gap: 16px;
+                                max-height: none;
+                            ">
+                                <!-- Sessions will be loaded dynamically -->
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="dashboard-stats-bar">
-                        <div class="stat-pill">
-                            <span class="stat-icon">📊</span>
-                            <span class="stat-text">Total: <strong id="totalTranscriptions">0</strong></span>
+                </div>
+            </div>
+
+            <!-- All Transcriptions View - NUCLEAR ISOLATED -->
+            <div id="allTranscriptionsScreen" style="display: none;">
+                <!-- COMPLETELY ISOLATED ALL TRANSCRIPTIONS SCREEN -->
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 20px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                        padding: 40px;
+                        box-sizing: border-box;
+                        min-height: calc(100vh - 40px);
+                    ">
+                        <!-- Header -->
+                        <div style="
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            margin-bottom: 30px;
+                            padding-bottom: 20px;
+                            border-bottom: 1px solid #eee;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <button onclick="showSessionList()" style="
+                                    background: #f5f5f5;
+                                    border: 1px solid #ddd;
+                                    border-radius: 8px;
+                                    width: 40px;
+                                    height: 40px;
+                                    cursor: pointer;
+                                    font-size: 18px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                ">←</button>
+                                
+                                <div>
+                                    <h1 id="allTranscriptionsTitle" style="margin: 0; font-size: 28px; color: #333; font-weight: 600;">📝 All Transcriptions</h1>
+                                    <p id="allTranscriptionsSubtitle" style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Session Overview</p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="stat-pill">
-                            <span class="stat-icon">🏓</span>
-                            <span class="stat-text">Tables: <strong id="activeTables">0</strong></span>
+
+                        <!-- Stats Bar -->
+                        <div style="
+                            display: flex;
+                            gap: 16px;
+                            margin-bottom: 30px;
+                            flex-wrap: wrap;
+                        ">
+                            <div style="
+                                background: #f8f9fa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                min-width: 120px;
+                            ">
+                                <span style="font-size: 16px;">📊</span>
+                                <span style="font-size: 14px; color: #666;">Total: <strong id="totalTranscriptions" style="color: #333;">0</strong></span>
+                            </div>
+                            <div style="
+                                background: #f8f9fa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                min-width: 120px;
+                            ">
+                                <span style="font-size: 16px;">🏓</span>
+                                <span style="font-size: 14px; color: #666;">Tables: <strong id="activeTables" style="color: #333;">0</strong></span>
+                            </div>
+                            <div style="
+                                background: #f8f9fa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                min-width: 120px;
+                            ">
+                                <span style="font-size: 16px;">⏱️</span>
+                                <span style="font-size: 14px; color: #666;">Duration: <strong id="totalDuration" style="color: #333;">0min</strong></span>
+                            </div>
+                            <div style="
+                                background: #f8f9fa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                min-width: 120px;
+                            ">
+                                <span style="font-size: 16px;">👥</span>
+                                <span style="font-size: 14px; color: #666;">Speakers: <strong id="totalSpeakers" style="color: #333;">0</strong></span>
+                            </div>
                         </div>
-                        <div class="stat-pill">
-                            <span class="stat-icon">⏱️</span>
-                            <span class="stat-text">Duration: <strong id="totalDuration">0min</strong></span>
+
+                        <!-- Controls -->
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 30px;
+                            gap: 20px;
+                            flex-wrap: wrap;
+                        ">
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <select id="tableFilter" style="
+                                    padding: 8px 12px;
+                                    border: 1px solid #ddd;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    background: white;
+                                    cursor: pointer;
+                                ">
+                                    <option value="">🌐 All Tables</option>
+                                </select>
+                                
+                                <select id="sortFilter" style="
+                                    padding: 8px 12px;
+                                    border: 1px solid #ddd;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    background: white;
+                                    cursor: pointer;
+                                ">
+                                    <option value="newest">🕐 Newest First</option>
+                                    <option value="oldest">🕑 Oldest First</option>
+                                    <option value="table">🏓 By Table</option>
+                                    <option value="duration">⏱️ By Duration</option>
+                                </select>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button onclick="generateAIAnalysis()" id="aiAnalysisBtn" style="
+                                    padding: 10px 16px;
+                                    background: linear-gradient(135deg, #667eea, #764ba2);
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                ">🤖 AI Analysis</button>
+                                
+                                <button onclick="exportAllTranscriptions()" style="
+                                    padding: 10px 16px;
+                                    background: #007bff;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                ">📥 Export All</button>
+                                
+                                <button onclick="refreshTranscriptions()" style="
+                                    padding: 10px 16px;
+                                    background: #6c757d;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                ">🔄 Refresh</button>
+                            </div>
                         </div>
-                        <div class="stat-pill">
-                            <span class="stat-icon">👥</span>
-                            <span class="stat-text">Speakers: <strong id="totalSpeakers">0</strong></span>
+
+                        <!-- AI Analysis Section -->
+                        <div id="aiAnalysisSection" style="
+                            display: none;
+                            background: #f8f9fa;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 8px;
+                            padding: 20px;
+                            margin-bottom: 30px;
+                        ">
+                            <div style="
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                margin-bottom: 16px;
+                            ">
+                                <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">🤖 AI Analysis Results</h3>
+                                <button onclick="toggleAIAnalysis()" style="
+                                    background: none;
+                                    border: none;
+                                    font-size: 18px;
+                                    cursor: pointer;
+                                    color: #666;
+                                ">✕</button>
+                            </div>
+                            <div id="aiAnalysisResults">
+                                <!-- AI analysis results will be loaded here -->
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="dashboard-controls">
-                        <div class="filter-controls">
-                            <select id="tableFilter" class="awesome-select">
-                                <option value="">🌐 All Tables</option>
-                            </select>
-                            <select id="sortFilter" class="awesome-select">
-                                <option value="newest">🕐 Newest First</option>
-                                <option value="oldest">🕑 Oldest First</option>
-                                <option value="table">🏓 By Table</option>
-                                <option value="duration">⏱️ By Duration</option>
-                            </select>
+
+                        <!-- Transcriptions List -->
+                        <div id="allTranscriptionsList" style="
+                            display: grid;
+                            gap: 16px;
+                            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                        ">
+                            <!-- All transcriptions will be loaded here -->
                         </div>
-                        <div class="action-controls">
-                            <button onclick="generateAIAnalysis()" class="awesome-btn ai" id="aiAnalysisBtn">🤖 AI Analysis</button>
-                            <button onclick="exportAllTranscriptions()" class="awesome-btn primary">📥 Export All</button>
-                            <button onclick="refreshTranscriptions()" class="awesome-btn secondary">🔄 Refresh</button>
-                        </div>
-                    </div>
-                    
-                    <div id="aiAnalysisSection" class="ai-analysis-section" style="display: none;">
-                        <div class="ai-analysis-header">
-                            <h2>🤖 AI Analysis Results</h2>
-                            <button onclick="toggleAIAnalysis()" class="close-analysis-btn">✕ Hide</button>
-                        </div>
-                        <div id="aiAnalysisResults" class="ai-analysis-results">
-                            <!-- AI analysis results will be loaded here -->
-                        </div>
-                    </div>
-                    
-                    <div id="allTranscriptionsList" class="awesome-transcriptions-grid">
-                        <!-- All transcriptions will be loaded here -->
                     </div>
                 </div>
             </div>
 
-            <!-- Admin Dashboard -->
+            <!-- Admin Dashboard - CLEAN REDESIGN -->
             <div id="adminDashboard" class="screen">
-                <div class="modern-admin-container">
-                    <!-- Admin Header -->
-                    <header class="admin-header">
-                        <div class="admin-header-content">
-                            <button onclick="showWelcome()" class="admin-back-btn">← Back</button>
-                            <div class="admin-branding">
-                                <h1>⚙️ Admin Dashboard</h1>
-                                <p>World Café Platform Administration</p>
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    background: #f8f9fa;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    overflow-y: auto;
+                    z-index: 10000;
+                ">
+                    <!-- Clean Header -->
+                    <header style="
+                        background: white;
+                        border-bottom: 1px solid #e5e7eb;
+                        padding: 16px 24px;
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                    ">
+                        <div style="
+                            max-width: 1400px;
+                            margin: 0 auto;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <button onclick="showWelcome()" style="
+                                    background: #f3f4f6;
+                                    border: 1px solid #d1d5db;
+                                    border-radius: 8px;
+                                    padding: 8px 12px;
+                                    cursor: pointer;
+                                    font-size: 14px;
+                                    color: #374151;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                    transition: all 0.2s ease;
+                                " onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+                                    ← Back to Home
+                                </button>
+                                <div>
+                                    <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
+                                        Admin Dashboard
+                                    </h1>
+                                    <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                                        World Café Platform Administration
+                                    </p>
+                                </div>
+                            </div>
+                            <div style="
+                                background: #ecfdf5;
+                                border: 1px solid #a7f3d0;
+                                padding: 6px 12px;
+                                border-radius: 6px;
+                                color: #065f46;
+                                font-size: 12px;
+                                font-weight: 500;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            ">
+                                <div style="width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></div>
+                                System Online
                             </div>
                         </div>
                     </header>
 
-                    <!-- Admin Login -->
-                    <div id="adminLogin" class="modern-admin-login">
-                        <div class="login-card">
-                            <div class="login-header">
-                                <div class="login-icon">🔒</div>
-                                <h2>Admin Access</h2>
-                                <p>Enter your admin credentials to continue</p>
-                            </div>
-                            <div class="login-form">
-                                <div class="form-field">
-                                    <input type="password" id="adminPassword" placeholder="Admin Password" class="modern-input">
-                                </div>
-                                <button onclick="adminLogin()" class="modern-btn modern-btn-primary">🚀 Access Dashboard</button>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Main Container -->
+                    <div style="max-width: 1400px; margin: 0 auto; padding: 24px;">
 
-                    <!-- Modern Admin Panel -->
-                    <div id="adminPanel" class="modern-admin-panel" style="display: none;">
-                        <!-- Navigation Cards -->
-                        <div class="admin-nav-grid">
-                            <div class="admin-nav-card" onclick="showAdminTab('sessions')" id="sessionsNavCard">
-                                <div class="nav-card-icon">📊</div>
-                                <h3>Sessions</h3>
-                                <p>Manage active and completed sessions</p>
-                                <span class="nav-card-badge" id="sessionsCount">-</span>
+                        <!-- Admin Login -->
+                        <div id="adminLogin" style="
+                            max-width: 400px;
+                            margin: 80px auto;
+                            background: white;
+                            border-radius: 12px;
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                            border: 1px solid #e5e7eb;
+                            padding: 40px;
+                        ">
+                            <div style="text-align: center; margin-bottom: 32px;">
+                                <div style="
+                                    width: 64px;
+                                    height: 64px;
+                                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                                    border-radius: 50%;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 24px;
+                                    margin: 0 auto 16px auto;
+                                ">🔐</div>
+                                <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #111827;">
+                                    Admin Access Required
+                                </h2>
+                                <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                                    Please enter your administrator password to continue
+                                </p>
                             </div>
-                            <div class="admin-nav-card" onclick="showAdminTab('prompts')" id="promptsNavCard">
-                                <div class="nav-card-icon">🎯</div>
-                                <h3>AI Prompts</h3>
-                                <p>Configure analysis prompts</p>
+                            
+                            <div style="margin-bottom: 24px;">
+                                <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #374151;">
+                                    Password
+                                </label>
+                                <input 
+                                    type="password" 
+                                    id="adminPassword" 
+                                    placeholder="Enter admin password" 
+                                    style="
+                                        width: 100%;
+                                        padding: 12px 16px;
+                                        border: 1px solid #d1d5db;
+                                        border-radius: 8px;
+                                        background: #f9fafb;
+                                        color: #111827;
+                                        font-size: 14px;
+                                        transition: all 0.2s ease;
+                                        box-sizing: border-box;
+                                    "
+                                    onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
+                                    onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
+                                    onkeypress="if(event.key==='Enter') adminLogin()"
+                                >
                             </div>
-                            <div class="admin-nav-card" onclick="showAdminTab('stats')" id="statsNavCard">
-                                <div class="nav-card-icon">📈</div>
-                                <h3>Analytics</h3>
-                                <p>Platform usage statistics</p>
+                            
+                            <button 
+                                onclick="adminLogin()" 
+                                style="
+                                    width: 100%;
+                                    padding: 12px 16px;
+                                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                                    border: none;
+                                    border-radius: 8px;
+                                    color: white;
+                                    font-size: 14px;
+                                    font-weight: 500;
+                                    cursor: pointer;
+                                    transition: all 0.2s ease;
+                                "
+                                onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                            >
+                                Access Dashboard
+                            </button>
+                        </div>
+
+                        <!-- Admin Panel -->
+                        <div id="adminPanel" style="display: none;">
+                        <!-- NUCLEAR NAVIGATION -->
+                        <div style="
+                            display: flex;
+                            gap: 15px;
+                            padding: 20px 30px;
+                            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                            flex-wrap: wrap;
+                        ">
+                            <div 
+                                onclick="showAdminTab('sessions')" 
+                                id="sessionsNavCard"
+                                style="
+                                    background: rgba(34, 197, 94, 0.2);
+                                    border: 1px solid rgba(34, 197, 94, 0.3);
+                                    padding: 12px 20px;
+                                    border-radius: 25px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    color: #22c55e;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                "
+                                onmouseover="this.style.background='rgba(34,197,94,0.3)'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.background='rgba(34,197,94,0.2)'; this.style.transform='translateY(0)'"
+                            >
+                                <span>📊</span>
+                                <span>Sessions</span>
+                                <span id="sessionsCount" style="
+                                    background: rgba(255, 255, 255, 0.2);
+                                    padding: 2px 8px;
+                                    border-radius: 10px;
+                                    font-size: 12px;
+                                ">-</span>
                             </div>
-                            <div class="admin-nav-card" onclick="showAdminTab('system')" id="systemNavCard">
-                                <div class="nav-card-icon">⚙️</div>
-                                <h3>System</h3>
-                                <p>Server status and logs</p>
+                            <div 
+                                onclick="showAdminTab('prompts')" 
+                                id="promptsNavCard"
+                                style="
+                                    background: rgba(168, 85, 247, 0.2);
+                                    border: 1px solid rgba(168, 85, 247, 0.3);
+                                    padding: 12px 20px;
+                                    border-radius: 25px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    color: #a855f7;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                "
+                                onmouseover="this.style.background='rgba(168,85,247,0.3)'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.background='rgba(168,85,247,0.2)'; this.style.transform='translateY(0)'"
+                            >
+                                <span>🎯</span>
+                                <span>AI Prompts</span>
                             </div>
-                            <div class="admin-nav-card" onclick="showAdminTab('settings')" id="settingsNavCard">
-                                <div class="nav-card-icon">🔧</div>
-                                <h3>Settings</h3>
-                                <p>API keys and configuration</p>
+                            <div 
+                                onclick="showAdminTab('stats')" 
+                                id="statsNavCard"
+                                style="
+                                    background: rgba(59, 130, 246, 0.2);
+                                    border: 1px solid rgba(59, 130, 246, 0.3);
+                                    padding: 12px 20px;
+                                    border-radius: 25px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    color: #3b82f6;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                "
+                                onmouseover="this.style.background='rgba(59,130,246,0.3)'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.background='rgba(59,130,246,0.2)'; this.style.transform='translateY(0)'"
+                            >
+                                <span>📈</span>
+                                <span>Analytics</span>
+                            </div>
+                            <div 
+                                onclick="showAdminTab('system')" 
+                                id="systemNavCard"
+                                style="
+                                    background: rgba(245, 158, 11, 0.2);
+                                    border: 1px solid rgba(245, 158, 11, 0.3);
+                                    padding: 12px 20px;
+                                    border-radius: 25px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    color: #f59e0b;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                "
+                                onmouseover="this.style.background='rgba(245,158,11,0.3)'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.background='rgba(245,158,11,0.2)'; this.style.transform='translateY(0)'"
+                            >
+                                <span>⚙️</span>
+                                <span>System</span>
+                            </div>
+                            <div 
+                                onclick="showAdminTab('settings')" 
+                                id="settingsNavCard"
+                                style="
+                                    background: rgba(239, 68, 68, 0.2);
+                                    border: 1px solid rgba(239, 68, 68, 0.3);
+                                    padding: 12px 20px;
+                                    border-radius: 25px;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    color: #ef4444;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                "
+                                onmouseover="this.style.background='rgba(239,68,68,0.3)'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.background='rgba(239,68,68,0.2)'; this.style.transform='translateY(0)'"
+                            >
+                                <span>🔧</span>
+                                <span>Settings</span>
                             </div>
                         </div>
+                        
+                        <!-- NUCLEAR CONTENT AREA -->
+                        <div style="height: calc(100vh - 140px); overflow-y: auto; padding: 20px 30px;">
 
                         <!-- Sessions Panel -->
                         <div id="adminSessionsTab" class="modern-admin-tab active">
@@ -474,33 +2166,109 @@
                             </div>
                             
                             <!-- Quick Stats -->
-                            <div class="modern-stats-grid">
-                                <div class="modern-stat-card active">
-                                    <div class="stat-icon">🟢</div>
-                                    <div class="stat-content">
-                                        <span class="stat-number" id="adminActiveCount">-</span>
-                                        <span class="stat-label">Active Sessions</span>
+                            <div style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                                gap: 16px;
+                                margin-bottom: 24px;
+                            ">
+                                <div style="
+                                    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+                                    border: 1px solid #a7f3d0;
+                                    border-radius: 12px;
+                                    padding: 20px;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 16px;
+                                ">
+                                    <div style="
+                                        font-size: 24px;
+                                        width: 48px;
+                                        height: 48px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: rgba(34, 197, 94, 0.1);
+                                        border-radius: 50%;
+                                    ">🟢</div>
+                                    <div>
+                                        <div style="font-size: 24px; font-weight: 700; color: #047857;" id="adminActiveCount">-</div>
+                                        <div style="font-size: 14px; color: #065f46; font-weight: 500;">Active Sessions</div>
                                     </div>
                                 </div>
-                                <div class="modern-stat-card closed">
-                                    <div class="stat-icon">🖯️</div>
-                                    <div class="stat-content">
-                                        <span class="stat-number" id="adminClosedCount">-</span>
-                                        <span class="stat-label">Closed Sessions</span>
+                                
+                                <div style="
+                                    background: linear-gradient(135deg, #fef3c7, #fde68a);
+                                    border: 1px solid #fbbf24;
+                                    border-radius: 12px;
+                                    padding: 20px;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 16px;
+                                ">
+                                    <div style="
+                                        font-size: 24px;
+                                        width: 48px;
+                                        height: 48px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: rgba(245, 158, 11, 0.1);
+                                        border-radius: 50%;
+                                    ">🖯️</div>
+                                    <div>
+                                        <div style="font-size: 24px; font-weight: 700; color: #92400e;" id="adminClosedCount">-</div>
+                                        <div style="font-size: 14px; color: #78350f; font-weight: 500;">Closed Sessions</div>
                                     </div>
                                 </div>
-                                <div class="modern-stat-card deleted">
-                                    <div class="stat-icon">🗑️</div>
-                                    <div class="stat-content">
-                                        <span class="stat-number" id="adminDeletedCount">-</span>
-                                        <span class="stat-label">Deleted Sessions</span>
+                                
+                                <div style="
+                                    background: linear-gradient(135deg, #fee2e2, #fecaca);
+                                    border: 1px solid #f87171;
+                                    border-radius: 12px;
+                                    padding: 20px;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 16px;
+                                ">
+                                    <div style="
+                                        font-size: 24px;
+                                        width: 48px;
+                                        height: 48px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: rgba(239, 68, 68, 0.1);
+                                        border-radius: 50%;
+                                    ">🗑️</div>
+                                    <div>
+                                        <div style="font-size: 24px; font-weight: 700; color: #b91c1c;" id="adminDeletedCount">-</div>
+                                        <div style="font-size: 14px; color: #991b1b; font-weight: 500;">Deleted Sessions</div>
                                     </div>
                                 </div>
-                                <div class="modern-stat-card recent">
-                                    <div class="stat-icon">📅</div>
-                                    <div class="stat-content">
-                                        <span class="stat-number" id="adminRecentCount">-</span>
-                                        <span class="stat-label">Recent (7 days)</span>
+                                
+                                <div style="
+                                    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+                                    border: 1px solid #818cf8;
+                                    border-radius: 12px;
+                                    padding: 20px;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 16px;
+                                ">
+                                    <div style="
+                                        font-size: 24px;
+                                        width: 48px;
+                                        height: 48px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        background: rgba(99, 102, 241, 0.1);
+                                        border-radius: 50%;
+                                    ">📅</div>
+                                    <div>
+                                        <div style="font-size: 24px; font-weight: 700; color: #3730a3;" id="adminRecentCount">-</div>
+                                        <div style="font-size: 14px; color: #312e81; font-weight: 500;">Recent (7 days)</div>
                                     </div>
                                 </div>
                             </div>
@@ -539,43 +2307,251 @@
                                 <p>Configure analysis prompts for automated insights</p>
                             </div>
                             
-                            <div class="modern-prompts-grid">
-                                <div class="prompt-card">
-                                    <div class="prompt-header">
-                                        <div class="prompt-icon">⚡</div>
-                                        <h3>Conflict Detection</h3>
+                            <div style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                                gap: 24px;
+                                margin-bottom: 32px;
+                            ">
+                                <div style="
+                                    background: white;
+                                    border: 1px solid #e5e7eb;
+                                    border-radius: 12px;
+                                    padding: 24px;
+                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 16px;
+                                    ">
+                                        <div style="
+                                            font-size: 24px;
+                                            width: 40px;
+                                            height: 40px;
+                                            background: linear-gradient(135deg, #fee2e2, #fecaca);
+                                            border-radius: 8px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                        ">⚡</div>
+                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Conflict Detection</h3>
                                     </div>
-                                    <textarea id="conflictPrompt" class="modern-textarea" placeholder="Enter conflict detection prompt..."></textarea>
+                                    <textarea 
+                                        id="conflictPrompt" 
+                                        placeholder="Enter conflict detection prompt to identify disagreements and opposing viewpoints..."
+                                        style="
+                                            width: 100%;
+                                            min-height: 150px;
+                                            padding: 16px;
+                                            border: 1px solid #d1d5db;
+                                            border-radius: 8px;
+                                            background: #f9fafb;
+                                            color: #111827;
+                                            font-size: 14px;
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                            resize: vertical;
+                                            transition: all 0.2s ease;
+                                            box-sizing: border-box;
+                                        "
+                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
+                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
+                                    ></textarea>
                                 </div>
                                 
-                                <div class="prompt-card">
-                                    <div class="prompt-header">
-                                        <div class="prompt-icon">🤝</div>
-                                        <h3>Agreement Detection</h3>
+                                <div style="
+                                    background: white;
+                                    border: 1px solid #e5e7eb;
+                                    border-radius: 12px;
+                                    padding: 24px;
+                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 16px;
+                                    ">
+                                        <div style="
+                                            font-size: 24px;
+                                            width: 40px;
+                                            height: 40px;
+                                            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+                                            border-radius: 8px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                        ">🤝</div>
+                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Agreement Detection</h3>
                                     </div>
-                                    <textarea id="agreementPrompt" class="modern-textarea" placeholder="Enter agreement detection prompt..."></textarea>
+                                    <textarea 
+                                        id="agreementPrompt" 
+                                        placeholder="Enter agreement detection prompt to find consensus and shared ideas..."
+                                        style="
+                                            width: 100%;
+                                            min-height: 150px;
+                                            padding: 16px;
+                                            border: 1px solid #d1d5db;
+                                            border-radius: 8px;
+                                            background: #f9fafb;
+                                            color: #111827;
+                                            font-size: 14px;
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                            resize: vertical;
+                                            transition: all 0.2s ease;
+                                            box-sizing: border-box;
+                                        "
+                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
+                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
+                                    ></textarea>
                                 </div>
                                 
-                                <div class="prompt-card">
-                                    <div class="prompt-header">
-                                        <div class="prompt-icon">🎨</div>
-                                        <h3>Theme Extraction</h3>
+                                <div style="
+                                    background: white;
+                                    border: 1px solid #e5e7eb;
+                                    border-radius: 12px;
+                                    padding: 24px;
+                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 16px;
+                                    ">
+                                        <div style="
+                                            font-size: 24px;
+                                            width: 40px;
+                                            height: 40px;
+                                            background: linear-gradient(135deg, #fef3c7, #fde68a);
+                                            border-radius: 8px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                        ">🎨</div>
+                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Theme Extraction</h3>
                                     </div>
-                                    <textarea id="themePrompt" class="modern-textarea" placeholder="Enter theme extraction prompt..."></textarea>
+                                    <textarea 
+                                        id="themePrompt" 
+                                        placeholder="Enter theme extraction prompt to identify key topics and recurring patterns..."
+                                        style="
+                                            width: 100%;
+                                            min-height: 150px;
+                                            padding: 16px;
+                                            border: 1px solid #d1d5db;
+                                            border-radius: 8px;
+                                            background: #f9fafb;
+                                            color: #111827;
+                                            font-size: 14px;
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                            resize: vertical;
+                                            transition: all 0.2s ease;
+                                            box-sizing: border-box;
+                                        "
+                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
+                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
+                                    ></textarea>
                                 </div>
                                 
-                                <div class="prompt-card">
-                                    <div class="prompt-header">
-                                        <div class="prompt-icon">😊</div>
-                                        <h3>Sentiment Analysis</h3>
+                                <div style="
+                                    background: white;
+                                    border: 1px solid #e5e7eb;
+                                    border-radius: 12px;
+                                    padding: 24px;
+                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                                ">
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 12px;
+                                        margin-bottom: 16px;
+                                    ">
+                                        <div style="
+                                            font-size: 24px;
+                                            width: 40px;
+                                            height: 40px;
+                                            background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+                                            border-radius: 8px;
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                        ">😊</div>
+                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Sentiment Analysis</h3>
                                     </div>
-                                    <textarea id="sentimentPrompt" class="modern-textarea" placeholder="Enter sentiment analysis prompt..."></textarea>
+                                    <textarea 
+                                        id="sentimentPrompt" 
+                                        placeholder="Enter sentiment analysis prompt to analyze emotional tone and attitudes..."
+                                        style="
+                                            width: 100%;
+                                            min-height: 150px;
+                                            padding: 16px;
+                                            border: 1px solid #d1d5db;
+                                            border-radius: 8px;
+                                            background: #f9fafb;
+                                            color: #111827;
+                                            font-size: 14px;
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                            resize: vertical;
+                                            transition: all 0.2s ease;
+                                            box-sizing: border-box;
+                                        "
+                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
+                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
+                                    ></textarea>
                                 </div>
                             </div>
                             
-                            <div class="modern-actions-bar">
-                                <button onclick="resetPrompts()" class="modern-btn modern-btn-secondary">🔄 Reset to Default</button>
-                                <button onclick="savePrompts()" class="modern-btn modern-btn-primary">💾 Save Prompts</button>
+                            <div style="
+                                display: flex;
+                                gap: 16px;
+                                justify-content: flex-end;
+                                padding: 24px 0;
+                                border-top: 1px solid #e5e7eb;
+                                margin-top: 24px;
+                            ">
+                                <button 
+                                    onclick="resetPrompts()" 
+                                    style="
+                                        background: #f3f4f6;
+                                        border: 1px solid #d1d5db;
+                                        border-radius: 8px;
+                                        padding: 12px 20px;
+                                        cursor: pointer;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        color: #374151;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 8px;
+                                    "
+                                    onmouseover="this.style.background='#e5e7eb'"
+                                    onmouseout="this.style.background='#f3f4f6'"
+                                >
+                                    🔄 Reset to Default
+                                </button>
+                                <button 
+                                    onclick="savePrompts()" 
+                                    style="
+                                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                                        border: none;
+                                        border-radius: 8px;
+                                        padding: 12px 20px;
+                                        cursor: pointer;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        color: white;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 8px;
+                                    "
+                                    onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                                >
+                                    💾 Save Prompts
+                                </button>
                             </div>
                         </div>
 
@@ -808,22 +2784,175 @@
                         </div>
                     </div>
                     
-                    <div class="form-actions">
-                        <button onclick="showWelcome()" class="btn btn-secondary">Back</button>
+                        </div>
                     </div>
                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <style>
+                #adminPanel .modern-admin-tab {
+                    display: none;
+                }
+                
+                #adminPanel .modern-admin-tab.active {
+                    display: block;
+                }
+                </style>
             </div>
 
-            <!-- Analysis Report -->
-            <div id="analysisReport" class="screen">
-                <div class="report-container">
-                    <h2>Session Analysis Report</h2>
-                    <div id="reportContent" class="report-content">
-                        <!-- Report content will be loaded dynamically -->
-                    </div>
-                    <div class="form-actions">
-                        <button onclick="downloadReport()" class="btn btn-primary">Download Report</button>
-                        <button onclick="showSessionDashboard()" class="btn btn-secondary">Back</button>
+            <!-- Analysis Report - Modern Layout -->
+            <div id="analysisReport" class="screen" style="display: none;">
+                <div style="
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    z-index: 10000;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    box-sizing: border-box;
+                    padding: 20px;
+                    overflow-y: auto;
+                ">
+                    <div style="
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                        min-height: calc(100vh - 40px);
+                        position: relative;
+                    ">
+                        <!-- Report Header -->
+                        <div style="
+                            background: linear-gradient(135deg, #667eea, #764ba2);
+                            color: white;
+                            border-radius: 16px 16px 0 0;
+                            padding: 30px 40px;
+                            position: relative;
+                            overflow: hidden;
+                        ">
+                            <div style="
+                                position: absolute;
+                                top: -50px;
+                                right: -50px;
+                                width: 200px;
+                                height: 200px;
+                                background: rgba(255,255,255,0.1);
+                                border-radius: 50%;
+                            "></div>
+                            <div style="position: relative; z-index: 2;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                                    <div>
+                                        <h1 id="reportTitle" style="margin: 0 0 8px 0; font-size: 32px; font-weight: 700;">
+                                            Session Analysis Report
+                                        </h1>
+                                        <p id="reportSubtitle" style="margin: 0; font-size: 16px; opacity: 0.9;">
+                                            AI-powered insights from your World Café session
+                                        </p>
+                                    </div>
+                                    <button onclick="showSessionDashboard()" style="
+                                        background: rgba(255,255,255,0.2);
+                                        border: 1px solid rgba(255,255,255,0.3);
+                                        color: white;
+                                        padding: 10px 16px;
+                                        border-radius: 8px;
+                                        cursor: pointer;
+                                        font-weight: 500;
+                                        transition: all 0.2s ease;
+                                    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                                        ← Back
+                                    </button>
+                                </div>
+                                <div id="reportMeta" style="
+                                    display: flex;
+                                    gap: 24px;
+                                    font-size: 14px;
+                                    color: rgba(255,255,255,0.8);
+                                ">
+                                    <!-- Meta info will be populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Report Content -->
+                        <div style="padding: 40px;">
+                            <div id="reportContent" style="
+                                display: flex;
+                                flex-direction: column;
+                                gap: 40px;
+                            ">
+                                <!-- Report content will be loaded dynamically -->
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div style="
+                                margin-top: 60px;
+                                padding-top: 30px;
+                                border-top: 1px solid #e0e0e0;
+                                display: flex;
+                                gap: 16px;
+                                justify-content: center;
+                                flex-wrap: wrap;
+                            ">
+                                <button onclick="downloadReport()" style="
+                                    background: linear-gradient(135deg, #667eea, #764ba2);
+                                    color: white;
+                                    border: none;
+                                    padding: 14px 28px;
+                                    border-radius: 10px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    transition: all 0.2s ease;
+                                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">
+                                    <span style="font-size: 18px;">📄</span>
+                                    Download Report
+                                </button>
+                                <button onclick="exportAnalysisData()" style="
+                                    background: #28a745;
+                                    color: white;
+                                    border: none;
+                                    padding: 14px 28px;
+                                    border-radius: 10px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    transition: all 0.2s ease;
+                                " onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
+                                    <span style="font-size: 18px;">📊</span>
+                                    Export Data
+                                </button>
+                                <button onclick="viewTableAnalyses()" style="
+                                    background: #17a2b8;
+                                    color: white;
+                                    border: none;
+                                    padding: 14px 28px;
+                                    border-radius: 10px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    transition: all 0.2s ease;
+                                " onmouseover="this.style.background='#138496'" onmouseout="this.style.background='#17a2b8'">
+                                    <span style="font-size: 18px;">🏓</span>
+                                    View Tables
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -857,8 +2986,9 @@
                 <div class="form-group">
                     <label for="manualCode">Session/Table Code or Password</label>
                     <input type="text" id="manualCode" placeholder="Enter session code, table code, or password" 
-                           style="margin-bottom: 1rem;">
-                    <small style="color: #666; font-size: 0.9rem;">
+                           style="margin-bottom: 1rem; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; width: 100%; box-sizing: border-box;"
+                           autocomplete="off" spellcheck="false" maxlength="60">
+                    <small style="color: #666; font-size: 0.9rem; display: block; margin-bottom: 1rem;">
                         Accepts: Session codes, table codes, admin passwords, or table passwords
                     </small>
                 </div>
@@ -901,10 +3031,165 @@
             </div>
         </div>
 
-        <!-- Toast notifications removed -->
+        <!-- Toast notifications container -->
+        <div id="toastContainer" class="toast-container"></div>
     </div>
 
 
+    <script>
+        // Live Transcription with Deepgram
+        let liveTranscriptionSocket;
+        let liveTranscriptionStream;
+        let liveTranscriptionMediaRecorder;
+        let currentTranscriptionSpeaker = null;
+        let currentTranscriptionBubble = null;
+        const DEEPGRAM_API_KEY = '5c0e7b6e611060387891a21b4d309ac439d0a404';
+        
+        // Live Transcription Elements
+        const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
+        const stopTranscriptionBtn = document.getElementById('stopTranscriptionBtn');
+        const liveTranscriptEl = document.getElementById('liveTranscript');
+        
+        // Event Listeners
+        if (liveTranscriptionBtn) {
+            liveTranscriptionBtn.onclick = startLiveTranscription;
+        }
+        if (stopTranscriptionBtn) {
+            stopTranscriptionBtn.onclick = stopLiveTranscription;
+        }
+
+        async function startLiveTranscription() {
+            try {
+                // Request microphone access
+                liveTranscriptionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                liveTranscriptionMediaRecorder = new MediaRecorder(liveTranscriptionStream, { mimeType: 'audio/webm' });
+
+                // Build WebSocket URL with Deepgram
+                let wsUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&diarize=true&language=en&punctuate=true&interim_results=true&v=${Date.now()}`;
+
+                // Connect to Deepgram WebSocket
+                liveTranscriptionSocket = new WebSocket(wsUrl, ['token', DEEPGRAM_API_KEY]);
+
+                liveTranscriptionSocket.onopen = () => {
+                    console.log('Live Transcription WebSocket connected');
+                    liveTranscriptionBtn.style.display = 'none';
+                    stopTranscriptionBtn.style.display = 'flex';
+                    liveTranscriptionMediaRecorder.start(250); // Collect 250ms of audio at a time
+                    // Clear initial message and prepare for bubbles
+                    liveTranscriptEl.innerHTML = '';
+                    liveTranscriptEl.style.border = 'none';
+                    liveTranscriptEl.style.background = '#ffffff';
+                    currentTranscriptionSpeaker = null;
+                    currentTranscriptionBubble = null;
+                };
+
+                liveTranscriptionSocket.onmessage = (message) => {
+                    try {
+                        const data = JSON.parse(message.data);
+                        if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
+                            const alternative = data.channel.alternatives[0];
+                            if (alternative.words && alternative.words.length > 0) {
+                                // Convert Deepgram format to our displayTranscription format
+                                const speakers = [];
+                                let currentSpeaker = null;
+                                let currentText = '';
+                                
+                                for (const wordObj of alternative.words) {
+                                    const speaker = wordObj.speaker || 0;
+                                    if (currentSpeaker !== speaker) {
+                                        // Save previous speaker segment if exists
+                                        if (currentSpeaker !== null && currentText.trim()) {
+                                            speakers.push({
+                                                speaker: currentSpeaker,
+                                                text: currentText.trim(),
+                                                start: 0, // Real-time doesn't have exact timing
+                                                end: 0
+                                            });
+                                        }
+                                        // Start new speaker segment
+                                        currentSpeaker = speaker;
+                                        currentText = wordObj.word + ' ';
+                                    } else {
+                                        currentText += wordObj.word + ' ';
+                                    }
+                                }
+                                
+                                // Add final speaker segment
+                                if (currentSpeaker !== null && currentText.trim()) {
+                                    speakers.push({
+                                        speaker: currentSpeaker,
+                                        text: currentText.trim(),
+                                        start: 0,
+                                        end: 0
+                                    });
+                                }
+                                
+                                // Use the existing displayTranscription function
+                                if (speakers.length > 0 && typeof displayTranscription === 'function') {
+                                    displayTranscription({
+                                        transcription: {
+                                            speakers: speakers,
+                                            transcript: alternative.transcript || alternative.words.map(w => w.word).join(' '),
+                                            confidence: alternative.confidence || 0.9
+                                        },
+                                        source: 'live-transcription'
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error processing transcription message:', error);
+                    }
+                };
+
+                liveTranscriptionSocket.onclose = (event) => {
+                    console.log('Live Transcription WebSocket closed:', event.code, event.reason);
+                    cleanupLiveTranscription();
+                };
+
+                liveTranscriptionSocket.onerror = (error) => {
+                    console.error('Live Transcription WebSocket error:', error);
+                    console.error('WebSocket URL used:', wsUrl);
+                    console.error('API Key length:', DEEPGRAM_API_KEY ? DEEPGRAM_API_KEY.length : 'undefined');
+                    liveTranscriptEl.innerHTML = '<div style="color: #dc3545;">❌ Connection failed. Check console for details.</div>';
+                    cleanupLiveTranscription();
+                };
+
+                liveTranscriptionMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && liveTranscriptionSocket.readyState === WebSocket.OPEN) {
+                        liveTranscriptionSocket.send(event.data);
+                    }
+                };
+
+                liveTranscriptionMediaRecorder.onstop = cleanupLiveTranscription;
+
+            } catch (error) {
+                console.error('Error starting live transcription:', error);
+                liveTranscriptEl.innerHTML = '<div style="color: #dc3545;">❌ Microphone access denied or other issue</div>';
+                cleanupLiveTranscription();
+            }
+        }
+
+        function stopLiveTranscription() {
+            if (liveTranscriptionMediaRecorder) {
+                liveTranscriptionMediaRecorder.stop();
+            }
+        }
+
+        function cleanupLiveTranscription() {
+            if (liveTranscriptionSocket && liveTranscriptionSocket.readyState !== WebSocket.CLOSED) {
+                liveTranscriptionSocket.close();
+            }
+            if (liveTranscriptionStream) {
+                liveTranscriptionStream.getTracks().forEach(track => track.stop());
+            }
+            liveTranscriptionBtn.style.display = 'flex';
+            stopTranscriptionBtn.style.display = 'none';
+            currentTranscriptionSpeaker = null;
+            currentTranscriptionBubble = null;
+        }
+
+    </script>
     <script src="app.js"></script>
 </body>
 </html>

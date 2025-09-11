@@ -40,7 +40,8 @@ INSERT INTO `migrations` (`filename`) VALUES
 ('006_add_session_analysis_table.sql'),
 ('007_add_global_settings_table.sql'),
 ('008_add_table_level_analysis.sql'),
-('009_add_session_table_passwords.sql');
+('009_add_session_table_passwords.sql'),
+('010_create_activity_logs.sql');
 
 -- Table structure for table `sessions`
 CREATE TABLE `sessions` (
@@ -208,6 +209,25 @@ CREATE TABLE `session_history` (
   PRIMARY KEY (`id`),
   KEY `session_id` (`session_id`),
   CONSTRAINT `session_history_ibfk_1` FOREIGN KEY (`session_id`) REFERENCES `sessions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table structure for table `activity_logs`
+CREATE TABLE `activity_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `action` varchar(100) NOT NULL,
+  `details` text DEFAULT NULL,
+  `timestamp` datetime DEFAULT current_timestamp(),
+  `user_id` varchar(255) DEFAULT NULL,
+  `session_id` varchar(255) DEFAULT NULL,
+  `table_id` int(11) DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_action` (`action`),
+  KEY `idx_timestamp` (`timestamp`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_session_id` (`session_id`),
+  KEY `idx_table_id` (`table_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 COMMIT;

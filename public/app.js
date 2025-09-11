@@ -371,28 +371,38 @@ function displayExistingTranscriptions(transcriptions) {
 
 // Handle URL parameters for QR code navigation
 function handleURLParams() {
+    console.log('[DEBUG] handleURLParams called');
+    console.log('[DEBUG] Current URL:', window.location.href);
+    console.log('[DEBUG] Search string:', window.location.search);
+    
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     const tableId = urlParams.get('table');
+    
+    console.log('[DEBUG] Parsed URL params:', { sessionId, tableId });
 
     if (sessionId) {
-        console.log('URL params detected:', { sessionId, tableId });
+        console.log('[DEBUG] Session ID found, proceeding with auto-join');
         // Auto-load session from QR code
         setTimeout(async () => {
             try {
                 if (tableId) {
-                    console.log(`Attempting to join table ${tableId} in session ${sessionId}`);
+                    console.log(`[DEBUG] Attempting to join table ${tableId} in session ${sessionId}`);
                     await joinSpecificTable(sessionId, tableId);
                 } else {
-                    console.log(`Attempting to load session ${sessionId}`);
+                    console.log(`[DEBUG] Attempting to load session ${sessionId}`);
                     await loadSpecificSession(sessionId);
                 }
+                console.log('[DEBUG] URL param handling completed successfully');
             } catch (error) {
-                console.error('Error handling URL params:', error);
-                alert(`Unable to join session/table. The session may not exist or may have expired.`);
+                console.error('[DEBUG] Error handling URL params:', error);
+                console.error('[DEBUG] Error stack:', error.stack);
+                alert(`Unable to join session/table. The session may not exist or may have expired.\nError: ${error.message}`);
                 showWelcome();
             }
         }, 1000);
+    } else {
+        console.log('[DEBUG] No session ID in URL params');
     }
 }
 
@@ -402,6 +412,9 @@ function initializeSocket() {
     
     socket.on('connect', () => {
         console.log('Connected to server');
+        if (window.logger) {
+            logger.logUserAction('socket_connected', { timestamp: new Date() });
+        }
         updateConnectionStatus('connected');
     });
     
@@ -424,6 +437,7 @@ function initializeSocket() {
     });
     
     socket.on('transcription-completed', (data) => {
+        console.log('📝 Received transcription-completed event:', data);
         displayTranscription(data);
         updateTableTranscriptionCount(data.tableId);
     });
@@ -431,44 +445,72 @@ function initializeSocket() {
 
 // Enhanced Event listeners
 function setupEventListeners() {
+    // Helper function to safely set event listeners
+    function safeSetEventListener(elementId, event, handler) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            if (event === 'onclick') {
+                element.onclick = handler;
+            } else if (event === 'onsubmit') {
+                element.onsubmit = handler;
+            } else if (event === 'onchange') {
+                element.onchange = handler;
+            } else {
+                element.addEventListener(event.replace('on', ''), handler);
+            }
+        } else {
+            console.warn(`Element with ID '${elementId}' not found, skipping event listener setup`);
+        }
+    }
+    
     // Navigation
-    document.getElementById('homeBtn').onclick = function() { closeMobileMenu(); showWelcome(); };
-    document.getElementById('createSessionBtn').onclick = function() { closeMobileMenu(); showCreateSession(); };
-    document.getElementById('adminBtn').onclick = function() { closeMobileMenu(); showAdminDashboard(); };
-    document.getElementById('mobileMenuToggle').onclick = toggleMobileMenu;
-    document.getElementById('qrScanBtn').onclick = function() { closeMobileMenu(); showQRScanner(); };
+    safeSetEventListener('homeBtn', 'onclick', function() { closeMobileMenu(); showWelcome(); });
+    safeSetEventListener('createSessionBtn', 'onclick', function() { closeMobileMenu(); showCreateSession(); });
+    safeSetEventListener('adminBtn', 'onclick', function() { closeMobileMenu(); showAdminDashboard(); });
+    safeSetEventListener('mobileMenuToggle', 'onclick', toggleMobileMenu);
     
     // Forms
-    document.getElementById('createSessionForm').onsubmit = createSession;
-    document.getElementById('sessionSelect').onchange = loadSessionTables;
-    document.getElementById('joinTableBtn').onclick = joinTable;
-    document.getElementById('joinThisTableBtn').onclick = joinCurrentTable;
+    safeSetEventListener('createSessionForm', 'onsubmit', createSession);
+    safeSetEventListener('sessionSelect', 'onchange', loadSessionTables);
+    
+    // Join Wizard functionality
+    setupJoinWizard();
+    
+    // Enhanced form interactions
+    setupFormValidation();
+    
+    // Table joining
+    safeSetEventListener('joinTableBtn', 'onclick', joinTable);
+    safeSetEventListener('joinThisTableBtn', 'onclick', joinCurrentTable);
     
     // Recording controls
-    document.getElementById('startRecordingBtn').onclick = startRecording;
-    document.getElementById('stopRecordingBtn').onclick = stopRecording;
-    document.getElementById('uploadMediaBtn').onclick = openMediaUpload;
-    document.getElementById('mediaFileInput').onchange = handleMediaFileUpload;
-    document.getElementById('generateReportBtn').onclick = generateAnalysis;
+    safeSetEventListener('startRecordingBtn', 'onclick', startRecording);
+    safeSetEventListener('stopRecordingBtn', 'onclick', stopRecording);
+    safeSetEventListener('uploadMediaBtn', 'onclick', openMediaUpload);
+    safeSetEventListener('mediaFileInput', 'onchange', handleMediaFileUpload);
+    safeSetEventListener('generateReportBtn', 'onclick', generateAnalysis);
     
     // QR Code functionality
-    document.getElementById('showQRCodesBtn').onclick = showQRCodes;
-    document.getElementById('hideQRCodesBtn').onclick = hideQRCodes;
-    document.getElementById('downloadAllQRBtn').onclick = downloadAllQRCodes;
-    document.getElementById('printQRBtn').onclick = printQRCodes;
+    safeSetEventListener('showQRCodesBtn', 'onclick', showQRCodes);
+    safeSetEventListener('hideQRCodesBtn', 'onclick', hideQRCodes);
+    safeSetEventListener('downloadAllQRBtn', 'onclick', downloadAllQRCodes);
+    safeSetEventListener('printQRBtn', 'onclick', printQRCodes);
     
     // Mobile QR Scanner
-    document.getElementById('closeScannerBtn').onclick = closeQRScanner;
-    document.getElementById('manualJoinBtn').onclick = showManualJoin;
-    document.getElementById('closeManualJoinBtn').onclick = closeManualJoin;
-    document.getElementById('submitManualJoinBtn').onclick = submitManualJoin;
+    safeSetEventListener('closeScannerBtn', 'onclick', closeQRScanner);
+    safeSetEventListener('manualJoinBtn', 'onclick', showManualJoin);
+    safeSetEventListener('closeManualJoinBtn', 'onclick', closeManualJoin);
+    safeSetEventListener('submitManualJoinBtn', 'onclick', submitManualJoin);
     
-    // Handle manual code input
-    document.getElementById('manualCode').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            submitManualJoin();
-        }
-    });
+    // Handle manual code input with keypress
+    const manualCodeInput = document.getElementById('manualCode');
+    if (manualCodeInput) {
+        manualCodeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitManualJoin();
+            }
+        });
+    }
 }
 
 // Navigation history for back button
@@ -503,10 +545,42 @@ function updateNavigationHistory(screenId) {
 
 // Navigation functions
 function showScreen(screenId) {
+    console.log('showScreen called with:', screenId);
+    
+    const targetScreen = document.getElementById(screenId);
+    if (!targetScreen) {
+        console.error('Screen element not found:', screenId);
+        throw new Error(`Screen element not found: ${screenId}`);
+    }
+    
+    console.log('Target screen found:', targetScreen);
+    
+    // Hide all screens including our isolated join screen
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
+        screen.style.display = 'none';
     });
-    document.getElementById(screenId).classList.add('active');
+    
+    // Also hide isolated screens specifically
+    const joinScreen = document.getElementById('joinSessionScreen');
+    if (joinScreen) {
+        joinScreen.style.display = 'none';
+    }
+    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+    if (transcriptionsScreen) {
+        transcriptionsScreen.style.display = 'none';
+    }
+    const sessionDashboardScreen = document.getElementById('sessionDashboard');
+    if (sessionDashboardScreen) {
+        sessionDashboardScreen.style.display = 'none';
+    }
+    
+    targetScreen.classList.add('active');
+    targetScreen.style.display = 'block';
+    
+    console.log(`Screen activated: ${screenId}`);
+    
+    console.log('Screen activated:', screenId, 'has active class:', targetScreen.classList.contains('active'));
     
     // Update navigation history
     updateNavigationHistory(screenId);
@@ -539,6 +613,21 @@ function showScreen(screenId) {
 
 function showWelcome() {
     navigationHistory = ['welcomeScreen']; // Reset history
+    
+    // Hide isolated screens if they're showing
+    const joinScreen = document.getElementById('joinSessionScreen');
+    if (joinScreen) {
+        joinScreen.style.display = 'none';
+    }
+    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+    if (transcriptionsScreen) {
+        transcriptionsScreen.style.display = 'none';
+    }
+    const sessionDashboardScreen = document.getElementById('sessionDashboard');
+    if (sessionDashboardScreen) {
+        sessionDashboardScreen.style.display = 'none';
+    }
+    
     showScreen('welcomeScreen');
 }
 
@@ -548,18 +637,73 @@ function showCreateSession() {
 
 function showJoinSession() {
     loadActiveSessions();
-    showScreen('joinSessionScreen');
+    
+    // Hide all other screens
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+    });
+    
+    // Show the completely isolated join screen
+    const joinScreen = document.getElementById('joinSessionScreen');
+    if (joinScreen) {
+        joinScreen.style.display = 'block';
+        console.log('Join session screen activated with isolated styles');
+    }
+    
+    // Reset to step 1
+    goToStep(1);
 }
 
 function showSessionList() {
     loadActiveSessions();
+    
+    // Hide isolated screens
+    const joinScreen = document.getElementById('joinSessionScreen');
+    if (joinScreen) {
+        joinScreen.style.display = 'none';
+    }
+    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+    if (transcriptionsScreen) {
+        transcriptionsScreen.style.display = 'none';
+    }
+    const sessionDashboardScreen = document.getElementById('sessionDashboard');
+    if (sessionDashboardScreen) {
+        sessionDashboardScreen.style.display = 'none';
+    }
+    
     showScreen('sessionListScreen');
 }
 
 function showSessionDashboard() {
     if (currentSession) {
         loadSessionDashboard(currentSession.id);
-        showScreen('sessionDashboard');
+        
+        console.log('Showing isolated session dashboard...');
+        // Hide all other screens
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
+            screen.style.display = 'none';
+        });
+        
+        // Hide isolated screens
+        const joinScreen = document.getElementById('joinSessionScreen');
+        if (joinScreen) {
+            joinScreen.style.display = 'none';
+        }
+        const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+        if (transcriptionsScreen) {
+            transcriptionsScreen.style.display = 'none';
+        }
+        
+        // Show the completely isolated session dashboard screen
+        const dashboardScreen = document.getElementById('sessionDashboard');
+        if (dashboardScreen) {
+            dashboardScreen.style.display = 'block';
+            console.log('Session dashboard activated with isolated styles');
+        }
+    } else {
+        alert('No session selected');
     }
 }
 
@@ -568,15 +712,47 @@ function showTableInterface(tableId) {
         currentTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
         if (currentTable) {
             setupTableInterface();
-            showScreen('tableInterface');
+            
+            // Nuclear isolation approach - hide all other screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+                screen.style.display = 'none';
+            });
+            
+            // Hide isolated screens
+            const sessionDashboard = document.getElementById('sessionDashboard');
+            if (sessionDashboard) {
+                sessionDashboard.style.display = 'none';
+            }
+            const joinScreen = document.getElementById('joinSessionScreen');
+            if (joinScreen) {
+                joinScreen.style.display = 'none';
+            }
+            
+            // Show table interface
+            const tableInterface = document.getElementById('tableInterface');
+            if (tableInterface) {
+                tableInterface.style.display = 'block';
+            }
         }
     }
 }
 
 function backToSession() {
     if (currentSession) {
+        // Hide table interface
+        const tableInterface = document.getElementById('tableInterface');
+        if (tableInterface) {
+            tableInterface.style.display = 'none';
+        }
+        
+        // Show session dashboard
+        const sessionDashboard = document.getElementById('sessionDashboard');
+        if (sessionDashboard) {
+            sessionDashboard.style.display = 'block';
+        }
+        
         loadSessionDashboard(currentSession.id);
-        showScreen('sessionDashboard');
     } else {
         showWelcome();
     }
@@ -660,32 +836,880 @@ function closeManualJoin() {
     }
 }
 
-function submitManualJoin() {
-    const code = document.getElementById('manualCode').value.trim();
-    if (code) {
-        // Try to parse the code as a session ID or URL
-        if (code.includes('session=')) {
-            const urlParams = new URLSearchParams(code.split('?')[1]);
-            const sessionId = urlParams.get('session');
-            const tableId = urlParams.get('table');
-            
-            if (sessionId) {
-                closeManualJoin();
-                if (tableId) {
-                    joinSpecificTable(sessionId, tableId);
-                } else {
-                    loadSpecificSession(sessionId);
-                }
-            }
-        } else {
-            // Assume it's a session ID
-            closeManualJoin();
-            loadSpecificSession(code);
-        }
-    } else {
-        console.log('Please enter a valid code');
+// Join Session QR Scanner - enhanced version for join session context
+function showJoinQRScanner() {
+    console.log('QR scanning works best on mobile devices');
+    const scanner = document.getElementById('mobileScanner');
+    if (scanner) {
+        // Update scanner title for join session context
+        const scannerTitle = scanner.querySelector('h3');
+        const scannerDescription = scanner.querySelector('p');
+        if (scannerTitle) scannerTitle.textContent = 'Scan QR Code';
+        if (scannerDescription) scannerDescription.textContent = 'Point camera at session QR code';
+        
+        scanner.style.display = 'flex';
+        initializeQRScanner();
     }
 }
+
+// Duplicate quickJoinSession function removed - using quickJoinWithCode from Step 1 instead
+
+// Old duplicate function removed - using proper backend API now
+
+// Join Wizard Management
+let currentJoinMethod = null;
+let currentWizardStep = 1;
+let selectedSessionData = null;
+let selectedTableId = null;
+
+function setupJoinWizard() {
+    // Reset wizard on join session screen show
+    const joinScreen = document.getElementById('joinSessionScreen');
+    if (joinScreen) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (joinScreen.classList.contains('active')) {
+                        resetWizard();
+                    }
+                }
+            });
+        });
+        observer.observe(joinScreen, { attributes: true });
+    }
+}
+
+function resetWizard() {
+    currentJoinMethod = null;
+    currentWizardStep = 1;
+    selectedSessionData = null;
+    selectedTableId = null;
+    
+    // Reset progress steps - with null checks
+    document.querySelectorAll('.progress-step').forEach(step => {
+        if (step) step.classList.remove('active', 'completed');
+    });
+    const firstProgressStep = document.querySelector('.progress-step[data-step="1"]');
+    if (firstProgressStep) firstProgressStep.classList.add('active');
+    
+    // Reset wizard steps - with null checks
+    document.querySelectorAll('.wizard-step').forEach(step => {
+        if (step) step.classList.remove('active');
+    });
+    const joinStep1 = document.getElementById('joinStep1');
+    if (joinStep1) joinStep1.classList.add('active');
+    
+    // Reset method cards - with null checks
+    document.querySelectorAll('.method-card').forEach(card => {
+        if (card) card.classList.remove('selected');
+    });
+    
+    // Clear form inputs - with null checks
+    const inputs = ['sessionCodeInput'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+    });
+}
+
+function selectJoinMethod(method) {
+    currentJoinMethod = method;
+    
+    // Update method card selection
+    document.querySelectorAll('.method-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-method="${method}"]`).classList.add('selected');
+    
+    // Proceed to step 2 after a short delay for visual feedback
+    setTimeout(() => {
+        if (method === 'code') {
+            goToStep(2, 'code');
+        } else if (method === 'browse') {
+            goToStep(2, 'browse');
+        }
+    }, 300);
+}
+
+function goToStep(step, method = null) {
+    if (method) currentJoinMethod = method;
+    currentWizardStep = step;
+    
+    // Hide all steps
+    const steps = ['joinStep1', 'joinStep2Browse', 'joinStep3'];
+    steps.forEach(stepId => {
+        const stepElement = document.getElementById(stepId);
+        if (stepElement) {
+            stepElement.style.display = 'none';
+        }
+    });
+    
+    // Show appropriate step
+    let targetStepId;
+    if (step === 1) {
+        targetStepId = 'joinStep1';
+    } else if (step === 2) {
+        targetStepId = 'joinStep2Browse'; // Code input is now handled directly in Step 1
+        
+        // Load sessions for browse method
+        if (currentJoinMethod === 'browse') {
+            loadSessionsForBrowse();
+        }
+    } else if (step === 3) {
+        targetStepId = 'joinStep3';
+        loadTablesForStep3();
+    }
+    
+    // Show the target step
+    const targetStep = document.getElementById(targetStepId);
+    if (targetStep) {
+        targetStep.style.display = 'block';
+        console.log(`Showing step: ${targetStepId}`);
+    }
+}
+
+function updateProgressSteps(activeStep) {
+    // Only update if progress steps exist (they were removed from HTML)
+    const progressSteps = document.querySelectorAll('.progress-step');
+    if (progressSteps.length > 0) {
+        progressSteps.forEach((step, index) => {
+            const stepNumber = index + 1;
+            if (step) {
+                step.classList.remove('active', 'completed');
+                
+                if (stepNumber < activeStep) {
+                    step.classList.add('completed');
+                } else if (stepNumber === activeStep) {
+                    step.classList.add('active');
+                }
+            }
+        });
+    }
+}
+
+async function loadSessionsForBrowse() {
+    const sessionSelect = document.getElementById('sessionSelect');
+    try {
+        const response = await fetch('/api/sessions');
+        if (!response.ok) throw new Error('Failed to load sessions');
+        
+        const sessions = await response.json();
+        const activeSessions = sessions.filter(session => session.status === 'active');
+        
+        sessionSelect.innerHTML = activeSessions.length > 0 
+            ? '<option value="">Select a session...</option>' + 
+              activeSessions.map(session => 
+                `<option value="${session.id}">${session.title}</option>`
+              ).join('')
+            : '<option value="">No active sessions available</option>';
+            
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
+    }
+}
+
+function handleSessionSelection() {
+    const sessionSelect = document.getElementById('sessionSelect');
+    
+    console.log('Session selection changed:', sessionSelect.value);
+    
+    if (sessionSelect.value) {
+        // Store selected session data
+        const selectedOption = sessionSelect.options[sessionSelect.selectedIndex];
+        selectedSessionData = {
+            id: sessionSelect.value,
+            title: selectedOption.textContent
+        };
+        
+        console.log('Selected session data set:', selectedSessionData);
+        
+        // Auto-advance to table selection step after short delay for visual feedback
+        setTimeout(() => {
+            goToStep(3);
+        }, 500);
+    } else {
+        selectedSessionData = null;
+    }
+}
+
+async function loadTablesForStep3() {
+    console.log('loadTablesForStep3 called, selectedSessionData:', selectedSessionData);
+    
+    if (!selectedSessionData) {
+        console.error('selectedSessionData is null');
+        document.getElementById('tableSelection').innerHTML = '<p>No session selected. Please go back and select a session.</p>';
+        return;
+    }
+    
+    // Update session info card
+    const sessionInfoCard = document.getElementById('selectedSessionInfo');
+    sessionInfoCard.innerHTML = `
+        <h4>${selectedSessionData.title}</h4>
+        <p>Select an available table to join</p>
+    `;
+    
+    // Load tables
+    const tableSelection = document.getElementById('tableSelection');
+    tableSelection.innerHTML = '<p>Loading tables...</p>';
+    
+    try {
+        console.log('Fetching session with tables:', selectedSessionData.id);
+        const response = await fetch(`/api/sessions/${selectedSessionData.id}`);
+        console.log('Session response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Session response error:', errorText);
+            throw new Error(`Failed to load session: ${response.status} ${response.statusText}`);
+        }
+        
+        const sessionData = await response.json();
+        const tables = sessionData.tables || [];
+        console.log('Tables loaded:', tables);
+        
+        if (!tables || tables.length === 0) {
+            tableSelection.innerHTML = '<p>No tables available for this session.</p>';
+            return;
+        }
+        
+        tableSelection.innerHTML = tables.map(table => {
+            const currentParticipants = table.current_participants || 0;
+            const maxSize = table.max_size || 10;
+            const isFull = currentParticipants >= maxSize;
+            
+            return `
+                <div class="table-card" 
+                     onclick="${isFull ? '' : `selectTable(${table.id})`}" 
+                     data-table-id="${table.id}"
+                     style="
+                         display: inline-block;
+                         width: 140px;
+                         height: 100px;
+                         margin: 8px;
+                         padding: 16px;
+                         background: ${isFull ? '#f5f5f5' : 'white'};
+                         border: 2px solid ${isFull ? '#ccc' : '#e0e0e0'};
+                         border-radius: 8px;
+                         cursor: ${isFull ? 'not-allowed' : 'pointer'};
+                         text-align: center;
+                         box-sizing: border-box;
+                         opacity: ${isFull ? '0.6' : '1'};
+                         transition: all 0.2s ease;
+                     "
+                     ${!isFull ? `onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-2px)'" onmouseout="if(!this.classList.contains('selected')) { this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; }"` : ''}>
+                    <h5 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: ${isFull ? '#999' : '#333'};">Table ${table.table_number}</h5>
+                    <p style="margin: 0 0 4px 0; font-size: 12px; color: ${isFull ? '#999' : '#666'};">${currentParticipants}/${maxSize} participants</p>
+                    ${table.name ? `<p style="margin: 0; font-size: 11px; color: ${isFull ? '#999' : '#888'};">${table.name}</p>` : ''}
+                    ${isFull ? '<p style="margin: 4px 0 0 0; font-size: 10px; color: #ff6b6b; font-weight: 600;">FULL</p>' : ''}
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Error loading tables:', error);
+        tableSelection.innerHTML = `<p>Error loading tables: ${error.message}</p>`;
+    }
+}
+
+function selectTable(tableId) {
+    // Check if clicking the same table to unselect it
+    if (selectedTableId === tableId) {
+        // Unselect the table
+        selectedTableId = null;
+        
+        // Reset all table cards to unselected state
+        document.querySelectorAll('.table-card').forEach(card => {
+            card.classList.remove('selected');
+            card.style.borderColor = '#e0e0e0';
+            card.style.background = 'white';
+            card.style.transform = 'translateY(0)';
+        });
+        
+        // Disable final join button
+        const finalJoinBtn = document.getElementById('finalJoinBtn');
+        if (finalJoinBtn) {
+            finalJoinBtn.disabled = true;
+            finalJoinBtn.style.opacity = '0.5';
+            finalJoinBtn.style.cursor = 'not-allowed';
+        }
+        return;
+    }
+    
+    // Select new table
+    selectedTableId = tableId;
+    
+    // Update table selection visuals
+    document.querySelectorAll('.table-card').forEach(card => {
+        card.classList.remove('selected');
+        // Reset all cards to normal state first
+        card.style.borderColor = '#e0e0e0';
+        card.style.background = 'white';
+        card.style.transform = 'translateY(0)';
+    });
+    
+    // Highlight selected card
+    const selectedCard = document.querySelector(`[data-table-id="${tableId}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+        selectedCard.style.borderColor = '#007bff';
+        selectedCard.style.background = '#f0f8ff';
+        selectedCard.style.transform = 'translateY(-2px)';
+    }
+    
+    // Enable final join button
+    const finalJoinBtn = document.getElementById('finalJoinBtn');
+    if (finalJoinBtn) {
+        finalJoinBtn.disabled = false;
+        finalJoinBtn.style.opacity = '1';
+        finalJoinBtn.style.cursor = 'pointer';
+    }
+}
+
+async function finalJoinTable() {
+    if (!selectedSessionData || !selectedTableId) return;
+    
+    const participantName = 'Anonymous'; // Name form removed
+    
+    const finalJoinBtn = document.getElementById('finalJoinBtn');
+    const originalText = finalJoinBtn.innerHTML;
+    finalJoinBtn.innerHTML = '<span>Joining...</span>';
+    finalJoinBtn.disabled = true;
+    
+    try {
+        console.log('Starting join process...', {sessionId: selectedSessionData.id, tableId: selectedTableId, participantName});
+        await joinTableWithDetails(selectedSessionData.id, selectedTableId, participantName);
+        console.log('Join successful, showing success message');
+        showToast('Successfully joined the session!', 'success');
+        
+        // Log successful table join
+        if (window.logger) {
+            logger.logTableEvent('table_joined', selectedTableId, selectedSessionData.id, {
+                sessionTitle: selectedSessionData.title,
+                participantName
+            });
+        }
+        // Reset button state in case the screen transition fails
+        finalJoinBtn.innerHTML = originalText;
+        finalJoinBtn.disabled = false;
+    } catch (error) {
+        console.error('Error joining table:', error);
+        showToast(error.message || 'Failed to join table', 'error');
+        
+        // Log join error
+        if (window.logger) {
+            logger.logError(error, {
+                action: 'table_join_failed',
+                sessionId: selectedSessionData?.id,
+                tableId: selectedTableId
+            });
+        }
+        finalJoinBtn.innerHTML = originalText;
+        finalJoinBtn.disabled = false;
+    }
+}
+
+async function joinTableWithDetails(sessionId, tableId, participantName) {
+    console.log(`[DEBUG] joinTableWithDetails called with sessionId: ${sessionId}, tableId: ${tableId}, participantName: ${participantName}`);
+    
+    try {
+        // Load session data
+        console.log(`[DEBUG] Loading session data for ${sessionId}...`);
+        const response = await fetch(`/api/sessions/${sessionId}`);
+        if (!response.ok) {
+            throw new Error('Session not found or unavailable');
+        }
+        
+        const session = await response.json();
+        console.log(`[DEBUG] Session loaded:`, session);
+        
+        // Find the specific table
+        const table = session.tables?.find(t => t.id == tableId || t.table_number == tableId);
+        if (!table) {
+            throw new Error(`Table ${tableId} not found in session`);
+        }
+        
+        // Join the table
+        console.log(`[DEBUG] Joining table ${table.table_number}...`);
+        const joinResponse = await fetch(`/api/sessions/${sessionId}/tables/${table.table_number}/join`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                participantName: participantName || 'Anonymous'
+            })
+        });
+        
+        if (!joinResponse.ok) {
+            const error = await joinResponse.json();
+            throw new Error(error.error || 'Failed to join table');
+        }
+        
+        const joinResult = await joinResponse.json();
+        console.log(`[DEBUG] Join successful:`, joinResult);
+        
+        // Set current session and table data
+        currentSession = session;
+        currentTable = table;
+        
+        // Navigate to the table view
+        console.log(`[DEBUG] Navigating to table view...`);
+        showScreen('tableInterface');
+        
+        return joinResult;
+        
+    } catch (error) {
+        console.error('[DEBUG] Join table error:', error);
+        throw error;
+    }
+}
+
+// Join with session code (new unified function) - now supports both session and table codes
+async function joinWithSessionCode() {
+    const sessionCodeInput = document.getElementById('sessionCodeInput');
+    const code = sessionCodeInput.value.trim();
+    
+    if (!code) {
+        showToast('Please enter a session or table code', 'error');
+        sessionCodeInput.focus();
+        return;
+    }
+    
+    const joinButton = sessionCodeInput.parentElement.querySelector('button');
+    const originalText = joinButton.textContent;
+    joinButton.textContent = 'Joining...';
+    joinButton.disabled = true;
+    
+    try {
+        const response = await fetch('/api/entry', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ code })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            sessionCodeInput.value = ''; // Clear on success
+            
+            // Handle different entry types with appropriate feedback and redirection
+            switch (result.type) {
+                case 'session':
+                    showToast('Joining session...', 'success');
+                    await loadSpecificSession(result.sessionId);
+                    break;
+                    
+                case 'session_admin':
+                    showToast('Joining session as admin...', 'success');
+                    await loadSpecificSession(result.sessionId, true);
+                    break;
+                    
+                case 'table':
+                    showToast(`Joining Table ${result.tableNumber}...`, 'success');
+                    await joinSpecificTable(result.sessionId, result.tableNumber);
+                    break;
+                    
+                case 'table_password':
+                    showToast(`Joining Table ${result.tableNumber}...`, 'success');
+                    await joinSpecificTable(result.sessionId, result.tableNumber);
+                    break;
+                    
+                default:
+                    console.error('Unknown entry type:', result.type);
+                    showToast('Unknown entry type. Please contact support.', 'error');
+            }
+        } else {
+            showToast(result.error || 'Unable to join. Please check your code and try again.', 'error');
+            sessionCodeInput.focus();
+        }
+    } catch (error) {
+        console.error('Join error:', error);
+        showToast('Connection error. Please check your internet connection and try again.', 'error');
+        sessionCodeInput.focus();
+    } finally {
+        joinButton.textContent = originalText;
+        joinButton.disabled = false;
+    }
+}
+
+// QR Scanner functionality
+function showJoinQRScanner() {
+    // Check if camera is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Camera not available on this device', 'error');
+        return;
+    }
+    
+    // Check if HTTPS (required for camera access)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        showToast('QR scanning requires HTTPS for camera access', 'error');
+        return;
+    }
+    
+    // Create QR scanner modal
+    const qrModal = document.createElement('div');
+    qrModal.id = 'qrScannerModal';
+    qrModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 15000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    qrModal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; color: #333; font-size: 18px;">Scan QR Code</h3>
+                <button onclick="closeQRScanner()" style="
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #666;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                " onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">×</button>
+            </div>
+            
+            <div id="qrVideoContainer" style="
+                position: relative;
+                width: 100%;
+                height: 250px;
+                background: #f0f0f0;
+                border-radius: 12px;
+                overflow: hidden;
+                margin-bottom: 16px;
+            ">
+                <video id="qrVideo" style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                "></video>
+                <div id="qrOverlay" style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 200px;
+                    height: 200px;
+                    border: 3px solid #4A90E2;
+                    border-radius: 12px;
+                    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+                "></div>
+            </div>
+            
+            <p style="margin: 0 0 16px 0; color: #666; font-size: 14px;">
+                Point your camera at a World Café QR code
+            </p>
+            
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button onclick="closeQRScanner()" style="
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    padding: 10px 16px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+                    Cancel
+                </button>
+                
+                <button onclick="closeQRScanner(); showBrowseJoin();" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    padding: 10px 16px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
+                    Browse Instead
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(qrModal);
+    
+    // Start camera
+    startQRCamera();
+}
+
+function closeQRScanner() {
+    // Stop camera stream
+    const video = document.getElementById('qrVideo');
+    if (video && video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
+    
+    // Remove modal
+    const modal = document.getElementById('qrScannerModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function startQRCamera() {
+    const video = document.getElementById('qrVideo');
+    if (!video) return;
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment', // Use back camera if available
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        video.srcObject = stream;
+        video.play();
+        
+        // Start scanning
+        startQRDetection();
+        showToast('Camera started - point at QR code', 'info');
+        
+    } catch (error) {
+        console.error('Camera access error:', error);
+        
+        if (error.name === 'NotAllowedError') {
+            showToast('Camera access denied. Please allow camera permissions and try again.', 'error');
+        } else if (error.name === 'NotFoundError') {
+            showToast('No camera found on this device', 'error');
+        } else {
+            showToast('Failed to start camera. Make sure you\'re on HTTPS and have camera permissions.', 'error');
+        }
+        
+        // Close scanner on error
+        setTimeout(closeQRScanner, 3000);
+    }
+}
+
+function startQRDetection() {
+    const video = document.getElementById('qrVideo');
+    if (!video) return;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let scanning = true;
+    
+    const scanFrame = () => {
+        if (!scanning || !video.videoWidth || !video.videoHeight) {
+            if (scanning) {
+                setTimeout(scanFrame, 100);
+            }
+            return;
+        }
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const qrResult = detectQRPattern(imageData);
+        
+        if (qrResult) {
+            scanning = false;
+            closeQRScanner();
+            processQRCode(qrResult);
+            return;
+        }
+        
+        // Continue scanning
+        setTimeout(scanFrame, 100);
+    };
+    
+    // Stop scanning when modal is closed
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.removedNodes.forEach((node) => {
+                if (node.id === 'qrScannerModal') {
+                    scanning = false;
+                    observer.disconnect();
+                }
+            });
+        });
+    });
+    
+    observer.observe(document.body, { childList: true });
+    
+    scanFrame();
+}
+
+// Removed duplicate quickJoinSession function - using quickJoinWithCode instead
+
+// Enhanced find and join by code with participant name - uses proper backend API
+async function findAndJoinSessionByCode(sessionCode, participantName) {
+    try {
+        console.log('Attempting to join with code:', sessionCode);
+        
+        // Use the proper backend API that handles session codes correctly
+        const response = await fetch(`/api/join/${encodeURIComponent(sessionCode)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                participantName: participantName || 'Anonymous'
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to join session');
+        }
+        
+        const result = await response.json();
+        console.log('Join result:', result);
+        
+        if (result.type === 'session_selection') {
+            // Session found, load the session dashboard
+            currentSession = result.session;
+            socket.emit('join-session', result.session.id);
+            
+            // Hide join screen and show session dashboard
+            const joinScreen = document.getElementById('joinSessionScreen');
+            if (joinScreen) {
+                joinScreen.style.display = 'none';
+            }
+            
+            loadSessionDashboard(result.session.id);
+            const sessionDashboard = document.getElementById('sessionDashboard');
+            if (sessionDashboard) {
+                sessionDashboard.style.display = 'block';
+            }
+        } else if (result.type === 'table_joined') {
+            // Directly joined a table
+            currentSession = result.session;
+            currentTable = result.table;
+            socket.emit('join-session', result.session.id);
+            socket.emit('join-table', result.table.id);
+            setupTableInterface();
+            showScreen('tableInterface');
+        }
+        
+    } catch (error) {
+        console.error('Error in findAndJoinSessionByCode:', error);
+        throw error;
+    }
+}
+
+// Enhanced Form Validation and Interactions
+function setupFormValidation() {
+    // Session code input enhancements
+    const sessionCodeInput = document.getElementById('sessionCodeInput');
+    if (sessionCodeInput) {
+        sessionCodeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinWithSessionCode();
+            }
+        });
+        
+        sessionCodeInput.addEventListener('input', function(e) {
+            // Allow alphanumeric, hyphens, and forward slashes for table codes (sessionId/table/N)
+            this.value = this.value.toLowerCase().replace(/[^a-z0-9-/]/g, '');
+        });
+        
+        sessionCodeInput.addEventListener('paste', function(e) {
+            setTimeout(() => {
+                // Allow alphanumeric, hyphens, and forward slashes for table codes (sessionId/table/N)
+                this.value = this.value.toLowerCase().replace(/[^a-z0-9-/]/g, '');
+            }, 10);
+        });
+    }
+    
+    // Participant name inputs
+    const participantInputs = []; // participantNameBrowse removed
+    participantInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', function() {
+                if (id === 'participantNameCode') {
+                    validateSessionCodeStep();
+                } else {
+                    handleSessionSelection();
+                }
+            });
+            
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    if (id === 'participantNameCode') {
+                        quickJoinSession();
+                    } else {
+                        const continueBtn = document.getElementById('continueToTables');
+                        if (!continueBtn.disabled) {
+                            goToStep(3);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    
+    // Session select for browse method
+    const sessionSelect = document.getElementById('sessionSelect');
+    if (sessionSelect) {
+        sessionSelect.addEventListener('change', handleSessionSelection);
+    }
+}
+
+// validateSessionCodeStep removed - duplicate functionality eliminated
+
+// Add visual feedback for ready states
+const style = document.createElement('style');
+style.textContent = `
+    .btn-wizard.ready {
+        animation: pulse 2s infinite;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    .floating-input.valid {
+        border-color: #28a745 !important;
+        box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2) !important;
+    }
+    
+    .floating-input.invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2) !important;
+    }
+`;
+document.head.appendChild(style);
+
+// Legacy function removed - now using unified submitManualJoin function later in file
 
 // Session Management
 async function createSession(event) {
@@ -789,114 +1813,596 @@ function populateSessionSelects() {
 }
 
 function populateSessionsList() {
-    const sessionsList = document.getElementById('sessionsList');
+    // Clear search when repopulating
+    const searchInput = document.getElementById('sessionsSearchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const searchResults = document.getElementById('searchResults');
     
-    if (activeSessions.length === 0) {
-        sessionsList.innerHTML = `
-            <div class="card">
-                <h3>No Active Sessions</h3>
-                <p>Create a new session to get started!</p>
-                <button onclick="showCreateSession()" class="btn btn-primary">Create Session</button>
-            </div>
-        `;
+    if (searchInput) {
+        searchInput.value = '';
+        clearBtn && (clearBtn.style.display = 'none');
+        searchResults && (searchResults.style.display = 'none');
+    }
+    
+    // Use the new filtered version
+    populateSessionsListFiltered();
+}
+
+// Helper function to create language badge for session cards
+function getSessionLanguageBadge(languageCode) {
+    // Language code to display name mapping
+    const languageMap = {
+        'en': 'English',
+        'es': 'Spanish', 
+        'fr': 'French',
+        'de': 'German',
+        'it': 'Italian',
+        'pt': 'Portuguese',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'ru': 'Russian',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'ar': 'Arabic',
+        'hi': 'Hindi',
+        'th': 'Thai',
+        'vi': 'Vietnamese',
+        'tr': 'Turkish',
+        'sv': 'Swedish',
+        'da': 'Danish',
+        'no': 'Norwegian',
+        'fi': 'Finnish'
+    };
+    
+    // Language code to flag emoji mapping
+    const flagMap = {
+        'en': '🇬🇧',
+        'es': '🇪🇸',
+        'fr': '🇫🇷', 
+        'de': '🇩🇪',
+        'it': '🇮🇹',
+        'pt': '🇵🇹',
+        'nl': '🇳🇱',
+        'pl': '🇵🇱',
+        'ru': '🇷🇺',
+        'zh': '🇨🇳',
+        'ja': '🇯🇵',
+        'ko': '🇰🇷',
+        'ar': '🇸🇦',
+        'hi': '🇮🇳',
+        'th': '🇹🇭',
+        'vi': '🇻🇳',
+        'tr': '🇹🇷',
+        'sv': '🇸🇪',
+        'da': '🇩🇰',
+        'no': '🇳🇴',
+        'fi': '🇫🇮'
+    };
+    
+    const displayName = languageMap[languageCode] || languageCode.toUpperCase();
+    const flag = flagMap[languageCode] || '🌍';
+    
+    return `
+        <div style="
+            background: linear-gradient(135deg, #ff6b6b, #feca57);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 6px rgba(255, 107, 107, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            white-space: nowrap;
+            flex-shrink: 0;
+        " title="Session Language: ${displayName}">
+            <span style="font-size: 12px;">${flag}</span>
+            <span>${displayName}</span>
+        </div>
+    `;
+}
+
+// Enhanced version with search capability - Compact Design
+function populateSessionsListFiltered(sessions = null) {
+    const sessionsList = document.getElementById('sessionsList');
+    const sessionsToShow = sessions || activeSessions;
+    
+    if (sessionsToShow.length === 0) {
+        const searchValue = document.getElementById('sessionsSearchInput')?.value || '';
+        if (searchValue.trim()) {
+            sessionsList.innerHTML = `
+                <div style="
+                    grid-column: 1 / -1;
+                    background: white;
+                    border: 2px dashed #e0e0e0;
+                    border-radius: 16px;
+                    padding: 40px;
+                    text-align: center;
+                    color: #666;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                    <h3 style="margin: 0 0 12px 0; color: #333; font-size: 20px;">No Results Found</h3>
+                    <p style="margin: 0 0 20px 0; font-size: 16px;">No sessions match "${searchValue}"</p>
+                    <button onclick="clearSearch()" style="
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.background='#5a67d8'" onmouseout="this.style.background='#667eea'">
+                        Clear Search
+                    </button>
+                </div>
+            `;
+        } else {
+            sessionsList.innerHTML = `
+                <div style="
+                    grid-column: 1 / -1;
+                    background: linear-gradient(135deg, #f8f9fa, #fff);
+                    border: 2px dashed #e0e0e0;
+                    border-radius: 16px;
+                    padding: 40px;
+                    text-align: center;
+                    color: #666;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📝</div>
+                    <h3 style="margin: 0 0 12px 0; color: #333; font-size: 20px;">No Active Sessions</h3>
+                    <p style="margin: 0 0 20px 0; font-size: 16px;">Create your first World Café session!</p>
+                    <button onclick="showCreateSession()" style="
+                        background: linear-gradient(135deg, #667eea, #764ba2);
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                        + Create Session
+                    </button>
+                </div>
+            `;
+        }
         return;
     }
     
-    sessionsList.innerHTML = activeSessions.map(session => `
-        <div class="card session-card">
-            <div onclick="loadSpecificSession('${session.id}')" style="cursor: pointer;">
-                <h3>${session.title}</h3>
-                <p>${session.description || 'No description'}</p>
-                <div class="session-stats">
-                    <span>📊 ${session.table_count || session.tableCount || 0} tables</span>
-                    <span>👥 ${session.total_participants || 0} participants</span>
-                    <span>🎤 ${session.total_recordings || 0} recordings</span>
+    sessionsList.innerHTML = sessionsToShow.map(session => `
+        <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+        " 
+        onclick="loadSpecificSession('${session.id}')"
+        onmouseover="
+            this.style.transform='translateY(-4px)'; 
+            this.style.boxShadow='0 8px 24px rgba(0,0,0,0.15)'; 
+            this.style.borderColor='#667eea';
+        " 
+        onmouseout="
+            this.style.transform='translateY(0)'; 
+            this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'; 
+            this.style.borderColor='transparent';
+        ">
+            <!-- Session Header -->
+            <div style="margin-bottom: 16px;">
+                <h3 style="
+                    margin: 0 0 8px 0; 
+                    font-size: 18px; 
+                    font-weight: 700; 
+                    color: #333;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                ">${session.title}</h3>
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 8px;
+                ">
+                    <p style="
+                        margin: 0; 
+                        color: #666; 
+                        font-size: 14px; 
+                        line-height: 1.5;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        overflow: hidden;
+                        flex: 1;
+                        margin-right: 12px;
+                    ">${session.description || 'No description provided'}</p>
+                    ${getSessionLanguageBadge(session.language || 'en')}
                 </div>
-                <small>Created: ${new Date(session.created_at || session.createdAt).toLocaleString()}</small>
             </div>
-            <div class="session-actions" style="margin-top: 8px; display: flex; gap: 8px;">
-                <button onclick="loadSpecificSession('${session.id}')" class="btn btn-primary btn-small">Open Dashboard</button>
-                <button onclick="viewAllTranscriptions('${session.id}')" class="btn btn-secondary btn-small">📝 All Transcriptions</button>
+            
+            <!-- Session ID -->
+            <div style="
+                margin-bottom: 16px;
+                background: #f0f8ff;
+                border: 1px solid #b3d9ff;
+                border-radius: 6px;
+                overflow: hidden;
+            ">
+                <div style="font-size: 11px; color: #666; margin-bottom: 8px; padding: 8px 12px 0; text-align: center;">Session ID</div>
+                <div onclick="copySessionCode('${session.id}', event)" style="
+                    font-family: monospace;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #333;
+                    letter-spacing: 0.5px;
+                    word-break: break-all;
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    background: transparent;
+                    text-align: center;
+                " 
+                onmouseover="this.style.background='#e3f2fd'"
+                onmouseout="this.style.background='transparent'"
+                title="Click to copy session ID"
+                >${session.id}</div>
+                
+                <!-- Copy Buttons Row -->
+                <div style="
+                    display: flex;
+                    border-top: 1px solid #b3d9ff;
+                    background: #e8f4ff;
+                ">
+                    <button onclick="copySessionCode('${session.id}', event)" style="
+                        flex: 1;
+                        padding: 6px 8px;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: #0056b3;
+                        background: transparent;
+                        border: none;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        border-right: 1px solid #b3d9ff;
+                    "
+                    onmouseover="this.style.background='#d1ecf1'"
+                    onmouseout="this.style.background='transparent'"
+                    >📋 Copy Code</button>
+                    
+                    <button onclick="copySessionLink('${session.id}', event)" style="
+                        flex: 1;
+                        padding: 6px 8px;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: #0056b3;
+                        background: transparent;
+                        border: none;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    "
+                    onmouseover="this.style.background='#d1ecf1'"
+                    onmouseout="this.style.background='transparent'"
+                    >🔗 Copy Link</button>
+                </div>
+            </div>
+            
+            <!-- Stats Grid -->
+            <div style="
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 12px;
+                margin-bottom: 16px;
+            ">
+                <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 20px; font-weight: 700; color: #667eea; margin-bottom: 2px;">
+                        ${session.table_count || session.tableCount || 0}
+                    </div>
+                    <div style="font-size: 11px; color: #666; font-weight: 600;">Tables</div>
+                </div>
+                <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 20px; font-weight: 700; color: #28a745; margin-bottom: 2px;">
+                        ${session.total_participants || 0}
+                    </div>
+                    <div style="font-size: 11px; color: #666; font-weight: 600;">Participants</div>
+                </div>
+                <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 20px; font-weight: 700; color: #17a2b8; margin-bottom: 2px;">
+                        ${session.total_recordings || 0}
+                    </div>
+                    <div style="font-size: 11px; color: #666; font-weight: 600;">Recordings</div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding-top: 12px;
+                border-top: 1px solid #f0f0f0;
+                font-size: 12px;
+                color: #888;
+            ">
+                <span>Created ${new Date(session.created_at || session.createdAt).toLocaleDateString()}</span>
+                <div style="display: flex; gap: 6px;">
+                    <span onclick="event.stopPropagation(); loadSpecificSession('${session.id}')" style="
+                        background: #667eea;
+                        color: white;
+                        padding: 4px 8px;
+                        border-radius: 6px;
+                        font-size: 10px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.background='#5a67d8'" onmouseout="this.style.background='#667eea'">
+                        📊 Dashboard
+                    </span>
+                    <span onclick="event.stopPropagation(); viewAllTranscriptions('${session.id}')" style="
+                        background: #28a745;
+                        color: white;
+                        padding: 4px 8px;
+                        border-radius: 6px;
+                        font-size: 10px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
+                        📝 Transcriptions
+                    </span>
+                </div>
             </div>
         </div>
     `).join('');
 }
 
-async function loadSpecificSession(sessionId) {
+// Search functionality for sessions
+function filterSessions() {
+    const searchInput = document.getElementById('sessionsSearchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const searchValue = searchInput.value.toLowerCase().trim();
+    
+    // Show/hide clear button
+    if (searchValue) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+        searchResults.style.display = 'none';
+        populateSessionsListFiltered(); // Show all sessions
+        return;
+    }
+    
+    // Filter sessions based on title and description
+    const filteredSessions = activeSessions.filter(session => {
+        const titleMatch = session.title.toLowerCase().includes(searchValue);
+        const descriptionMatch = (session.description || '').toLowerCase().includes(searchValue);
+        return titleMatch || descriptionMatch;
+    });
+    
+    // Update search results info
+    searchResults.style.display = 'block';
+    if (filteredSessions.length === 0) {
+        searchResults.textContent = `No results found for "${searchInput.value}"`;
+        searchResults.style.color = '#dc3545';
+    } else if (filteredSessions.length === 1) {
+        searchResults.textContent = `Found 1 session`;
+        searchResults.style.color = '#28a745';
+    } else {
+        searchResults.textContent = `Found ${filteredSessions.length} sessions`;
+        searchResults.style.color = '#28a745';
+    }
+    
+    // Display filtered sessions
+    populateSessionsListFiltered(filteredSessions);
+}
+
+// Clear search functionality
+function clearSearch() {
+    const searchInput = document.getElementById('sessionsSearchInput');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const searchResults = document.getElementById('searchResults');
+    
+    searchInput.value = '';
+    clearBtn.style.display = 'none';
+    searchResults.style.display = 'none';
+    
+    // Reset to show all sessions
+    populateSessionsListFiltered();
+}
+
+// Search input focus/blur handlers
+function handleSearchFocus() {
+    const container = document.getElementById('searchInputContainer');
+    if (container) {
+        container.style.borderColor = '#007bff';
+        container.style.boxShadow = '0 0 0 3px rgba(0,123,255,0.1)';
+    }
+}
+
+function handleSearchBlur() {
+    const container = document.getElementById('searchInputContainer');
+    if (container) {
+        container.style.borderColor = '#ddd';
+        container.style.boxShadow = 'none';
+    }
+}
+
+async function loadSpecificSession(sessionId, isAdmin = false) {
+    console.log(`[DEBUG] loadSpecificSession called with sessionId: ${sessionId}, isAdmin: ${isAdmin}`);
     showLoading('Loading session...');
     
     try {
+        console.log(`[DEBUG] Fetching session data from /api/sessions/${sessionId}`);
         const response = await fetch(`/api/sessions/${sessionId}`);
+        
         if (response.ok) {
             const session = await response.json();
+            console.log(`[DEBUG] Session data received:`, session.title);
             currentSession = session;
             socket.emit('join-session', sessionId);
             
+            console.log(`[DEBUG] Loading session dashboard...`);
             loadSessionDashboard(sessionId);
-            showScreen('sessionDashboard');
-            console.log(`Joined session: ${session.title}`);
+            
+            console.log('[DEBUG] Showing session dashboard...');
+            // Hide all other screens using the same approach as showSessionDashboard
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+                screen.style.display = 'none';
+            });
+            
+            // Hide isolated screens
+            const joinScreen = document.getElementById('joinSessionScreen');
+            if (joinScreen) {
+                joinScreen.style.display = 'none';
+                console.log('[DEBUG] Join screen hidden');
+            }
+            const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+            if (transcriptionsScreen) {
+                transcriptionsScreen.style.display = 'none';
+            }
+            
+            // Show the completely isolated session dashboard screen
+            const dashboardScreen = document.getElementById('sessionDashboard');
+            if (dashboardScreen) {
+                dashboardScreen.style.display = 'block';
+                console.log('[DEBUG] Session dashboard screen shown');
+            } else {
+                console.error('[DEBUG] Session dashboard screen not found!');
+            }
+            
+            console.log(`[DEBUG] Successfully joined session: ${session.title}`);
         } else {
             const error = response.status === 404 ? 'Session not found or expired' : 'Failed to load session';
-            console.error(error);
+            console.error(`[DEBUG] Session loading failed: ${error} (Status: ${response.status})`);
             throw new Error(error);
         }
     } catch (error) {
-        console.error('Error loading session:', error);
+        console.error('[DEBUG] Error in loadSpecificSession:', error);
+        console.error('[DEBUG] Error stack:', error.stack);
+        showToast(`Failed to load session: ${error.message}`, 'error');
         throw error; // Re-throw so caller can handle it
     } finally {
+        console.log('[DEBUG] Hiding loading overlay');
         hideLoading();
     }
 }
 
 async function viewAllTranscriptions(sessionId) {
+    console.log('viewAllTranscriptions called with sessionId:', sessionId);
     showLoading('Loading all transcriptions...');
     
     try {
         // Get session details
+        console.log('Fetching session details...');
         const sessionResponse = await fetch(`/api/sessions/${sessionId}`);
         if (!sessionResponse.ok) {
+            console.error('Session response not OK:', sessionResponse.status, sessionResponse.statusText);
             throw new Error('Session not found');
         }
         const session = await sessionResponse.json();
+        console.log('Session loaded:', session);
         
         // Get all transcriptions for the session
+        console.log('Fetching transcriptions...');
         const transcriptionsResponse = await fetch(`/api/sessions/${sessionId}/all-transcriptions`);
         if (!transcriptionsResponse.ok) {
+            console.error('Transcriptions response not OK:', transcriptionsResponse.status, transcriptionsResponse.statusText);
             throw new Error('Failed to load transcriptions');
         }
         const transcriptions = await transcriptionsResponse.json();
+        console.log('Transcriptions loaded:', transcriptions.length, 'records');
+        
+        // Check if required DOM elements exist
+        const titleElement = document.getElementById('allTranscriptionsTitle');
+        const subtitleElement = document.getElementById('allTranscriptionsSubtitle');
+        
+        if (!titleElement) {
+            console.error('allTranscriptionsTitle element not found');
+            throw new Error('Required DOM element missing: allTranscriptionsTitle');
+        }
+        
+        if (!subtitleElement) {
+            console.error('allTranscriptionsSubtitle element not found');
+            throw new Error('Required DOM element missing: allTranscriptionsSubtitle');
+        }
         
         // Update UI
-        document.getElementById('allTranscriptionsTitle').textContent = `📝 All Transcriptions`;
-        document.getElementById('allTranscriptionsSubtitle').textContent = `${session.title} - Session Overview`;
+        console.log('Updating UI elements...');
+        titleElement.textContent = `📝 All Transcriptions`;
+        subtitleElement.textContent = `${session.title} - Session Overview`;
         
         // Store current session for filtering
         currentSession = session;
         
         // Display transcriptions
+        console.log('Calling displayAwesomeTranscriptions...');
         displayAwesomeTranscriptions(transcriptions, session);
-        showScreen('allTranscriptionsScreen');
+        
+        console.log('Showing isolated transcriptions screen...');
+        // Hide all other screens
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
+            screen.style.display = 'none';
+        });
+        
+        // Hide isolated join screen if it's showing
+        const joinScreen = document.getElementById('joinSessionScreen');
+        if (joinScreen) {
+            joinScreen.style.display = 'none';
+        }
+        
+        // Show the completely isolated transcriptions screen
+        const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
+        if (transcriptionsScreen) {
+            transcriptionsScreen.style.display = 'block';
+            console.log('Transcriptions screen activated with isolated styles');
+        }
+        
+        console.log('viewAllTranscriptions completed successfully');
         
     } catch (error) {
-        console.error('Error loading transcriptions:', error);
-        console.error('Error loading transcriptions');
+        console.error('Error in viewAllTranscriptions:', error);
+        alert('Failed to load transcriptions: ' + error.message);
     } finally {
         hideLoading();
     }
 }
 
 function displayAwesomeTranscriptions(transcriptions, session) {
-    // Update statistics
-    updateDashboardStats(transcriptions);
+    console.log('displayAwesomeTranscriptions called with:', transcriptions.length, 'transcriptions');
     
-    // Setup filters
-    setupAwesomeFilters(transcriptions);
-    
-    // Display transcriptions with awesome design
-    renderAwesomeTranscriptions(transcriptions);
-    
-    // Load existing AI analysis
-    loadExistingAIAnalysis(session.id);
+    try {
+        // Update statistics
+        console.log('Updating dashboard stats...');
+        updateDashboardStats(transcriptions);
+        
+        // Setup filters
+        console.log('Setting up filters...');
+        setupAwesomeFilters(transcriptions);
+        
+        // Display transcriptions with awesome design
+        console.log('Rendering transcriptions...');
+        renderAwesomeTranscriptions(transcriptions);
+        
+        // Load existing AI analysis
+        console.log('Loading existing AI analysis...');
+        loadExistingAIAnalysis(session.id);
+        
+        console.log('displayAwesomeTranscriptions completed successfully');
+    } catch (error) {
+        console.error('Error in displayAwesomeTranscriptions:', error);
+        alert('Error displaying transcriptions: ' + error.message);
+    }
 }
 
 function updateDashboardStats(transcriptions) {
@@ -931,9 +2437,28 @@ function setupAwesomeFilters(transcriptions) {
 }
 
 function renderAwesomeTranscriptions(transcriptions) {
+    console.log('renderAwesomeTranscriptions called with:', transcriptions.length, 'transcriptions');
+    
     const allTranscriptionsList = document.getElementById('allTranscriptionsList');
     const tableFilter = document.getElementById('tableFilter');
     const sortFilter = document.getElementById('sortFilter');
+    
+    if (!allTranscriptionsList) {
+        console.error('allTranscriptionsList element not found');
+        throw new Error('Required DOM element missing: allTranscriptionsList');
+    }
+    
+    if (!tableFilter) {
+        console.error('tableFilter element not found');
+        throw new Error('Required DOM element missing: tableFilter');
+    }
+    
+    if (!sortFilter) {
+        console.error('sortFilter element not found');
+        throw new Error('Required DOM element missing: sortFilter');
+    }
+    
+    console.log('All required DOM elements found');
     
     // Apply filters
     let filteredTranscriptions = transcriptions;
@@ -990,12 +2515,37 @@ function renderAwesomeTranscriptions(transcriptions) {
         const tableTranscriptions = groupedTranscriptions[tableKey];
         
         html += `
-            <div class="awesome-table-group">
-                <div class="table-group-header">
-                    <h3 class="table-group-title">
-                        🏓 Table ${tableNumber}
+            <div style="margin-bottom: 24px;">
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 16px;
+                    padding: 16px 20px;
+                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    border-radius: 12px;
+                    border-left: 4px solid #007bff;
+                ">
+                    <h3 style="
+                        margin: 0;
+                        font-size: 20px;
+                        font-weight: 600;
+                        color: #333;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    ">
+                        <span style="font-size: 24px;">🏓</span>
+                        Table ${tableNumber}
                     </h3>
-                    <span class="table-group-badge">${tableTranscriptions.length} recording${tableTranscriptions.length !== 1 ? 's' : ''}</span>
+                    <span style="
+                        background: #007bff;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                    ">${tableTranscriptions.length} recording${tableTranscriptions.length !== 1 ? 's' : ''}</span>
                 </div>
         `;
         
@@ -1012,20 +2562,81 @@ function renderAwesomeTranscriptions(transcriptions) {
             const duration = Math.round(parseFloat(transcription.duration_seconds) || 0);
             
             html += `
-                <div class="awesome-transcription-card">
-                    <div class="transcription-card-header">
-                        <div class="recording-title">🎤 Recording ${index + 1}</div>
-                        <div class="recording-meta">
+                <div class="awesome-transcription-card" 
+                     data-transcription-id="${transcription.id || index}"
+                     style="
+                         background: white;
+                         border: 2px solid #e0e0e0;
+                         border-radius: 12px;
+                         padding: 20px;
+                         margin-bottom: 16px;
+                         cursor: pointer;
+                         transition: all 0.2s ease;
+                         box-sizing: border-box;
+                         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                     "
+                     onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(0,123,255,0.15)'"
+                     onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'"
+                     onclick="selectTranscription('${transcription.id || index}')">
+                    <div style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 16px;
+                        padding-bottom: 12px;
+                        border-bottom: 1px solid #f0f0f0;
+                    ">
+                        <div style="
+                            font-size: 16px;
+                            font-weight: 600;
+                            color: #333;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        ">
+                            <span style="font-size: 20px;">🎤</span>
+                            Recording ${index + 1}
+                        </div>
+                        <div style="
+                            display: flex;
+                            flex-direction: column;
+                            align-items: flex-end;
+                            gap: 4px;
+                            color: #666;
+                            font-size: 12px;
+                        ">
                             <div>${recordingDate} ${recordingTime}</div>
-                            ${duration > 0 ? `<span class="duration-badge">${duration}s</span>` : ''}
+                            ${duration > 0 ? `<span style="
+                                background: #007bff;
+                                color: white;
+                                padding: 2px 8px;
+                                border-radius: 4px;
+                                font-size: 11px;
+                                font-weight: 500;
+                            ">${duration}s</span>` : ''}
                         </div>
                     </div>
-                    <div class="awesome-speaker-segments">
+                    <div style="max-height: 200px; overflow-y: auto;">
                         ${consolidatedSegments.length > 0 ? 
                                 consolidatedSegments.map(segment => `
-                                    <div class="awesome-speaker-segment">
-                                        <div class="awesome-speaker-label">Speaker ${(segment.speaker || 0) + 1}</div>
-                                        <div class="awesome-speaker-text">${
+                                    <div style="
+                                        margin-bottom: 12px;
+                                        padding: 12px;
+                                        background: #f8f9fa;
+                                        border-radius: 8px;
+                                        border-left: 3px solid #007bff;
+                                    ">
+                                        <div style="
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            color: #007bff;
+                                            margin-bottom: 6px;
+                                        ">Speaker ${(segment.speaker || 0) + 1}</div>
+                                        <div style="
+                                            font-size: 14px;
+                                            line-height: 1.4;
+                                            color: #333;
+                                        ">${
                                             (typeof segment.consolidatedText === 'string' ? segment.consolidatedText : null) ||
                                             (typeof segment.transcript === 'string' ? segment.transcript : null) ||
                                             (typeof segment.text === 'string' ? segment.text : null) ||
@@ -1043,10 +2654,52 @@ function renderAwesomeTranscriptions(transcriptions) {
             `;
         });
         
-        html += `</div>`;
+        html += `</div>`; // Close the table group div
     });
     
     allTranscriptionsList.innerHTML = html;
+}
+
+// Transcription selection function with beautiful effects like Join Session
+function selectTranscription(transcriptionId) {
+    console.log('Transcription selected:', transcriptionId);
+    
+    // Update visual selection
+    document.querySelectorAll('.awesome-transcription-card').forEach(card => {
+        // Reset all cards to default state
+        if (card.getAttribute('data-transcription-id') != transcriptionId) {
+            card.style.borderColor = '#e0e0e0';
+            card.style.background = 'white';
+            card.style.transform = 'translateY(0)';
+            card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+        }
+    });
+    
+    // Highlight selected card
+    const selectedCard = document.querySelector(`[data-transcription-id="${transcriptionId}"]`);
+    if (selectedCard) {
+        selectedCard.style.borderColor = '#007bff';
+        selectedCard.style.background = 'linear-gradient(135deg, #f0f8ff, #e6f3ff)';
+        selectedCard.style.transform = 'translateY(-4px)';
+        selectedCard.style.boxShadow = '0 8px 24px rgba(0,123,255,0.2)';
+        
+        // Optional: scroll into view smoothly
+        selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Add a subtle pulse effect
+        selectedCard.style.animation = 'pulse 0.6s ease-in-out';
+        setTimeout(() => {
+            if (selectedCard.style) {
+                selectedCard.style.animation = '';
+            }
+        }, 600);
+    }
+    
+    // Here you could add additional functionality like:
+    // - Show detailed view
+    // - Enable export for this specific transcription
+    // - Show analysis options
+    console.log('Transcription selection completed');
 }
 
 // Refresh transcriptions by reloading the data
@@ -1262,79 +2915,253 @@ function displayAIAnalysisResults(analyses) {
 }
 
 function formatAnalysisContent(data, type) {
+    console.log('formatAnalysisContent called with:', { data, type });
+    
     if (!data) return '<p>No data available</p>';
     
-    // Handle different data formats
+    // Parse JSON string if needed
+    let parsedData = data;
     if (typeof data === 'string') {
-        return `<p>${data}</p>`;
+        try {
+            parsedData = JSON.parse(data);
+        } catch (e) {
+            return `<p>${data}</p>`;
+        }
     }
     
-    if (typeof data === 'object') {
+    if (typeof parsedData === 'object') {
         let html = '';
         
-        // Handle common AI analysis structures
-        if (data.summary) {
-            html += `<p><strong>Summary:</strong> ${data.summary}</p>`;
+        // Handle summary type
+        if (type === 'summary') {
+            if (parsedData.summary) {
+                html += `<p><strong>Summary:</strong> ${parsedData.summary}</p>`;
+            } else if (parsedData.content) {
+                html += `<p>${parsedData.content}</p>`;
+            } else {
+                // Try to extract any meaningful text
+                html += `<p>${JSON.stringify(parsedData, null, 2).replace(/[{}"]/g, '').replace(/,/g, '<br>')}</p>`;
+            }
         }
         
-        if (data.themes && Array.isArray(data.themes)) {
-            html += '<h3>Main Themes:</h3><ul>';
-            data.themes.forEach(theme => {
-                if (typeof theme === 'object') {
-                    html += `<li><strong>${theme.name || theme.title}:</strong> ${theme.description || theme.content}</li>`;
-                } else {
-                    html += `<li>${theme}</li>`;
+        // Handle themes type
+        else if (type === 'themes') {
+            if (parsedData.themes && Array.isArray(parsedData.themes)) {
+                html += '<p><strong>Main Themes:</strong></p><ul>';
+                parsedData.themes.forEach(theme => {
+                    if (typeof theme === 'object') {
+                        const title = theme.name || theme.title || theme.theme || 'Theme';
+                        const desc = theme.description || theme.content || theme.summary || JSON.stringify(theme);
+                        html += `<li><strong>${title}:</strong> ${desc}</li>`;
+                    } else {
+                        html += `<li>${theme}</li>`;
+                    }
+                });
+                html += '</ul>';
+            } else if (parsedData.content) {
+                html += `<p>${parsedData.content}</p>`;
+            } else {
+                html += '<p><strong>Themes identified:</strong></p>';
+                Object.entries(parsedData).forEach(([key, value]) => {
+                    if (key !== 'type' && key !== 'analysis_type') {
+                        html += `<p><strong>${key}:</strong> ${typeof value === 'object' ? JSON.stringify(value) : value}</p>`;
+                    }
+                });
+            }
+        }
+        
+        // Handle sentiment type
+        else if (type === 'sentiment') {
+            if (parsedData.insights && Array.isArray(parsedData.insights)) {
+                html += '<p><strong>Key Insights:</strong></p><ul>';
+                parsedData.insights.forEach(insight => {
+                    if (typeof insight === 'object') {
+                        const text = insight.text || insight.description || insight.content || JSON.stringify(insight);
+                        html += `<li>${text}</li>`;
+                    } else {
+                        html += `<li>${insight}</li>`;
+                    }
+                });
+                html += '</ul>';
+            } else if (parsedData.sentiment) {
+                html += `<p><strong>Overall Sentiment:</strong> ${parsedData.sentiment}</p>`;
+            } else {
+                Object.entries(parsedData).forEach(([key, value]) => {
+                    if (key !== 'type' && key !== 'analysis_type') {
+                        html += `<p><strong>${key}:</strong> ${typeof value === 'object' ? JSON.stringify(value) : value}</p>`;
+                    }
+                });
+            }
+        }
+        
+        // Handle agreements type
+        else if (type === 'agreements') {
+            if (parsedData.agreements && Array.isArray(parsedData.agreements)) {
+                html += '<p><strong>Points of Agreement:</strong></p><ul>';
+                parsedData.agreements.forEach(agreement => {
+                    if (typeof agreement === 'object') {
+                        const text = agreement.point || agreement.description || agreement.content || agreement.text || JSON.stringify(agreement);
+                        html += `<li>${text}</li>`;
+                    } else {
+                        html += `<li>${agreement}</li>`;
+                    }
+                });
+                html += '</ul>';
+            } else {
+                html += '<p><strong>Points of Agreement:</strong></p>';
+                Object.entries(parsedData).forEach(([key, value]) => {
+                    if (key !== 'type' && key !== 'analysis_type') {
+                        if (Array.isArray(value)) {
+                            html += `<ul>`;
+                            value.forEach(item => {
+                                const text = typeof item === 'object' ? 
+                                    (item.point || item.description || item.text || JSON.stringify(item)) : 
+                                    item;
+                                html += `<li>${text}</li>`;
+                            });
+                            html += `</ul>`;
+                        } else {
+                            html += `<p>${typeof value === 'object' ? JSON.stringify(value) : value}</p>`;
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Handle conflicts type
+        else if (type === 'conflicts') {
+            if (parsedData.conflicts && Array.isArray(parsedData.conflicts)) {
+                html += '<p><strong>Areas of Disagreement:</strong></p><ul>';
+                parsedData.conflicts.forEach(conflict => {
+                    if (typeof conflict === 'object') {
+                        const text = conflict.point || conflict.description || conflict.content || conflict.text || JSON.stringify(conflict);
+                        html += `<li>${text}</li>`;
+                    } else {
+                        html += `<li>${conflict}</li>`;
+                    }
+                });
+                html += '</ul>';
+            } else {
+                html += '<p><strong>Areas of Disagreement:</strong></p>';
+                Object.entries(parsedData).forEach(([key, value]) => {
+                    if (key !== 'type' && key !== 'analysis_type') {
+                        if (Array.isArray(value)) {
+                            html += `<ul>`;
+                            value.forEach(item => {
+                                const text = typeof item === 'object' ? 
+                                    (item.point || item.description || item.text || JSON.stringify(item)) : 
+                                    item;
+                                html += `<li>${text}</li>`;
+                            });
+                            html += `</ul>`;
+                        } else {
+                            html += `<p>${typeof value === 'object' ? JSON.stringify(value) : value}</p>`;
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Default handling for any other type
+        else {
+            Object.entries(parsedData).forEach(([key, value]) => {
+                if (key !== 'type' && key !== 'analysis_type') {
+                    html += `<p><strong>${key}:</strong> `;
+                    if (Array.isArray(value)) {
+                        html += `<ul>`;
+                        value.forEach(item => {
+                            html += `<li>${typeof item === 'object' ? JSON.stringify(item) : item}</li>`;
+                        });
+                        html += `</ul>`;
+                    } else {
+                        html += `${typeof value === 'object' ? JSON.stringify(value) : value}</p>`;
+                    }
                 }
             });
-            html += '</ul>';
         }
         
-        if (data.sentiment) {
-            html += `<h3>Overall Sentiment:</h3><p>${data.sentiment}</p>`;
-        }
-        
-        if (data.score !== undefined) {
-            html += `<p><strong>Confidence Score:</strong> ${(data.score * 100).toFixed(1)}%</p>`;
-        }
-        
-        if (data.insights && Array.isArray(data.insights)) {
-            html += '<h3>Key Insights:</h3><ul>';
-            data.insights.forEach(insight => {
-                html += `<li>${insight}</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        if (data.conflicts && Array.isArray(data.conflicts)) {
-            html += '<h3>Areas of Disagreement:</h3><ul>';
-            data.conflicts.forEach(conflict => {
-                html += `<li>${conflict}</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        if (data.agreements && Array.isArray(data.agreements)) {
-            html += '<h3>Points of Agreement:</h3><ul>';
-            data.agreements.forEach(agreement => {
-                html += `<li>${agreement}</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        // Fallback: display as JSON if no specific structure matches
         if (!html) {
-            html = `<pre style="background: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>`;
+            html = `<pre style="background: #f8f9fa; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto;">${JSON.stringify(parsedData, null, 2)}</pre>`;
         }
         
         return html;
     }
     
-    return `<p>${String(data)}</p>`;
+    return `<p>${String(parsedData)}</p>`;
 }
 
 function toggleAIAnalysis() {
     const aiAnalysisSection = document.getElementById('aiAnalysisSection');
     aiAnalysisSection.style.display = 'none';
+}
+
+function updateSessionLanguageIndicator(languageCode) {
+    const languageIndicator = document.getElementById('sessionLanguageIndicator');
+    const languageText = document.getElementById('sessionLanguageText');
+    
+    if (!languageIndicator || !languageText) return;
+    
+    // Language code to display name mapping
+    const languageMap = {
+        'en': 'English',
+        'es': 'Spanish', 
+        'fr': 'French',
+        'de': 'German',
+        'it': 'Italian',
+        'pt': 'Portuguese',
+        'nl': 'Dutch',
+        'pl': 'Polish',
+        'ru': 'Russian',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'ar': 'Arabic',
+        'hi': 'Hindi',
+        'th': 'Thai',
+        'vi': 'Vietnamese',
+        'tr': 'Turkish',
+        'sv': 'Swedish',
+        'da': 'Danish',
+        'no': 'Norwegian',
+        'fi': 'Finnish'
+    };
+    
+    // Language code to flag emoji mapping
+    const flagMap = {
+        'en': '🇬🇧',
+        'es': '🇪🇸',
+        'fr': '🇫🇷', 
+        'de': '🇩🇪',
+        'it': '🇮🇹',
+        'pt': '🇵🇹',
+        'nl': '🇳🇱',
+        'pl': '🇵🇱',
+        'ru': '🇷🇺',
+        'zh': '🇨🇳',
+        'ja': '🇯🇵',
+        'ko': '🇰🇷',
+        'ar': '🇸🇦',
+        'hi': '🇮🇳',
+        'th': '🇹🇭',
+        'vi': '🇻🇳',
+        'tr': '🇹🇷',
+        'sv': '🇸🇪',
+        'da': '🇩🇰',
+        'no': '🇳🇴',
+        'fi': '🇫🇮'
+    };
+    
+    const displayName = languageMap[languageCode] || languageCode.toUpperCase();
+    const flag = flagMap[languageCode] || '🌍';
+    
+    // Update the language text
+    languageText.textContent = displayName;
+    
+    // Update the flag
+    const flagElement = languageIndicator.querySelector('span:first-child');
+    if (flagElement) {
+        flagElement.textContent = flag;
+    }
 }
 
 async function loadSessionDashboard(sessionId) {
@@ -1343,9 +3170,26 @@ async function loadSessionDashboard(sessionId) {
     
     // Update dashboard title and stats
     document.getElementById('dashboardTitle').textContent = session.title;
+    document.getElementById('sessionCodeValue').textContent = session.id; // Session code is the session ID
     document.getElementById('participantCount').textContent = session.total_participants || 0;
     document.getElementById('activeTableCount').textContent = session.active_tables || session.tableCount || 0;
-    document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+    
+    // Get actual recording count from transcriptions
+    try {
+        const transcriptionsResponse = await fetch(`/api/sessions/${sessionId}/all-transcriptions`);
+        if (transcriptionsResponse.ok) {
+            const transcriptions = await transcriptionsResponse.json();
+            document.getElementById('recordingCount').textContent = transcriptions.length;
+        } else {
+            document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+        }
+    } catch (error) {
+        console.warn('Failed to load transcriptions for count:', error);
+        document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+    }
+    
+    // Update language indicator
+    updateSessionLanguageIndicator(session.language || 'en');
     
     // Load tables if available
     if (session.tables && session.tables.length > 0) {
@@ -1380,40 +3224,232 @@ async function loadSessionDashboard(sessionId) {
 function displayTables(tables) {
     const tablesGrid = document.getElementById('tablesGrid');
     
+    if (!tablesGrid) {
+        console.error('Tables grid container not found');
+        return;
+    }
+    
+    if (!tables || tables.length === 0) {
+        tablesGrid.innerHTML = `
+            <div style="
+                grid-column: 1 / -1;
+                text-align: center;
+                padding: 60px 20px;
+                color: #666;
+                background: #f8f9fa;
+                border-radius: 12px;
+                border: 2px dashed #ddd;
+            ">
+                <div style="font-size: 48px; margin-bottom: 16px;">🏓</div>
+                <h3 style="margin: 0 0 12px 0; color: #333; font-size: 20px;">No Tables Yet</h3>
+                <p style="margin: 0 0 24px 0; font-size: 14px;">Create your first table to start the World Café session</p>
+                <button onclick="showCreateTable()" style="
+                    padding: 12px 24px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                ">
+                    <span style="font-size: 16px;">➕</span>
+                    Create Table
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
     tablesGrid.innerHTML = tables.map(table => {
         const participantCount = table.participant_count || (table.participants ? table.participants.length : 0);
-        const statusClass = table.status || 'waiting';
+        const status = table.status || 'waiting';
         const recordingCount = table.recording_count || 0;
         const transcriptionCount = table.transcription_count || 0;
+        const maxSize = table.max_size || 5;
+        
+        // Status-based styling
+        const statusColors = {
+            active: { bg: '#28a745', text: 'Active' },
+            waiting: { bg: '#ffc107', text: 'Waiting' },
+            closed: { bg: '#6c757d', text: 'Closed' },
+            full: { bg: '#dc3545', text: 'Full' }
+        };
+        const statusStyle = statusColors[status] || statusColors.waiting;
         
         return `
-            <div class="table-card ${statusClass}" onclick="showTableInterface(${table.id || table.table_number})">
-                <div class="table-header">
-                    <h4 class="table-title">${table.name || `Table ${table.table_number}`}</h4>
-                    <span class="status-badge ${statusClass}">${statusClass}</span>
+            <div onclick="showTableInterface(${table.id || table.table_number})" style="
+                background: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 12px;
+                padding: 24px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                position: relative;
+            " 
+            onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'"
+            onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
+                
+                <!-- Table Header -->
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 16px;
+                    border-bottom: 1px solid #f0f0f0;
+                ">
+                    <h4 style="
+                        margin: 0;
+                        font-size: 18px;
+                        font-weight: 600;
+                        color: #333;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    ">
+                        <span style="font-size: 20px;">🏓</span>
+                        ${table.name || `Table ${table.table_number}`}
+                    </h4>
+                    <span style="
+                        background: ${statusStyle.bg};
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                    ">${statusStyle.text}</span>
                 </div>
-                <div class="table-stats">
-                    <div class="stat-item">
-                        <span class="stat-icon">👥</span>
-                        <span>${participantCount}/5</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon">🎤</span>
-                        <span>${recordingCount}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon">📝</span>
-                        <span>${transcriptionCount}</span>
+                
+                <!-- Table Actions -->
+                <div style="
+                    margin-bottom: 20px;
+                    background: #f0f8ff;
+                    border: 1px solid #b3d9ff;
+                    border-radius: 6px;
+                    overflow: hidden;
+                ">
+                    <div style="font-size: 11px; color: #666; padding: 8px 12px 4px; text-align: center;">Table Actions</div>
+                    
+                    <!-- Action Buttons Row -->
+                    <div style="
+                        display: flex;
+                        background: #e8f4ff;
+                    ">
+                        <button onclick="copyTableCode('${currentSession ? currentSession.id : 'session-id'}/table/${table.table_number}', event)" style="
+                            flex: 1;
+                            padding: 8px 6px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            color: #0056b3;
+                            background: transparent;
+                            border: none;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            border-right: 1px solid #b3d9ff;
+                        "
+                        onmouseover="this.style.background='#d1ecf1'"
+                        onmouseout="this.style.background='transparent'"
+                        title="Copy table code"
+                        >📋 Copy Code</button>
+                        
+                        <button onclick="copyTableLink('${currentSession ? currentSession.id : 'session-id'}', '${table.table_number}', event)" style="
+                            flex: 1;
+                            padding: 8px 6px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            color: #0056b3;
+                            background: transparent;
+                            border: none;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            border-right: 1px solid #b3d9ff;
+                        "
+                        onmouseover="this.style.background='#d1ecf1'"
+                        onmouseout="this.style.background='transparent'"
+                        title="Copy table link"
+                        >🔗 Copy Link</button>
+                        
+                        <button onclick="showTableQR('${currentSession ? currentSession.id : 'session-id'}', '${table.table_number}', event)" style="
+                            flex: 1;
+                            padding: 8px 6px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            color: #0056b3;
+                            background: transparent;
+                            border: none;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                        "
+                        onmouseover="this.style.background='#d1ecf1'"
+                        onmouseout="this.style.background='transparent'"
+                        title="Show QR code for this table"
+                        >📱 QR Code</button>
                     </div>
                 </div>
-                <div class="table-qr">
-                    <button onclick="event.stopPropagation(); showTableQR(${table.id || table.table_number})" class="btn btn-sm btn-secondary">
-                        📱 QR Code
-                    </button>
+                
+                <!-- Table Stats -->
+                <div style="
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 16px;
+                    text-align: center;
+                ">
+                    <div style="
+                        padding: 12px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                    ">
+                        <div style="font-size: 20px; margin-bottom: 4px;">👥</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #333;">${participantCount}</div>
+                        <div style="font-size: 11px; color: #666;">/${maxSize} seats</div>
+                    </div>
+                    
+                    <div style="
+                        padding: 12px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                    ">
+                        <div style="font-size: 20px; margin-bottom: 4px;">🎤</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #333;">${recordingCount}</div>
+                        <div style="font-size: 11px; color: #666;">recordings</div>
+                    </div>
+                    
+                    <div style="
+                        padding: 12px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                    ">
+                        <div style="font-size: 20px; margin-bottom: 4px;">📝</div>
+                        <div style="font-size: 16px; font-weight: 600; color: #333;">${transcriptionCount}</div>
+                        <div style="font-size: 11px; color: #666;">transcripts</div>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Toggle functions for isolated sections
+function toggleQRCodesSection() {
+    const qrSection = document.getElementById('qrCodesSection');
+    if (qrSection.style.display === 'none' || !qrSection.style.display) {
+        qrSection.style.display = 'block';
+    } else {
+        qrSection.style.display = 'none';
+    }
+}
+
+function toggleSessionAIAnalysis() {
+    const aiSection = document.getElementById('sessionAIAnalysisSection');
+    if (aiSection) {
+        aiSection.style.display = 'none';
+    }
 }
 
 // QR Code functionality
@@ -1536,6 +3572,223 @@ function copyQRLink(type, sessionId, tableNumber = null) {
     });
 }
 
+function showTableQR(sessionId, tableNumber, event) {
+    event.stopPropagation();
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        backdrop-filter: blur(5px);
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        ">
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+            ">
+                <h3 style="margin: 0; color: #333; font-size: 18px;">Table ${tableNumber} QR Code</h3>
+                <button onclick="this.closest('[style*=position]').remove()" style="
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #666;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                " onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">×</button>
+            </div>
+            
+            <div style="
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            ">
+                <img src="/api/qr/table/${sessionId}/${tableNumber}" 
+                     alt="Table ${tableNumber} QR Code"
+                     style="max-width: 200px; width: 100%; height: auto;"
+                     onerror="this.parentElement.innerHTML='<div style=&quot;color: #666; padding: 2rem;&quot;>QR Code<br/>Not Available</div>'">
+            </div>
+            
+            <div style="
+                display: flex;
+                gap: 12px;
+                justify-content: center;
+            ">
+                <button onclick="downloadQR('table', '${sessionId}', '${tableNumber}')" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    padding: 10px 16px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    📥 Download
+                </button>
+                
+                <button onclick="copyQRLink('table', '${sessionId}', '${tableNumber}')" style="
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    color: white;
+                    border: none;
+                    padding: 10px 16px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    🔗 Copy Link
+                </button>
+            </div>
+        </div>
+    `;
+    
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    };
+    
+    document.body.appendChild(modal);
+}
+
+function copyTableCode(tableCode, event) {
+    // Prevent card click when copying
+    event.stopPropagation();
+    
+    navigator.clipboard.writeText(tableCode).then(() => {
+        showToast('Table code copied to clipboard!', 'success');
+        console.log('Table code copied:', tableCode);
+    }).catch(err => {
+        console.error('Failed to copy table code:', err);
+        showToast('Failed to copy table code. Please copy manually.', 'error');
+        
+        // Fallback - select text for manual copy
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = tableCode;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Table code selected for copying', 'info');
+        } catch (fallbackErr) {
+            console.error('Fallback copy also failed:', fallbackErr);
+        }
+    });
+}
+
+function copyTableLink(sessionId, tableNumber, event) {
+    // Prevent card click when copying
+    event.stopPropagation();
+    
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/?session=${sessionId}&table=${tableNumber}`;
+    
+    navigator.clipboard.writeText(link).then(() => {
+        showToast('Table join link copied to clipboard!', 'success');
+        console.log('Table link copied:', link);
+    }).catch(err => {
+        console.error('Failed to copy table link:', err);
+        showToast('Failed to copy table link. Please copy manually.', 'error');
+        
+        // Fallback - select text for manual copy
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = link;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Table link selected for copying', 'info');
+        } catch (fallbackErr) {
+            console.error('Fallback copy also failed:', fallbackErr);
+        }
+    });
+}
+
+function copySessionCode(sessionId, event) {
+    // Prevent card click when copying
+    event.stopPropagation();
+    
+    navigator.clipboard.writeText(sessionId).then(() => {
+        showToast('Session ID copied to clipboard!', 'success');
+        console.log('Session ID copied:', sessionId);
+    }).catch(err => {
+        console.error('Failed to copy session ID:', err);
+        showToast('Failed to copy session ID. Please copy manually.', 'error');
+        
+        // Fallback - select text for manual copy
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = sessionId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Session ID selected for copying', 'info');
+        } catch (fallbackErr) {
+            console.error('Fallback copy also failed:', fallbackErr);
+        }
+    });
+}
+
+function copySessionLink(sessionId, event) {
+    // Prevent card click when copying
+    event.stopPropagation();
+    
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/?session=${sessionId}`;
+    
+    navigator.clipboard.writeText(link).then(() => {
+        showToast('Session join link copied to clipboard!', 'success');
+        console.log('Session link copied:', link);
+    }).catch(err => {
+        console.error('Failed to copy session link:', err);
+        showToast('Failed to copy session link. Please copy manually.', 'error');
+        
+        // Fallback - select text for manual copy
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = link;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Session link selected for copying', 'info');
+        } catch (fallbackErr) {
+            console.error('Fallback copy also failed:', fallbackErr);
+        }
+    });
+}
+
 function downloadAllQRCodes() {
     if (!currentSession) return;
     
@@ -1631,13 +3884,27 @@ function closeManualJoin() {
 }
 
 async function submitManualJoin() {
-    const code = document.getElementById('manualCode').value.trim();
+    console.log('[DEBUG] submitManualJoin called');
+    const codeInput = document.getElementById('manualCode');
+    const code = codeInput.value.trim();
+    const submitBtn = document.getElementById('submitManualJoinBtn');
+    
+    console.log('[DEBUG] Code entered:', code);
+    
     if (!code) {
-        console.error('Please enter a session or table code');
+        console.log('[DEBUG] No code entered');
+        showToast('Please enter a session code, table code, or password', 'error');
+        codeInput.focus();
         return;
     }
     
+    // Show loading state
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Joining...';
+    submitBtn.disabled = true;
+    
     try {
+        console.log('[DEBUG] Sending request to /api/entry with code:', code);
         const response = await fetch('/api/entry', {
             method: 'POST',
             headers: {
@@ -1647,41 +3914,53 @@ async function submitManualJoin() {
         });
         
         const result = await response.json();
+        console.log('[DEBUG] /api/entry response:', result);
         
         if (result.success) {
+            console.log('[DEBUG] Entry successful, closing manual join modal');
             closeManualJoin();
             
-            // Handle different entry types
+            // Handle different entry types with appropriate feedback
             switch (result.type) {
                 case 'session':
-                    // Regular session access
-                    loadSpecificSession(result.sessionId);
+                    console.log('[DEBUG] Handling session entry');
+                    showToast('Joining session...', 'success');
+                    await loadSpecificSession(result.sessionId);
+                    console.log('[DEBUG] Session loading completed');
                     break;
                     
                 case 'session_admin':
-                    // Admin access to session
-                    loadSpecificSession(result.sessionId, true);
+                    console.log('[DEBUG] Handling admin session entry');
+                    showToast('Joining session as admin...', 'success');
+                    await loadSpecificSession(result.sessionId, true);
+                    console.log('[DEBUG] Admin session loading completed');
                     break;
                     
                 case 'table':
-                    // Direct table access via table code
-                    joinSpecificTable(result.sessionId, result.tableNumber);
+                    showToast(`Joining Table ${result.tableNumber}...`, 'success');
+                    await joinSpecificTable(result.sessionId, result.tableNumber);
                     break;
                     
                 case 'table_password':
-                    // Direct table access via password
-                    joinSpecificTable(result.sessionId, result.tableNumber);
+                    showToast(`Joining Table ${result.tableNumber}...`, 'success');
+                    await joinSpecificTable(result.sessionId, result.tableNumber);
                     break;
                     
                 default:
                     console.error('Unknown entry type:', result.type);
+                    showToast('Unknown entry type. Please contact support.', 'error');
             }
         } else {
-            alert(result.error || 'Unable to join. Please check your code and try again.');
+            showToast(result.error || 'Unable to join. Please check your code and try again.', 'error');
+            codeInput.focus();
         }
     } catch (error) {
         console.error('Error joining session/table:', error);
-        alert('Connection error. Please try again.');
+        showToast('Connection error. Please check your internet connection and try again.', 'error');
+    } finally {
+        // Restore button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
     }
 }
 
@@ -1712,13 +3991,88 @@ function stopCamera() {
 }
 
 function detectQRCode(video) {
-    // Simplified QR detection - in production, use jsQR or similar library
-    // This is a placeholder that would integrate with a QR code scanning library
-    setTimeout(() => {
-        if (document.getElementById('mobileScanner').style.display !== 'none') {
-            detectQRCode(video);
+    // Create a canvas to capture video frames
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const scanFrame = () => {
+        if (document.getElementById('mobileScanner').style.display === 'none') {
+            return; // Stop scanning if scanner is closed
         }
-    }, 1000);
+        
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Simple QR code detection using pattern recognition
+            // This looks for QR code-like patterns in the video frame
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const qrResult = detectQRPattern(imageData);
+            
+            if (qrResult) {
+                handleQRCodeDetected(qrResult);
+                return;
+            }
+        }
+        
+        // Continue scanning
+        setTimeout(scanFrame, 300); // Scan every 300ms for better performance
+    };
+    
+    scanFrame();
+}
+
+// Real QR code detection using jsQR library
+function detectQRPattern(imageData) {
+    if (typeof jsQR !== 'undefined') {
+        try {
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code) {
+                console.log('QR Code detected:', code.data);
+                return code.data;
+            }
+        } catch (error) {
+            console.warn('QR detection error:', error);
+        }
+    } else {
+        console.warn('jsQR library not loaded');
+    }
+    return null;
+}
+
+// Handle detected QR code
+async function handleQRCodeDetected(qrData) {
+    console.log('QR Code detected:', qrData);
+    
+    // Close scanner
+    closeQRScanner();
+    
+    try {
+        // Parse QR code URL
+        const url = new URL(qrData);
+        const pathParts = url.pathname.split('/');
+        
+        if (pathParts[1] === 'join' && pathParts[2]) {
+            const sessionId = pathParts[2];
+            const tableNumber = pathParts[4]; // Optional table number
+            
+            showToast('QR Code detected! Joining session...', 'success');
+            
+            if (tableNumber) {
+                // Direct table join
+                await joinSpecificTable(sessionId, tableNumber);
+            } else {
+                // Session join - redirect to session
+                window.location.href = `/?session=${sessionId}`;
+            }
+        } else {
+            throw new Error('Invalid QR code format');
+        }
+    } catch (error) {
+        console.error('Error processing QR code:', error);
+        showToast('Invalid QR code. Please try again.', 'error');
+    }
 }
 
 function processQRCode(data) {
@@ -1752,26 +4106,34 @@ function processQRCode(data) {
 }
 
 async function joinSpecificTable(sessionId, tableId) {
+    console.log(`[DEBUG] joinSpecificTable called with sessionId: ${sessionId}, tableId: ${tableId}`);
     showLoading(`Joining Table ${tableId}...`);
     
     try {
         // Load session data without showing session dashboard
+        console.log(`[DEBUG] Loading session data for ${sessionId}...`);
         const response = await fetch(`/api/sessions/${sessionId}`);
         if (!response.ok) {
+            console.error(`[DEBUG] Session API failed with status: ${response.status}`);
             throw new Error('Session not found or expired');
         }
         
         const session = await response.json();
         currentSession = session;
+        console.log(`[DEBUG] Session loaded: ${session.title}`);
         
         // Join the socket room
+        console.log(`[DEBUG] Joining socket room for session ${sessionId}...`);
         socket.emit('join-session', sessionId);
         
         // Load table-specific data
+        console.log(`[DEBUG] Loading table data for table ${tableId}...`);
         const tableResponse = await fetch(`/api/sessions/${sessionId}/tables/${tableId}`);
         if (tableResponse.ok) {
             currentTable = await tableResponse.json();
+            console.log(`[DEBUG] Table loaded: ${currentTable.name} (ID: ${currentTable.id})`);
         } else {
+            console.log(`[DEBUG] Table API failed, using fallback table object`);
             // Fallback: create basic table object
             currentTable = {
                 id: tableId,
@@ -1783,14 +4145,19 @@ async function joinSpecificTable(sessionId, tableId) {
         }
         
         // Setup and show table interface directly
+        console.log(`[DEBUG] Setting up table interface...`);
         setupTableInterface();
+        console.log(`[DEBUG] Showing tableInterface screen...`);
         showScreen('tableInterface');
-        console.log(`Joined Table ${tableId} in session: ${session.title}`);
+        console.log(`[DEBUG] Successfully joined Table ${tableId} in session: ${session.title}`);
         
     } catch (error) {
-        console.error('Error joining table:', error);
+        console.error('[DEBUG] Error in joinSpecificTable:', error);
+        console.error('[DEBUG] Error stack:', error.stack);
+        showToast(`Error joining table: ${error.message}`, 'error');
         throw new Error(`Unable to join Table ${tableId}. ${error.message}`);
     } finally {
+        console.log(`[DEBUG] Hiding loading...`);
         hideLoading();
     }
 }
@@ -1800,6 +4167,12 @@ async function loadSessionTables() {
     const sessionSelect = document.getElementById('sessionSelect');
     const tableSelect = document.getElementById('tableSelect');
     const joinBtn = document.getElementById('joinTableBtn');
+    
+    // Check if required elements exist
+    if (!sessionSelect || !tableSelect || !joinBtn) {
+        console.log('Session selection elements not found, skipping loadSessionTables');
+        return;
+    }
     
     if (!sessionSelect.value) {
         tableSelect.innerHTML = '<option value="">First select a session</option>';
@@ -1878,13 +4251,10 @@ async function joinCurrentTable() {
         return;
     }
     
-    const participantName = document.getElementById('participantNameInput').value.trim();
+    const participantName = 'Anonymous'; // Name form removed as requested
     const participantEmail = document.getElementById('participantEmailInput').value.trim();
     
-    if (!participantName) {
-        alert('Please enter your name');
-        return;
-    }
+    // Name validation removed since form was removed
     
     showLoading('Joining table...');
     
@@ -1925,13 +4295,40 @@ async function joinCurrentTable() {
 function setupTableInterface() {
     if (!currentTable) return;
     
+    // Update session info in header
+    if (currentSession) {
+        const sessionTitleHeader = document.getElementById('sessionTitleHeader');
+        const sessionDescriptionHeader = document.getElementById('sessionDescriptionHeader');
+        
+        if (sessionTitleHeader) {
+            sessionTitleHeader.textContent = currentSession.title || 'Session';
+        }
+        
+        if (sessionDescriptionHeader) {
+            if (currentSession.description && currentSession.description.trim()) {
+                sessionDescriptionHeader.textContent = currentSession.description;
+                sessionDescriptionHeader.style.display = 'block';
+            } else {
+                sessionDescriptionHeader.style.display = 'none';
+            }
+        }
+    }
+    
     document.getElementById('tableTitle').textContent = currentTable.name || `Table ${currentTable.table_number}`;
     document.getElementById('tableStatus').textContent = currentTable.status || 'waiting';
     document.getElementById('tableStatus').className = `status-badge ${currentTable.status || 'waiting'}`;
     
+    // Update table code display
+    if (currentSession && currentTable) {
+        const tableCodeValue = document.getElementById('tableCodeValue');
+        if (tableCodeValue) {
+            tableCodeValue.textContent = `${currentSession.id}/table/${currentTable.table_number}`;
+        }
+    }
+    
     // Check if current user is already in this table
     const currentParticipantId = localStorage.getItem('currentParticipantId');
-    const isAlreadyJoined = currentTable.participants && currentTable.participants.some(p => p.id === currentParticipantId);
+    const isAlreadyJoined = currentTable.participants && currentTable.participants.some(p => p && p.id === currentParticipantId);
     
     // Show/hide join section
     const joinSection = document.getElementById('joinTableSection');
@@ -2038,6 +4435,11 @@ async function uploadAudio(audioBlob) {
             
             // Update recording status
             updateRecordingStatus({ status: 'processing', timestamp: new Date() });
+            
+            // Refresh the dashboard to update the recording count
+            if (currentSession) {
+                loadSessionDashboard(currentSession.id);
+            }
         } else {
             const error = await response.json();
             console.error(`Upload failed: ${error.error}`);
@@ -2076,80 +4478,141 @@ function updateRecordingStatus(data) {
 function displayTranscription(data) {
     const transcriptDisplay = document.getElementById('liveTranscript');
     
+    if (!transcriptDisplay) {
+        console.warn('liveTranscript element not found');
+        return;
+    }
+    
+    // Clear initial placeholder message on first transcription
+    if (transcriptDisplay.children.length === 1 && transcriptDisplay.children[0].style.textAlign === 'center') {
+        transcriptDisplay.innerHTML = '';
+        transcriptDisplay.style.border = 'none';
+        transcriptDisplay.style.background = '#ffffff';
+    }
+    
     // Debug logging
-    console.log('🎤 Live transcription received:', {
+    console.log('🎤 displayTranscription called:', {
         hasTranscription: !!data.transcription,
         speakers: data.transcription?.speakers,
-        speakersType: typeof data.transcription?.speakers,
         speakersLength: Array.isArray(data.transcription?.speakers) ? data.transcription.speakers.length : 'not array',
-        transcript: data.transcription?.transcript
+        transcript: data.transcription?.transcript,
+        source: data.source
     });
     
     if (data.transcription) {
-        const transcriptItem = document.createElement('div');
-        transcriptItem.className = 'transcript-item';
-        
-        // Parse speakers for real-time transcription
         let speakers = [];
-        try {
-            if (data.transcription.speakers && Array.isArray(data.transcription.speakers)) {
-                speakers = data.transcription.speakers;
-                console.log('✅ Found speaker segments:', speakers.length);
-            } else {
-                console.log('❌ No valid speaker segments found');
-            }
-        } catch (e) {
-            console.error('Error parsing real-time speakers:', e);
+        
+        // Parse speakers from different sources
+        if (data.transcription.speakers && Array.isArray(data.transcription.speakers)) {
+            speakers = data.transcription.speakers;
+        } else if (data.transcription.transcript) {
+            // Fallback: create single speaker segment
+            speakers = [{
+                speaker: 0,
+                text: data.transcription.transcript,
+                start: 0,
+                end: 0
+            }];
         }
         
-        const currentTime = new Date().toLocaleTimeString();
-        const confidence = data.transcription.confidence ? `${(data.transcription.confidence * 100).toFixed(1)}% confidence` : '';
-        
-        let transcriptContent = '';
-        
-        if (speakers && speakers.length > 0) {
-            // Consolidate consecutive speaker segments for real-time display
+        if (speakers.length > 0) {
+            // Consolidate consecutive speaker segments
             const consolidatedSpeakers = consolidateSpeakerSegments(speakers);
-            const uniqueSpeakers = new Set(consolidatedSpeakers.map(s => s.speaker));
             
-            // Always display with speaker diarization (even for single speaker)
-            transcriptContent = consolidatedSpeakers.map(segment => {
-                const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
-                const speakerClass = `speaker-${speakerNum % 5}`;
-                return `
-                    <div class="speaker-segment ${speakerClass}">
-                        <div class="speaker-label">
-                            <strong>Speaker ${speakerNum}</strong>
-                        </div>
-                        <div class="speaker-text">${segment.consolidatedText}</div>
-                    </div>
-                `;
-            }).join('');
-        } else {
-            // Handle different transcript field names and ensure we display text, not object
-            const transcriptText = data.transcription.transcript || 
-                                 data.transcription.transcript_text || 
-                                 data.transcription.transcriptText ||
-                                 (typeof data.transcription === 'string' ? data.transcription : 'No transcript available');
-            transcriptContent = `<div class="transcript-text">${transcriptText}</div>`;
-        }
-        
-        transcriptItem.innerHTML = `
-            <div class="transcript-meta">
-                <span><strong>Table ${data.tableNumber} - New</strong></span>
-                <span>${currentTime}</span>
-                <span>${confidence}</span>
-            </div>
-            ${transcriptContent}
-        `;
-        
-        transcriptDisplay.insertBefore(transcriptItem, transcriptDisplay.firstChild);
-        
-        // Limit to 10 most recent transcriptions
-        while (transcriptDisplay.children.length > 10) {
-            transcriptDisplay.removeChild(transcriptDisplay.lastChild);
+            // Create chat bubbles for each speaker segment
+            consolidatedSpeakers.forEach(segment => {
+                createChatBubble(segment.speaker, segment.consolidatedText, data.source);
+            });
+            
+            // Auto-scroll to bottom
+            transcriptDisplay.scrollTop = transcriptDisplay.scrollHeight;
         }
     }
+}
+
+function createChatBubble(speakerIndex, text, source = '') {
+    const transcriptDisplay = document.getElementById('liveTranscript');
+    if (!transcriptDisplay || !text || text.trim() === '') return;
+    
+    const speakerNum = (speakerIndex || 0) + 1;
+    
+    // Check if we can consolidate with the last bubble (same speaker)
+    const lastBubble = transcriptDisplay.lastElementChild;
+    const canConsolidate = lastBubble && 
+                          lastBubble.classList.contains('chat-bubble') &&
+                          lastBubble.dataset.speaker === speakerIndex.toString();
+    
+    if (canConsolidate && source === 'live-transcription') {
+        // Append to existing bubble for live transcription
+        const textElement = lastBubble.querySelector('.bubble-text');
+        if (textElement) {
+            textElement.textContent += ' ' + text.trim();
+            return;
+        }
+    }
+    
+    // Create new chat bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.dataset.speaker = speakerIndex.toString();
+    
+    // Speaker colors - modern, accessible palette
+    const speakerColors = [
+        { bg: '#e3f2fd', border: '#2196F3', text: '#1565C0' },  // Blue
+        { bg: '#fff3e0', border: '#FF9800', text: '#E65100' },  // Orange
+        { bg: '#e8f5e9', border: '#4CAF50', text: '#2E7D32' },  // Green
+        { bg: '#fce4ec', border: '#E91E63', text: '#AD1457' },  // Pink
+        { bg: '#f3e5f5', border: '#9C27B0', text: '#6A1B9A' }   // Purple
+    ];
+    
+    const colorIndex = (speakerIndex || 0) % speakerColors.length;
+    const colors = speakerColors[colorIndex];
+    
+    bubble.style.cssText = `
+        margin: 12px 0;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: ${colors.bg};
+        border-left: 4px solid ${colors.border};
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: relative;
+        animation: fadeInUp 0.3s ease-out;
+        max-width: 85%;
+        margin-left: ${speakerIndex % 2 === 0 ? '0' : '15%'};
+        margin-right: ${speakerIndex % 2 === 0 ? '15%' : '0'};
+    `;
+    
+    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const sourceIndicator = source === 'live-transcription' ? '🎙️' : 
+                           source === 'upload' ? '📁' : '🎤';
+    
+    bubble.innerHTML = `
+        <div style="font-weight: 600; color: ${colors.text}; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <span>Speaker ${speakerNum}</span>
+            <span style="font-weight: 400; opacity: 0.7; font-size: 10px;">${sourceIndicator} ${currentTime}</span>
+        </div>
+        <div class="bubble-text" style="color: #333; line-height: 1.4; word-wrap: break-word;">${text.trim()}</div>
+    `;
+    
+    // Add animation styles if not already present
+    if (!document.getElementById('chat-bubble-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'chat-bubble-styles';
+        styles.textContent = `
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .chat-bubble:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                transition: all 0.2s ease;
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+    
+    transcriptDisplay.appendChild(bubble);
 }
 
 function updateTableTranscriptionCount(tableId) {
@@ -2242,14 +4705,17 @@ async function generateSessionAnalysis() {
             displaySessionAnalysisReport(analysisResult);
             showScreen('analysisReport');
             console.log('Session analysis completed!');
+            return analysisResult; // Return the result so it can be used by calling function
         } else {
             const error = await response.json();
             console.error(`Session analysis failed: ${error.error}`);
             alert(`Analysis failed: ${error.error}`);
+            return null; // Return null on error
         }
     } catch (error) {
         console.error('Error generating session analysis:', error);
         alert('Error generating session analysis. Please check console for details.');
+        return null; // Return null on error
     } finally {
         hideLoading();
     }
@@ -2469,7 +4935,43 @@ function displayTableAnalysisReport(analysisResult) {
 }
 
 function displaySessionAnalysisReport(analysisResult) {
+    // Helper function to get proper table number from table ID
+    function getTableNumber(tableId) {
+        // Convert to number if it's a string
+        const numericTableId = typeof tableId === 'string' ? parseInt(tableId) : tableId;
+        
+        // Always try to find the table in currentSession first to get the correct table_number
+        if (currentSession && currentSession.tables && currentSession.tables.length > 0) {
+            const table = currentSession.tables.find(t => {
+                // Match by database ID (t.id) which maps to the large numbers like 384, 385
+                return t.id == numericTableId;
+            });
+            
+            if (table && table.table_number) {
+                return table.table_number;
+            }
+            
+            // If no match by ID, check if the input is already a table_number
+            const tableByNumber = currentSession.tables.find(t => t.table_number == numericTableId);
+            if (tableByNumber) {
+                return tableByNumber.table_number;
+            }
+        }
+        
+        // If it's a small number (1-20), it might already be a table number
+        if (typeof numericTableId === 'number' && numericTableId >= 1 && numericTableId <= 20) {
+            return numericTableId;
+        }
+        
+        // Return original value as fallback
+        return tableId;
+    }
+    
     const reportContent = document.getElementById('reportContent');
+    const reportTitle = document.getElementById('reportTitle');
+    const reportSubtitle = document.getElementById('reportSubtitle');
+    const reportMeta = document.getElementById('reportMeta');
+    
     const { analyses, session_title } = analysisResult;
     
     // Extract analysis data from the response structure
@@ -2479,138 +4981,322 @@ function displaySessionAnalysisReport(analysisResult) {
     const agreements = analyses.agreements?.analysis_data?.agreements || [];
     const sentiment = analyses.sentiment?.analysis_data || {};
     
+    // Update header
+    reportTitle.textContent = `${session_title} - Analysis Report`;
+    reportSubtitle.textContent = `Comprehensive insights from your World Café session`;
+    
+    reportMeta.innerHTML = `
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">📊</span>
+            Generated: ${new Date().toLocaleString()}
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🤖</span>
+            AI-Powered Analysis
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🌐</span>
+            Session-Wide Scope
+        </span>
+    `;
+    
     reportContent.innerHTML = `
-        <div class="analysis-header">
-            <h2>${session_title} - Session Analysis</h2>
-            <p class="analysis-scope">🌐 Session-Wide Analysis</p>
-            <div class="analysis-meta">
-                <span>Session: ${session_title}</span>
-                <span>Generated: ${new Date().toLocaleString()}</span>
-                <span>🤖 AI-Powered Analysis</span>
+        <!-- Key Metrics Overview -->
+        <div style="
+            background: linear-gradient(135deg, #f8f9fa, #fff);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid #e0e0e0;
+        ">
+            <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 28px;">📈</span>
+                Key Metrics Overview
+            </h3>
+            <div style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 24px;
+            ">
+                <div style="
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${themes.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Main Themes</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #f093fb, #f5576c);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${agreements.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Agreements Found</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #4facfe, #00f2fe);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${conflicts.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Conflicts Identified</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #fa709a, #fee140);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${Object.keys(sentiment.byTable || {}).length}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Tables Analyzed</div>
+                </div>
             </div>
         </div>
-        
-        <div class="analysis-summary">
-            <h3>Session Overview</h3>
-            <div class="summary-stats">
-                <div class="stat-card">
-                    <span class="stat-value">${conflicts.length || 0}</span>
-                    <span class="stat-label">Total Conflicts</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${agreements.length || 0}</span>
-                    <span class="stat-label">Total Agreements</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${themes.length || 0}</span>
-                    <span class="stat-label">Main Themes</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-value">${Object.keys(sentiment.byTable || {}).length}</span>
-                    <span class="stat-label">Tables Analyzed</span>
-                </div>
-            </div>
-        </div>
-        
+
         ${summary.key_insights ? `
-            <div class="analysis-section">
-                <h4>📋 Session Insights</h4>
-                <ul class="insights-list">
-                    ${summary.key_insights.map(insight => `<li>${insight}</li>`).join('')}
-                </ul>
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">💡</span>
+                    Key Session Insights
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    ${summary.key_insights.map(insight => `
+                        <div style="
+                            background: #f8f9fa;
+                            padding: 20px;
+                            border-radius: 12px;
+                            border-left: 4px solid #667eea;
+                            font-size: 16px;
+                            line-height: 1.6;
+                        ">${insight}</div>
+                    `).join('')}
+                </div>
             </div>
         ` : ''}
-        
+
         ${sentiment.overall !== undefined ? `
-            <div class="analysis-section">
-                <h4>😊 Overall Session Sentiment</h4>
-                <div class="sentiment-display">
-                    <div class="sentiment-score">
-                        <span class="score-value">${sentiment.overall > 0 ? '+' : ''}${(sentiment.overall * 100).toFixed(0)}%</span>
-                        <span class="score-label">${sentiment.interpretation || 'Mixed'}</span>
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">${sentiment.overall > 0.1 ? '😊' : sentiment.overall < -0.1 ? '😔' : '😐'}</span>
+                    Session Sentiment Analysis
+                </h3>
+                <div style="margin-bottom: 24px; text-align: center;">
+                    <div style="
+                        display: inline-block;
+                        padding: 16px 32px;
+                        border-radius: 50px;
+                        background: linear-gradient(135deg, ${sentiment.overall > 0.1 ? '#28a745, #20c997' : sentiment.overall < -0.1 ? '#dc3545, #fd7e14' : '#6c757d, #adb5bd'});
+                        color: white;
+                        font-size: 24px;
+                        font-weight: 700;
+                        margin-bottom: 8px;
+                    ">
+                        ${sentiment.overall > 0 ? '+' : ''}${(sentiment.overall * 100).toFixed(0)}%
                     </div>
-                    ${sentiment.byTable ? `
-                        <div class="table-sentiments">
-                            <h5>By Table:</h5>
-                            <div class="table-sentiment-grid">
-                                ${Object.entries(sentiment.byTable).map(([tableId, score]) => `
-                                    <div class="table-sentiment-item">
-                                        <span class="table-label">Table ${tableId}</span>
-                                        <span class="sentiment-bar">
-                                            <span class="sentiment-fill ${score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral'}" 
-                                                  style="width: ${Math.abs(score) * 100}%"></span>
-                                        </span>
-                                        <span class="sentiment-value">${(score * 100).toFixed(0)}%</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
+                    <div style="font-size: 18px; color: #666; font-weight: 500;">
+                        ${sentiment.interpretation || 'Mixed Sentiment'}
+                    </div>
                 </div>
+                ${sentiment.byTable ? `
+                    <h4 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #333;">Sentiment by Table:</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        ${Object.entries(sentiment.byTable).map(([tableId, score]) => `
+                            <div style="
+                                background: #f8f9fa;
+                                padding: 20px;
+                                border-radius: 12px;
+                                text-align: center;
+                                border: 2px solid ${score > 0.1 ? '#28a745' : score < -0.1 ? '#dc3545' : '#6c757d'};
+                            ">
+                                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333;">
+                                    Table ${getTableNumber(tableId)}
+                                </div>
+                                <div style="
+                                    font-size: 20px; 
+                                    font-weight: 700; 
+                                    color: ${score > 0.1 ? '#28a745' : score < -0.1 ? '#dc3545' : '#6c757d'};
+                                ">
+                                    ${score > 0 ? '+' : ''}${(score * 100).toFixed(0)}%
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
             </div>
         ` : ''}
-        
+
         ${themes.length > 0 ? `
-            <div class="analysis-section">
-                <h4>🎨 Cross-Table Themes</h4>
-                <div class="themes-list">
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">🎨</span>
+                    Cross-Table Themes
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
                     ${themes.map(theme => `
-                        <div class="theme-item">
-                            <h5>${theme.theme}</h5>
-                            <p>${theme.description || 'No description available'}</p>
-                            <div class="theme-meta">
-                                <small>Mentioned ${theme.frequency || 0} times</small>
-                                ${theme.tables ? `<small>Tables: ${Object.keys(theme.tables).join(', ')}</small>` : ''}
-                                ${theme.sentiment ? `<span class="theme-sentiment ${theme.sentiment > 0 ? 'positive' : theme.sentiment < 0 ? 'negative' : 'neutral'}">${theme.sentiment > 0 ? '😊' : theme.sentiment < 0 ? '😔' : '😐'}</span>` : ''}
+                        <div style="
+                            background: linear-gradient(135deg, #f8f9fa, #fff);
+                            border: 1px solid #e0e0e0;
+                            border-radius: 12px;
+                            padding: 24px;
+                            transition: all 0.2s ease;
+                        " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                            <h4 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #333;">${theme.theme}</h4>
+                            <p style="margin: 0 0 16px 0; color: #666; line-height: 1.6; font-size: 14px;">${theme.description || 'No description available'}</p>
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                                <div style="display: flex; gap: 16px; font-size: 12px; color: #888;">
+                                    <span>🔄 ${theme.frequency || 0}x mentioned</span>
+                                    ${theme.tables ? `<span>📍 Tables: ${Object.keys(theme.tables).map(getTableNumber).join(', ')}</span>` : ''}
+                                </div>
+                                ${theme.sentiment ? `<span style="font-size: 20px;">${theme.sentiment > 0 ? '😊' : theme.sentiment < 0 ? '😔' : '😐'}</span>` : ''}
                             </div>
                         </div>
                     `).join('')}
                 </div>
             </div>
         ` : ''}
-        
-        ${conflicts.length > 0 ? `
-            <div class="analysis-section">
-                <h4>⚡ Session-Wide Conflicts</h4>
-                <div class="conflicts-list">
-                    ${conflicts.map(conflict => `
-                        <div class="conflict-item">
-                            <div class="conflict-header">
-                                <span class="conflict-severity">Severity: ${((conflict.severity || 0) * 100).toFixed(0)}%</span>
-                                ${conflict.tableId ? `<span class="table-ref">Table ${conflict.tableId}</span>` : ''}
-                            </div>
-                            <p class="conflict-text">"${conflict.text || 'No text available'}"</p>
-                            <p class="conflict-description">${conflict.description || 'No description available'}</p>
-                            ${conflict.context ? `<small class="conflict-context">Context: ${conflict.context}</small>` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        ` : ''}
-        
+
         ${agreements.length > 0 ? `
-            <div class="analysis-section">
-                <h4>🤝 Session-Wide Agreements</h4>
-                <div class="agreements-list">
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">🤝</span>
+                    Session-Wide Agreements
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
                     ${agreements.map(agreement => `
-                        <div class="agreement-item">
-                            <div class="agreement-header">
-                                <span class="agreement-strength">Strength: ${((agreement.strength || 0) * 100).toFixed(0)}%</span>
-                                ${agreement.tableId ? `<span class="table-ref">Table ${agreement.tableId}</span>` : ''}
+                        <div style="
+                            background: linear-gradient(135deg, #e8f5e8, #f0fdf0);
+                            border: 1px solid #28a745;
+                            border-left: 6px solid #28a745;
+                            border-radius: 12px;
+                            padding: 24px;
+                        ">
+                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px; gap: 16px;">
+                                <span style="
+                                    background: #28a745;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    Strength: ${((agreement.strength || 0) * 100).toFixed(0)}%
+                                </span>
+                                ${agreement.tableId ? `<span style="
+                                    background: #17a2b8;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">Table ${getTableNumber(agreement.tableId)}</span>` : ''}
                             </div>
-                            <p class="agreement-text">"${agreement.text || 'No text available'}"</p>
-                            <p class="agreement-description">${agreement.description || 'No description available'}</p>
-                            ${agreement.context ? `<small class="agreement-context">Context: ${agreement.context}</small>` : ''}
+                            <blockquote style="
+                                margin: 0 0 16px 0;
+                                font-size: 16px;
+                                font-style: italic;
+                                color: #2d5a2d;
+                                border-left: 3px solid #28a745;
+                                padding-left: 16px;
+                            ">"${agreement.text || 'No text available'}"</blockquote>
+                            <p style="margin: 0 0 8px 0; color: #495057; font-size: 15px; line-height: 1.5;">${agreement.description || 'No description available'}</p>
+                            ${agreement.context ? `<small style="color: #6c757d; font-style: italic;">Context: ${agreement.context}</small>` : ''}
                         </div>
                     `).join('')}
                 </div>
             </div>
         ` : ''}
-        
-        <div class="analysis-actions">
-            <button onclick="viewTableAnalyses()" class="btn btn-secondary">🏓 View Individual Tables</button>
-            <button onclick="exportAnalysisData()" class="btn btn-secondary">📥 Export Data</button>
-        </div>
+
+        ${conflicts.length > 0 ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">⚡</span>
+                    Session-Wide Conflicts
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    ${conflicts.map(conflict => `
+                        <div style="
+                            background: linear-gradient(135deg, #ffeaa7, #fab1a0);
+                            border: 1px solid #e17055;
+                            border-left: 6px solid #e17055;
+                            border-radius: 12px;
+                            padding: 24px;
+                        ">
+                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px; gap: 16px;">
+                                <span style="
+                                    background: #e17055;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    Severity: ${((conflict.severity || 0) * 100).toFixed(0)}%
+                                </span>
+                                ${conflict.tableId ? `<span style="
+                                    background: #6c757d;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">Table ${getTableNumber(conflict.tableId)}</span>` : ''}
+                            </div>
+                            <blockquote style="
+                                margin: 0 0 16px 0;
+                                font-size: 16px;
+                                font-style: italic;
+                                color: #8b4513;
+                                border-left: 3px solid #e17055;
+                                padding-left: 16px;
+                            ">"${conflict.text || 'No text available'}"</blockquote>
+                            <p style="margin: 0 0 8px 0; color: #495057; font-size: 15px; line-height: 1.5;">${conflict.description || 'No description available'}</p>
+                            ${conflict.context ? `<small style="color: #6c757d; font-style: italic;">Context: ${conflict.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
     `;
 }
 
@@ -2702,6 +5388,19 @@ async function generateSessionAnalysisFromDashboard() {
 
 function displaySessionAnalysisInDashboard(analysisResult) {
     const sessionAIAnalysisResults = document.getElementById('sessionAIAnalysisResults');
+    
+    // Check if analysisResult is valid
+    if (!analysisResult) {
+        sessionAIAnalysisResults.innerHTML = `
+            <div class="analysis-error">
+                <h3>❌ Session Analysis Failed</h3>
+                <p>analysisResult is undefined</p>
+                <small>Please try again or check if the AI service is available.</small>
+            </div>
+        `;
+        return;
+    }
+    
     const { analyses, session_title } = analysisResult;
     
     // Extract analysis data from the response structure
@@ -2845,13 +5544,25 @@ async function checkSimpleChatStatus() {
 }
 
 function updateSimpleChatStatus(message, available) {
+    // Update chatbot elements
     const statusText = document.getElementById('simpleChatStatus');
     const chatInput = document.getElementById('simpleChatInput');
     const sendBtn = document.getElementById('simpleSendBtn');
     
     if (statusText) statusText.textContent = message;
-    if (chatInput) chatInput.disabled = !available;
-    if (sendBtn) sendBtn.disabled = !available;
+    if (chatInput) {
+        chatInput.disabled = !available;
+        // Update placeholder based on availability
+        if (available) {
+            chatInput.placeholder = "Ask about the discussions, insights, themes...";
+        } else {
+            chatInput.placeholder = "Chat unavailable - " + message.toLowerCase();
+        }
+    }
+    if (sendBtn) {
+        sendBtn.disabled = !available;
+        sendBtn.textContent = available ? 'Send' : 'Unavailable';
+    }
     
     simpleChatAvailable = available;
 }
@@ -2923,14 +5634,55 @@ async function sendSimpleChatMessage() {
     }
 }
 
+
 function addSimpleMessage(type, content) {
     const messagesDiv = document.getElementById('simpleChatMessages');
     const messageId = 'simple-msg-' + Date.now();
     
+    // Clear welcome message if this is the first real message
+    const welcomeMsg = messagesDiv.querySelector('[style*="text-align: center"]');
+    if (welcomeMsg && (type === 'user' || type === 'ai')) {
+        welcomeMsg.remove();
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.id = messageId;
-    messageDiv.className = `simple-msg simple-msg-${type}`;
-    messageDiv.innerHTML = content.replace(/\n/g, '<br>');
+    messageDiv.style.cssText = `
+        margin-bottom: 16px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        animation: fadeIn 0.3s ease;
+        max-width: 100%;
+        word-wrap: break-word;
+        line-height: 1.5;
+    `;
+    
+    // Style based on message type
+    if (type === 'user') {
+        messageDiv.style.cssText += `
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            margin-left: 20%;
+            border-bottom-right-radius: 4px;
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; color: #666; font-size: 12px;">You</div>${content.replace(/\n/g, '<br>')}`;
+    } else if (type === 'ai') {
+        messageDiv.style.cssText += `
+            background: rgba(255,255,255,0.2);
+            color: white;
+            margin-right: 20%;
+            border-bottom-left-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.3);
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; color: rgba(255,255,255,0.8); font-size: 12px; display: flex; align-items: center; gap: 6px;"><span>🤖</span> AI Assistant</div>${content.replace(/\n/g, '<br>')}`;
+    } else if (type === 'error') {
+        messageDiv.style.cssText += `
+            background: rgba(220, 53, 69, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; font-size: 12px;">❌ Error</div>${content.replace(/\n/g, '<br>')}`;
+    }
     
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -3348,16 +6100,59 @@ document.getElementById('closeHistoryBtn').addEventListener('click', closeSessio
 // Utility functions
 // Toast notifications removed - using console logging instead
 
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        console.warn('Toast container not found, falling back to console log');
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        return;
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    toast.innerHTML = `
+        <div class="toast-content">
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${message}</span>
+            <button class="toast-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
 function showLoading(message = 'Loading...') {
     const loadingOverlay = document.getElementById('loadingOverlay');
     const loadingMessage = document.getElementById('loadingMessage');
     
-    loadingMessage.textContent = message;
-    loadingOverlay.style.display = 'flex';
+    if (loadingMessage) {
+        loadingMessage.textContent = message;
+    }
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+    }
 }
 
 function hideLoading() {
-    document.getElementById('loadingOverlay').style.display = 'none';
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
+    }
 }
 
 function downloadReport() {
@@ -3537,38 +6332,14 @@ function optimizeMobileNavigation() {
 
 // Enhanced mobile QR scanner with better camera handling
 function enhanceMobileQRScanner() {
-    const qrScanBtn = document.getElementById('qrScanBtn');
+    // Note: qrScanBtn moved to Join Session page as joinSessionQRBtn
     const mobileScanner = document.getElementById('mobileScanner');
     const qrVideo = document.getElementById('qrVideo');
     
-    if (qrScanBtn && mobileScanner && qrVideo) {
-        qrScanBtn.addEventListener('click', async () => {
-            try {
-                // Request camera permission with mobile-optimized constraints
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment', // Back camera
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }
-                });
-                
-                qrVideo.srcObject = stream;
-                mobileScanner.style.display = 'flex';
-                
-                // Add scanner overlay
-                addScannerOverlay();
-                
-                // Add haptic feedback if available
-                if (navigator.vibrate) {
-                    navigator.vibrate(50);
-                }
-                
-            } catch (error) {
-                console.error('Camera access failed:', error);
-                console.error('Camera access denied. Please enable camera permissions.');
-            }
-        });
+    if (mobileScanner && qrVideo) {
+        // Enhanced scanner functionality can be added here if needed
+        // The scanner is now triggered from showJoinQRScanner() function
+        console.log('Enhanced QR scanner initialized for join session context');
     }
 }
 
