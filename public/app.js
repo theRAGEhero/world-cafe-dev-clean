@@ -166,14 +166,14 @@ function handleSwipeBack() {
 function setupMobileNavigation() {
     // Close menu when clicking outside
     document.addEventListener('click', function(e) {
-        const navMenu = document.querySelector('.nav-menu');
+        const navMenu = document.getElementById('navMenu');
         const menuToggle = document.getElementById('mobileMenuToggle');
         
         if (mobileMenuOpen && navMenu && menuToggle) {
             // Check if click is outside the menu and toggle button
             if (!navMenu.contains(e.target) && !menuToggle.contains(e.target)) {
                 mobileMenuOpen = false;
-                navMenu.classList.remove('menu-open');
+                navMenu.classList.remove('show');
                 menuToggle.textContent = '☰';
             }
         }
@@ -587,11 +587,11 @@ function showScreen(screenId) {
     
     // Close mobile menu if open
     if (mobileMenuOpen) {
-        const navMenu = document.querySelector('.nav-menu');
+        const navMenu = document.getElementById('navMenu');
         const menuToggle = document.getElementById('mobileMenuToggle');
         if (navMenu && menuToggle) {
             mobileMenuOpen = false;
-            navMenu.classList.remove('menu-open');
+            navMenu.classList.remove('show');
             menuToggle.textContent = '☰';
         }
     }
@@ -708,8 +708,13 @@ function showSessionDashboard() {
 }
 
 function showTableInterface(tableId) {
+    console.log('[DEBUG] showTableInterface called with tableId:', tableId);
+    console.log('[DEBUG] Current currentTable before override:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
+    
     if (currentSession && currentSession.tables) {
-        currentTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
+        const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
+        console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
+        currentTable = foundTable;
         if (currentTable) {
             setupTableInterface();
             
@@ -760,18 +765,19 @@ function backToSession() {
 
 function showAdminDashboard() {
     loadAdminPrompts();
+    loadAdminSessions();
     showScreen('adminDashboard');
 }
 
 // Mobile Navigation Functions  
 function toggleMobileMenu() {
-    const navMenu = document.querySelector('.nav-menu');
+    const navMenu = document.getElementById('navMenu');
     const menuToggle = document.getElementById('mobileMenuToggle');
     
     mobileMenuOpen = !mobileMenuOpen;
     
     if (navMenu) {
-        navMenu.classList.toggle('menu-open', mobileMenuOpen);
+        navMenu.classList.toggle('show', mobileMenuOpen);
     }
     
     if (menuToggle) {
@@ -780,12 +786,12 @@ function toggleMobileMenu() {
 }
 
 function closeMobileMenu() {
-    const navMenu = document.querySelector('.nav-menu');
+    const navMenu = document.getElementById('navMenu');
     const menuToggle = document.getElementById('mobileMenuToggle');
     
     if (mobileMenuOpen && navMenu && menuToggle) {
         mobileMenuOpen = false;
-        navMenu.classList.remove('menu-open');
+        navMenu.classList.remove('show');
         menuToggle.textContent = '☰';
     }
 }
@@ -1080,8 +1086,9 @@ async function loadTablesForStep3() {
             
             return `
                 <div class="table-card" 
-                     onclick="${isFull ? '' : `selectTable(${table.id})`}" 
+                     onclick="${isFull ? '' : `selectTable(${table.table_number})`}" 
                      data-table-id="${table.id}"
+                     data-table-number="${table.table_number}"
                      style="
                          display: inline-block;
                          width: 140px;
@@ -1113,6 +1120,9 @@ async function loadTablesForStep3() {
 }
 
 function selectTable(tableId) {
+    // Ensure tableId is a number for consistent comparison
+    tableId = parseInt(tableId);
+    
     // Check if clicking the same table to unselect it
     if (selectedTableId === tableId) {
         // Unselect the table
@@ -1138,6 +1148,7 @@ function selectTable(tableId) {
     
     // Select new table
     selectedTableId = tableId;
+    console.log(`[DEBUG] Selected table ID set to: ${selectedTableId}`);
     
     // Update table selection visuals
     document.querySelectorAll('.table-card').forEach(card => {
@@ -1148,8 +1159,8 @@ function selectTable(tableId) {
         card.style.transform = 'translateY(0)';
     });
     
-    // Highlight selected card
-    const selectedCard = document.querySelector(`[data-table-id="${tableId}"]`);
+    // Highlight selected card  
+    const selectedCard = document.querySelector(`[data-table-number="${tableId}"]`);
     if (selectedCard) {
         selectedCard.classList.add('selected');
         selectedCard.style.borderColor = '#007bff';
@@ -1167,7 +1178,14 @@ function selectTable(tableId) {
 }
 
 async function finalJoinTable() {
-    if (!selectedSessionData || !selectedTableId) return;
+    console.log('[DEBUG] finalJoinTable called');
+    console.log('[DEBUG] selectedSessionData:', selectedSessionData);
+    console.log('[DEBUG] selectedTableId:', selectedTableId);
+    
+    if (!selectedSessionData || !selectedTableId) {
+        console.log('[DEBUG] Missing data - selectedSessionData:', !!selectedSessionData, 'selectedTableId:', selectedTableId);
+        return;
+    }
     
     const participantName = 'Anonymous'; // Name form removed
     
@@ -1177,7 +1195,7 @@ async function finalJoinTable() {
     finalJoinBtn.disabled = true;
     
     try {
-        console.log('Starting join process...', {sessionId: selectedSessionData.id, tableId: selectedTableId, participantName});
+        console.log('[DEBUG] Starting join process...', {sessionId: selectedSessionData.id, tableNumber: selectedTableId, participantName});
         await joinTableWithDetails(selectedSessionData.id, selectedTableId, participantName);
         console.log('Join successful, showing success message');
         showToast('Successfully joined the session!', 'success');
@@ -1209,8 +1227,8 @@ async function finalJoinTable() {
     }
 }
 
-async function joinTableWithDetails(sessionId, tableId, participantName) {
-    console.log(`[DEBUG] joinTableWithDetails called with sessionId: ${sessionId}, tableId: ${tableId}, participantName: ${participantName}`);
+async function joinTableWithDetails(sessionId, tableNumber, participantName) {
+    console.log(`[DEBUG] joinTableWithDetails called with sessionId: ${sessionId}, tableNumber: ${tableNumber}, participantName: ${participantName}`);
     
     try {
         // Load session data
@@ -1223,15 +1241,18 @@ async function joinTableWithDetails(sessionId, tableId, participantName) {
         const session = await response.json();
         console.log(`[DEBUG] Session loaded:`, session);
         
-        // Find the specific table
-        const table = session.tables?.find(t => t.id == tableId || t.table_number == tableId);
+        // Find the specific table by table_number
+        const tableNum = parseInt(tableNumber);
+        const table = session.tables?.find(t => t.table_number === tableNum);
         if (!table) {
-            throw new Error(`Table ${tableId} not found in session`);
+            throw new Error(`Table ${tableNumber} not found in session`);
         }
         
+        console.log(`[DEBUG] Found table for joining:`, {id: table.id, table_number: table.table_number, name: table.name});
+        
         // Join the table
-        console.log(`[DEBUG] Joining table ${table.table_number}...`);
-        const joinResponse = await fetch(`/api/sessions/${sessionId}/tables/${table.table_number}/join`, {
+        console.log(`[DEBUG] Making API call to: /api/sessions/${sessionId}/tables/${tableNum}/join`);
+        const joinResponse = await fetch(`/api/sessions/${sessionId}/tables/${tableNum}/join`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1252,6 +1273,7 @@ async function joinTableWithDetails(sessionId, tableId, participantName) {
         // Set current session and table data
         currentSession = session;
         currentTable = table;
+        console.log('[DEBUG] Set currentTable to:', {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name});
         
         // Navigate to the table view
         console.log(`[DEBUG] Navigating to table view...`);
@@ -1339,14 +1361,35 @@ async function joinWithSessionCode() {
 function showJoinQRScanner() {
     // Check if camera is available
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showToast('Camera not available on this device', 'error');
+        showToast('Camera not available on this device. Please use a modern browser.', 'error');
         return;
     }
     
-    // Check if HTTPS (required for camera access)
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        showToast('QR scanning requires HTTPS for camera access', 'error');
-        return;
+    // Check secure context (more comprehensive than just HTTPS)
+    if (!window.isSecureContext) {
+        const protocol = location.protocol;
+        const hostname = location.hostname;
+        
+        // Allow localhost and 127.0.0.1 for development
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+            console.log('Development environment detected, proceeding with camera access');
+        } else {
+            showToast('Camera requires HTTPS for security. Please use the HTTPS version of this site.', 'error');
+            return;
+        }
+    }
+    
+    // Check if permissions API is available for better permission handling
+    if ('permissions' in navigator) {
+        navigator.permissions.query({ name: 'camera' }).then((permissionStatus) => {
+            console.log('Camera permission status:', permissionStatus.state);
+            if (permissionStatus.state === 'denied') {
+                showToast('Camera permission denied. Please enable camera access in browser settings.', 'error');
+                return;
+            }
+        }).catch((error) => {
+            console.warn('Could not query camera permissions:', error);
+        });
     }
     
     // Create QR scanner modal
@@ -1424,6 +1467,22 @@ function showJoinQRScanner() {
                 Point your camera at a World Café QR code
             </p>
             
+            <div id="qrInstructions" style="
+                background: #f8f9fa;
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 16px;
+                font-size: 13px;
+                color: #555;
+                line-height: 1.4;
+            ">
+                📱 <strong>Tips for better scanning:</strong><br>
+                • Hold phone steady<br>
+                • Ensure good lighting<br>
+                • Keep QR code centered<br>
+                • Allow camera permissions when prompted
+            </div>
+            
             <div style="display: flex; gap: 12px; justify-content: center;">
                 <button onclick="closeQRScanner()" style="
                     background: #6c757d;
@@ -1480,32 +1539,125 @@ async function startQRCamera() {
     const video = document.getElementById('qrVideo');
     if (!video) return;
     
+    // Additional security context check for production
+    if (!window.isSecureContext) {
+        showToast('Camera requires secure context (HTTPS). Please use HTTPS version of the site.', 'error');
+        return;
+    }
+    
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'environment', // Use back camera if available
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            } 
-        });
+        // First check if we can enumerate devices (additional permission check)
+        let devices = [];
+        try {
+            devices = await navigator.mediaDevices.enumerateDevices();
+            console.log('Available devices:', devices.length);
+        } catch (e) {
+            console.warn('Could not enumerate devices:', e);
+        }
+        
+        // Progressive fallback constraints for better compatibility
+        const constraints = [
+            // First try: Ideal settings for QR scanning
+            {
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                } 
+            },
+            // Second try: Basic back camera
+            {
+                video: { 
+                    facingMode: 'environment',
+                    width: { min: 640 },
+                    height: { min: 480 }
+                } 
+            },
+            // Third try: Any camera with decent resolution
+            {
+                video: { 
+                    width: { min: 640 },
+                    height: { min: 480 }
+                } 
+            },
+            // Last resort: Any video
+            { video: true }
+        ];
+        
+        let stream = null;
+        let lastError = null;
+        
+        for (let i = 0; i < constraints.length; i++) {
+            try {
+                console.log(`Trying camera constraint ${i + 1}:`, constraints[i]);
+                stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
+                console.log('Camera stream acquired successfully');
+                break;
+            } catch (error) {
+                console.warn(`Camera constraint ${i + 1} failed:`, error.name, error.message);
+                lastError = error;
+                continue;
+            }
+        }
+        
+        if (!stream) {
+            throw lastError || new Error('All camera constraints failed');
+        }
         
         video.srcObject = stream;
-        video.play();
         
-        // Start scanning
-        startQRDetection();
-        showToast('Camera started - point at QR code', 'info');
+        // Wait for video to load before starting
+        return new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+                video.play().then(() => {
+                    console.log('Video playing, starting QR detection');
+                    startQRDetection();
+                    showToast('Camera started - point at QR code', 'success');
+                    resolve();
+                }).catch(error => {
+                    console.error('Video play failed:', error);
+                    showToast('Failed to start video playback', 'error');
+                    reject(error);
+                });
+            };
+            
+            video.onerror = (error) => {
+                console.error('Video error:', error);
+                showToast('Video error occurred', 'error');
+                reject(error);
+            };
+        });
         
     } catch (error) {
         console.error('Camera access error:', error);
         
-        if (error.name === 'NotAllowedError') {
-            showToast('Camera access denied. Please allow camera permissions and try again.', 'error');
-        } else if (error.name === 'NotFoundError') {
-            showToast('No camera found on this device', 'error');
-        } else {
-            showToast('Failed to start camera. Make sure you\'re on HTTPS and have camera permissions.', 'error');
+        let message = 'Camera access failed. ';
+        
+        switch (error.name) {
+            case 'NotAllowedError':
+                message += 'Please allow camera permissions in your browser settings and try again.';
+                break;
+            case 'NotFoundError':
+                message += 'No camera found on this device.';
+                break;
+            case 'NotSupportedError':
+                message += 'Camera not supported in this browser.';
+                break;
+            case 'NotReadableError':
+                message += 'Camera is being used by another application.';
+                break;
+            case 'OverconstrainedError':
+                message += 'Camera constraints could not be satisfied.';
+                break;
+            case 'SecurityError':
+                message += 'Security error - ensure you\'re on HTTPS and have proper permissions.';
+                break;
+            default:
+                message += `Error: ${error.message || 'Unknown error'}`;
         }
+        
+        showToast(message, 'error');
         
         // Close scanner on error
         setTimeout(closeQRScanner, 3000);
@@ -2429,7 +2581,7 @@ function setupAwesomeFilters(transcriptions) {
     // Populate table filter
     const tables = [...new Set(transcriptions.map(t => t.table_number))].sort((a, b) => a - b);
     tableFilter.innerHTML = '<option value="">🌐 All Tables</option>' +
-        tables.map(tableNum => `<option value="${tableNum}">🏓 Table ${tableNum}</option>`).join('');
+        tables.map(tableNum => `<option value="${tableNum}">📢 Table ${tableNum}</option>`).join('');
     
     // Add event listeners
     tableFilter.onchange = () => renderAwesomeTranscriptions(transcriptions);
@@ -2535,7 +2687,7 @@ function renderAwesomeTranscriptions(transcriptions) {
                         align-items: center;
                         gap: 8px;
                     ">
-                        <span style="font-size: 24px;">🏓</span>
+                        <span style="font-size: 24px;">📢</span>
                         Table ${tableNumber}
                     </h3>
                     <span style="
@@ -3240,7 +3392,7 @@ function displayTables(tables) {
                 border-radius: 12px;
                 border: 2px dashed #ddd;
             ">
-                <div style="font-size: 48px; margin-bottom: 16px;">🏓</div>
+                <div style="font-size: 48px; margin-bottom: 16px;">📢</div>
                 <h3 style="margin: 0 0 12px 0; color: #333; font-size: 20px;">No Tables Yet</h3>
                 <p style="margin: 0 0 24px 0; font-size: 14px;">Create your first table to start the World Café session</p>
                 <button onclick="showCreateTable()" style="
@@ -3312,7 +3464,7 @@ function displayTables(tables) {
                         align-items: center;
                         gap: 8px;
                     ">
-                        <span style="font-size: 20px;">🏓</span>
+                        <span style="font-size: 20px;">📢</span>
                         ${table.name || `Table ${table.table_number}`}
                     </h4>
                     <span style="
@@ -4027,16 +4179,31 @@ function detectQRCode(video) {
 function detectQRPattern(imageData) {
     if (typeof jsQR !== 'undefined') {
         try {
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (code) {
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert", // Faster processing
+            });
+            if (code && code.data) {
                 console.log('QR Code detected:', code.data);
-                return code.data;
+                
+                // Validate that it's a World Café QR code
+                if (code.data.includes(window.location.origin) || 
+                    code.data.includes('session=') || 
+                    code.data.includes('table=') ||
+                    code.data.match(/^[a-f0-9-]{36}$/)) { // UUID format
+                    return code.data;
+                } else {
+                    console.log('Non-World Café QR code detected, ignoring');
+                    return null;
+                }
             }
         } catch (error) {
             console.warn('QR detection error:', error);
         }
     } else {
-        console.warn('jsQR library not loaded');
+        // Fallback: Check if library loaded yet
+        if (document.readyState === 'complete') {
+            console.warn('jsQR library not available. QR scanning disabled.');
+        }
     }
     return null;
 }
@@ -4293,6 +4460,7 @@ async function joinCurrentTable() {
 }
 
 function setupTableInterface() {
+    console.log('[DEBUG] setupTableInterface called with currentTable:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
     if (!currentTable) return;
     
     // Update session info in header
@@ -4341,9 +4509,19 @@ function setupTableInterface() {
     // Update participants list
     const participantsList = document.getElementById('participantsList');
     if (currentTable.participants && currentTable.participants.length > 0) {
-        participantsList.innerHTML = currentTable.participants.map(p => 
-            `<li>${p.name} ${p.is_facilitator ? '(Facilitator)' : ''}</li>`
-        ).join('');
+        console.log(`[DEBUG] Processing ${currentTable.participants.length} participants for table ${currentTable.table_number}`);
+        const validParticipants = currentTable.participants.filter(p => p && p.name);
+        console.log(`[DEBUG] Valid participants: ${validParticipants.length}`);
+        
+        participantsList.innerHTML = validParticipants
+            .map(p => 
+                `<li>${p.name} ${p.is_facilitator ? '(Facilitator)' : ''}</li>`
+            ).join('');
+        
+        // Show "No participants yet" if all participants were filtered out
+        if (participantsList.innerHTML === '') {
+            participantsList.innerHTML = '<li>No participants yet</li>';
+        }
     } else {
         participantsList.innerHTML = '<li>No participants yet</li>';
     }
@@ -4814,7 +4992,7 @@ function displayTableAnalysisReport(analysisResult) {
     reportContent.innerHTML = `
         <div class="analysis-header">
             <h2>Table ${table_number} Analysis Report</h2>
-            <p class="analysis-scope">🏓 Table-Level Analysis</p>
+            <p class="analysis-scope">📢 Table-Level Analysis</p>
             <div class="analysis-meta">
                 <span>Table ID: ${table_id}</span>
                 <span>Generated: ${new Date().toLocaleString()}</span>
@@ -4929,7 +5107,7 @@ function displayTableAnalysisReport(analysisResult) {
         
         <div class="analysis-actions">
             <button onclick="viewSessionAnalysis()" class="btn btn-secondary">📊 View Session Analysis</button>
-            <button onclick="compareWithOtherTables()" class="btn btn-secondary">🏓 Compare Tables</button>
+            <button onclick="compareWithOtherTables()" class="btn btn-secondary">📢 Compare Tables</button>
         </div>
     `;
 }
@@ -5466,7 +5644,7 @@ function displaySessionAnalysisInDashboard(analysisResult) {
         
         <div class="analysis-actions-dashboard">
             <button onclick="viewFullSessionAnalysisReport()" class="btn btn-primary">📋 View Full Report</button>
-            <button onclick="viewTableAnalyses()" class="btn btn-secondary">🏓 Table Breakdown</button>
+            <button onclick="viewTableAnalyses()" class="btn btn-secondary">📢 Table Breakdown</button>
         </div>
     `;
 }

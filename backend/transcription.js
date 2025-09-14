@@ -21,7 +21,7 @@ class DeepgramSTT {
             
             const defaultOptions = {
                 model: 'nova-2',
-                language: 'en-US',
+                language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 diarize: true,
@@ -33,6 +33,7 @@ class DeepgramSTT {
                 ...options
             };
 
+            console.log(`🌍 Backend transcription language: ${defaultOptions.language}`);
             const { result, error } = await this.deepgram.listen.prerecorded.transcribeFile(
                 audioBuffer,
                 defaultOptions
@@ -53,7 +54,7 @@ class DeepgramSTT {
         try {
             const defaultOptions = {
                 model: 'nova-2',
-                language: 'en-US',
+                language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 diarize: true,
@@ -85,7 +86,7 @@ class DeepgramSTT {
         try {
             const defaultOptions = {
                 model: 'nova-2',
-                language: 'en-US',
+                language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 diarize: true,
