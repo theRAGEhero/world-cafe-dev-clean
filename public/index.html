@@ -1933,6 +1933,34 @@
                                         <p style="font-size: 12px; color: #999;">Start Recording, Upload Media, or use Live Transcription<br>Chat bubbles will appear here with speaker diarization</p>
                                     </div>
                                 </div>
+                                
+                                <!-- Audio Player Section -->
+                                <div style="margin-top: 20px;">
+                                    <h3 style="margin: 0 0 16px 0; font-size: 18px; color: #333; display: flex; align-items: center; gap: 8px;">
+                                        🎵 Table Recordings
+                                        <span id="recordingCountBadge" style="background: #007bff; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; font-weight: 500;">0</span>
+                                    </h3>
+                                    <div id="audioPlayerContainer" style="
+                                        background: #f8f9fa;
+                                        border-radius: 12px;
+                                        padding: 16px;
+                                        border: 1px solid #e9ecef;
+                                    ">
+                                        <div id="recordingsList" style="display: none;">
+                                            <!-- Audio players will be populated here -->
+                                        </div>
+                                        <div id="noRecordingsMessage" style="
+                                            text-align: center;
+                                            color: #666;
+                                            font-size: 14px;
+                                            padding: 20px;
+                                        ">
+                                            <div style="font-size: 24px; margin-bottom: 8px;">🎙️</div>
+                                            <p>No recordings available yet</p>
+                                            <p style="font-size: 12px; opacity: 0.7;">Recordings will appear here after transcription</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -2254,6 +2282,19 @@
                                     cursor: pointer;
                                     font-weight: 500;
                                 ">📥 Export All</button>
+                                
+                                <input type="file" id="importSessionFile" accept=".json" style="display: none;" onchange="importSession(event)">
+                                <button onclick="document.getElementById('importSessionFile').click()" style="
+                                    padding: 10px 16px;
+                                    background: #28a745;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 6px;
+                                    font-size: 14px;
+                                    cursor: pointer;
+                                    font-weight: 500;
+                                    margin-left: 8px;
+                                ">📤 Import Session</button>
                                 
                                 <button onclick="refreshTranscriptions()" style="
                                     padding: 10px 16px;
@@ -3356,6 +3397,11 @@
         let liveTranscriptionSocket;
         let liveTranscriptionStream;
         let liveTranscriptionMediaRecorder;
+        let liveTranscriptionSaveRecorder; // New: for saving audio to server
+        let liveTranscriptionAudioChunks = []; // New: collect audio chunks for saving
+        let liveTranscriptionStartTime = null; // New: track session start time
+        let liveTranscriptionSegments = []; // New: collect all transcription segments
+        let liveTranscriptionFullText = ''; // New: accumulate complete transcript
         let currentTranscriptionSpeaker = null;
         let currentTranscriptionBubble = null;
         const DEEPGRAM_API_KEY = '5c0e7b6e611060387891a21b4d309ac439d0a404';
@@ -3378,6 +3424,18 @@
                 // Request microphone access
                 liveTranscriptionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 liveTranscriptionMediaRecorder = new MediaRecorder(liveTranscriptionStream, { mimeType: 'audio/webm' });
+                
+                // New: Create second MediaRecorder for saving audio to server
+                try {
+                    liveTranscriptionSaveRecorder = new MediaRecorder(liveTranscriptionStream, { mimeType: 'audio/webm' });
+                    liveTranscriptionAudioChunks = [];
+                    liveTranscriptionStartTime = new Date();
+                    liveTranscriptionSegments = []; // Reset transcription collection
+                    liveTranscriptionFullText = '';
+                } catch (recorderError) {
+                    console.warn('Failed to create save recorder, continuing with real-time only:', recorderError);
+                    liveTranscriptionSaveRecorder = null;
+                }
 
                 // Build WebSocket URL with Deepgram using session language
                 const sessionLanguage = currentSession?.language || 'en-US';
@@ -3393,7 +3451,10 @@
                     console.log('Live Transcription WebSocket connected');
                     liveTranscriptionBtn.style.display = 'none';
                     stopTranscriptionBtn.style.display = 'flex';
-                    liveTranscriptionMediaRecorder.start(250); // Collect 250ms of audio at a time
+                    liveTranscriptionMediaRecorder.start(250); // Collect 250ms of audio at a time for real-time
+                    if (liveTranscriptionSaveRecorder) {
+                        liveTranscriptionSaveRecorder.start(1000); // Collect 1s chunks for saving
+                    }
                     // Clear initial message and prepare for bubbles
                     liveTranscriptEl.innerHTML = '';
                     liveTranscriptEl.style.border = 'none';
@@ -3404,7 +3465,8 @@
 
                 // Track processed words to avoid duplicates
                 let processedWordCount = 0;
-                let lastTranscriptText = '';
+                let lastFinalTranscript = '';
+                let isProcessingFinal = false;
                 
                 liveTranscriptionSocket.onmessage = (message) => {
                     try {
@@ -3417,11 +3479,18 @@
                                 is_final: data.is_final,
                                 words_count: alternative.words?.length || 0,
                                 transcript: alternative.transcript,
-                                speech_final: data.speech_final
+                                speech_final: data.speech_final,
+                                processedWordCount: processedWordCount
                             });
                             
+                            // Only process final results to avoid duplicates from interim results
+                            if (!data.is_final && !data.speech_final) {
+                                console.log('🎤 Skipping interim result to avoid duplicates');
+                                return;
+                            }
+                            
                             if (alternative.words && alternative.words.length > 0) {
-                                // Only process new words to avoid duplicates
+                                // Only process truly new words since last final result
                                 const newWords = alternative.words.slice(processedWordCount);
                                 
                                 if (newWords.length === 0) {
@@ -3429,10 +3498,8 @@
                                     return;
                                 }
                                 
-                                // Update processed word count only for final results
-                                if (data.is_final || data.speech_final) {
-                                    processedWordCount = alternative.words.length;
-                                }
+                                // Update processed word count for final results
+                                processedWordCount = alternative.words.length;
                                 
                                 console.log('🎤 Processing', newWords.length, 'new words:', newWords.map(w => w.word));
                                 
@@ -3481,6 +3548,14 @@
                                         },
                                         source: 'live-transcription'
                                     });
+                                    
+                                    // Collect segments for database storage
+                                    speakers.forEach(segment => {
+                                        liveTranscriptionSegments.push(segment);
+                                        liveTranscriptionFullText += segment.text + ' ';
+                                    });
+                                    
+                                    console.log(`📝 Collected ${speakers.length} segments. Total segments: ${liveTranscriptionSegments.length}`);
                                 }
                                 
                                 // Reset word count if we get a new speech segment
@@ -3514,6 +3589,17 @@
                     }
                 };
 
+                // New: Save audio chunks for server upload
+                if (liveTranscriptionSaveRecorder) {
+                    liveTranscriptionSaveRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            liveTranscriptionAudioChunks.push(event.data);
+                            console.log(`📼 Collected audio chunk: ${event.data.size} bytes, total chunks: ${liveTranscriptionAudioChunks.length}`);
+                        }
+                    };
+                    liveTranscriptionSaveRecorder.onstop = saveLiveTranscriptionAudio;
+                }
+
                 liveTranscriptionMediaRecorder.onstop = cleanupLiveTranscription;
 
             } catch (error) {
@@ -3526,6 +3612,104 @@
         function stopLiveTranscription() {
             if (liveTranscriptionMediaRecorder) {
                 liveTranscriptionMediaRecorder.stop();
+            }
+            if (liveTranscriptionSaveRecorder) {
+                liveTranscriptionSaveRecorder.stop();
+            }
+        }
+
+        async function saveLiveTranscriptionAudio() {
+            if (liveTranscriptionAudioChunks.length === 0) {
+                console.log('📼 No audio chunks to save');
+                return;
+            }
+            
+            try {
+                console.log(`📼 Saving ${liveTranscriptionAudioChunks.length} audio chunks to server`);
+                
+                // Create complete audio blob from chunks
+                const audioBlob = new Blob(liveTranscriptionAudioChunks, { type: 'audio/webm' });
+                const duration = (new Date() - liveTranscriptionStartTime) / 1000; // Duration in seconds
+                
+                // Generate filename
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `live-transcription-${currentSession.id}-table-${currentTableNumber}-${timestamp}.webm`;
+                
+                // Create FormData for upload
+                const formData = new FormData();
+                formData.append('audio', audioBlob, filename);
+                formData.append('sessionId', currentSession.id);
+                formData.append('tableId', currentTableId);
+                formData.append('tableNumber', currentTableNumber);
+                formData.append('duration', duration.toString());
+                formData.append('source', 'live-transcription');
+                
+                console.log(`📼 Uploading live transcription audio: ${filename}, ${audioBlob.size} bytes, ${duration.toFixed(2)}s`);
+                
+                // Upload to server
+                const response = await fetch('/api/recordings/live-transcription', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('📼 Live transcription audio saved successfully:', result);
+                    
+                    // Now save the transcription text if we have segments
+                    if (liveTranscriptionSegments.length > 0 && result.recordingId) {
+                        try {
+                            console.log(`📝 Saving transcription with ${liveTranscriptionSegments.length} segments`);
+                            
+                            const transcriptionResponse = await fetch('/api/transcriptions', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    recordingId: result.recordingId,
+                                    sessionId: currentSession.id,
+                                    tableId: currentTableId,
+                                    transcriptText: liveTranscriptionFullText.trim(),
+                                    speakerSegments: liveTranscriptionSegments,
+                                    confidenceScore: 0.95, // Average confidence for live transcription
+                                    source: 'live-transcription'
+                                })
+                            });
+                            
+                            if (transcriptionResponse.ok) {
+                                const transcriptionResult = await transcriptionResponse.json();
+                                console.log('📝 Live transcription text saved successfully:', transcriptionResult);
+                            } else {
+                                console.error('📝 Failed to save live transcription text:', transcriptionResponse.statusText);
+                            }
+                        } catch (transcriptionError) {
+                            console.error('📝 Error saving live transcription text:', transcriptionError);
+                        }
+                    }
+                    
+                    // Update recording counter
+                    updateTableRecordingCount();
+                    
+                    // Refresh recordings display if on table page
+                    if (typeof loadTableRecordings === 'function') {
+                        loadTableRecordings();
+                    }
+                    
+                    // Refresh transcriptions display if on table page
+                    if (typeof loadExistingTranscriptions === 'function') {
+                        loadExistingTranscriptions();
+                    }
+                } else {
+                    console.error('📼 Failed to save live transcription audio:', response.statusText);
+                }
+            } catch (error) {
+                console.error('📼 Error saving live transcription audio:', error);
+            } finally {
+                // Clear audio chunks and transcription data regardless of success/failure
+                liveTranscriptionAudioChunks = [];
+                liveTranscriptionSegments = [];
+                liveTranscriptionFullText = '';
             }
         }
 
@@ -3540,6 +3724,10 @@
             stopTranscriptionBtn.style.display = 'none';
             currentTranscriptionSpeaker = null;
             currentTranscriptionBubble = null;
+            
+            // Clean up save recorder variables (but don't clear chunks/segments until save completes)
+            liveTranscriptionSaveRecorder = null;
+            liveTranscriptionStartTime = null;
         }
 
     </script>

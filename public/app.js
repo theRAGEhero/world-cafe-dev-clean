@@ -288,6 +288,8 @@ function displayExistingTranscriptions(transcriptions) {
                 } else if (Array.isArray(transcription.speaker_segments)) {
                     speakers = transcription.speaker_segments;
                 }
+                console.log('📝 Upload Media - Parsed speaker segments:', speakers.length, 'segments for transcription:', transcription.id);
+                console.log('📝 First segment example:', speakers[0]);
             }
             // Fallback to speakers field (legacy)
             else if (transcription.speakers) {
@@ -296,6 +298,10 @@ function displayExistingTranscriptions(transcriptions) {
                 } else if (Array.isArray(transcription.speakers)) {
                     speakers = transcription.speakers;
                 }
+                console.log('📝 Upload Media - Using legacy speakers field:', speakers.length, 'segments');
+            }
+            else {
+                console.log('📝 Upload Media - No speaker segments found for transcription:', transcription.id);
             }
         } catch (e) {
             console.error('Error parsing speaker segments:', e);
@@ -309,7 +315,12 @@ function displayExistingTranscriptions(transcriptions) {
         
         if (speakers && speakers.length > 0) {
             // Consolidate consecutive speaker segments
+            console.log('📝 Upload Media - Consolidating', speakers.length, 'speaker segments');
             const consolidatedSpeakers = consolidateSpeakerSegments(speakers);
+            console.log('📝 Upload Media - After consolidation:', consolidatedSpeakers.length, 'segments');
+            if (consolidatedSpeakers.length > 0) {
+                console.log('📝 Upload Media - Consolidated example:', consolidatedSpeakers[0]);
+            }
             
             // Check if there's actually multiple speakers
             const uniqueSpeakers = new Set(consolidatedSpeakers.map(s => s.speaker));
@@ -333,6 +344,7 @@ function displayExistingTranscriptions(transcriptions) {
             `;
             }).join('');
         } else {
+            console.log('📝 Upload Media - No speakers found, using fallback transcript for:', transcription.id);
             // Display without diarization - ensure we get text, not object
             const transcriptText = (typeof transcription.transcript === 'string' ? transcription.transcript : null) ||
                                  (typeof transcription.transcript_text === 'string' ? transcription.transcript_text : null) ||
@@ -440,6 +452,8 @@ function initializeSocket() {
         console.log('📝 Received transcription-completed event:', data);
         displayTranscription(data);
         updateTableTranscriptionCount(data.tableId);
+        // Refresh recordings list to show new recording
+        loadTableRecordings();
     });
 }
 
@@ -717,6 +731,10 @@ function showTableInterface(tableId) {
         currentTable = foundTable;
         if (currentTable) {
             setupTableInterface();
+            
+            // Load existing transcriptions and recordings
+            loadExistingTranscriptions();
+            loadTableRecordings();
             
             // Nuclear isolation approach - hide all other screens
             document.querySelectorAll('.screen').forEach(screen => {
@@ -2874,21 +2892,120 @@ async function refreshTranscriptions() {
     }
 }
 
-function exportAllTranscriptions() {
-    if (!currentSession) return;
+async function exportAllTranscriptions() {
+    if (!currentSession) {
+        alert('No session loaded');
+        return;
+    }
     
-    const allTranscriptionsList = document.getElementById('allTranscriptionsList');
-    const transcriptionsText = allTranscriptionsList.innerText;
+    try {
+        showLoading();
+        
+        // Get complete session data with transcriptions
+        const response = await fetch(`/api/sessions/${currentSession.id}`);
+        if (!response.ok) throw new Error('Failed to fetch session data');
+        
+        const sessionData = await response.json();
+        
+        // Get all transcriptions
+        const transcriptionsResponse = await fetch(`/api/sessions/${currentSession.id}/all-transcriptions`);
+        if (!transcriptionsResponse.ok) throw new Error('Failed to fetch transcriptions');
+        
+        const transcriptions = await transcriptionsResponse.json();
+        
+        // Create export object with complete session backup
+        const exportData = {
+            exportVersion: '1.0',
+            exportDate: new Date().toISOString(),
+            session: sessionData,
+            transcriptions: transcriptions,
+            metadata: {
+                totalTranscriptions: transcriptions.length,
+                totalTables: sessionData.tables?.length || 0,
+                totalParticipants: sessionData.total_participants || 0,
+                totalRecordings: sessionData.total_recordings || 0
+            }
+        };
+        
+        // Create and download JSON file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentSession.title.replace(/[^a-z0-9]/gi, '_')}_complete_export_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert(`Session exported successfully!\nIncluded: ${exportData.metadata.totalTranscriptions} transcriptions, ${exportData.metadata.totalTables} tables`);
+        
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export session data. Please try again.');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function importSession(event) {
+    const file = event.target.files[0];
+    if (!file) return;
     
-    const blob = new Blob([transcriptionsText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentSession.title}_all_transcriptions.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (!file.name.endsWith('.json')) {
+        alert('Please select a valid JSON export file');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        // Validate export format
+        if (!importData.exportVersion || !importData.session || !importData.transcriptions) {
+            alert('Invalid export file format. Please select a valid session export.');
+            return;
+        }
+        
+        // Confirm import
+        const confirmMsg = `Import Session: "${importData.session.title}"?\n\nThis will create a new session with:\n• ${importData.metadata.totalTranscriptions} transcriptions\n• ${importData.metadata.totalTables} tables\n• ${importData.metadata.totalParticipants} participants data\n\nContinue?`;
+        
+        if (!confirm(confirmMsg)) return;
+        
+        // Send import request to backend
+        const response = await fetch('/api/sessions/import', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(importData)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Import failed');
+        }
+        
+        const result = await response.json();
+        
+        alert(`Session imported successfully!\nNew Session ID: ${result.sessionId}\nTitle: "${result.title}"\n\nRedirecting to imported session...`);
+        
+        // Redirect to imported session
+        currentSession = result;
+        showScreen('sessionDashboard');
+        await loadSessionDashboard(result.sessionId);
+        await loadActiveSessions(); // Refresh sessions list
+        
+    } catch (error) {
+        console.error('Import error:', error);
+        alert(`Import failed: ${error.message}`);
+    } finally {
+        hideLoading();
+        // Clear file input
+        event.target.value = '';
+    }
 }
 
 // AI Analysis Functions
@@ -4614,10 +4731,20 @@ async function uploadAudio(audioBlob) {
             // Update recording status
             updateRecordingStatus({ status: 'processing', timestamp: new Date() });
             
+            // Update recording counter immediately
+            if (currentTable) {
+                updateTableRecordingCount(currentTable.id);
+            }
+            
             // Refresh the dashboard to update the recording count
             if (currentSession) {
                 loadSessionDashboard(currentSession.id);
             }
+            
+            // Refresh recordings list after a delay
+            setTimeout(() => {
+                loadTableRecordings();
+            }, 2000);
         } else {
             const error = await response.json();
             console.error(`Upload failed: ${error.error}`);
@@ -4805,6 +4932,129 @@ function updateTableTranscriptionCount(tableId) {
             }
         }
     });
+}
+
+function updateTableRecordingCount(tableId) {
+    // Update the table card's recording count (🎤 icon)
+    const tableCards = document.querySelectorAll('.table-card');
+    tableCards.forEach(card => {
+        if (card.onclick.toString().includes(tableId)) {
+            // Find the recording stat (🎤 icon - second stat-item)
+            const recordingStat = card.querySelector('.stat-item:nth-child(2) span:last-child');
+            if (recordingStat) {
+                const currentCount = parseInt(recordingStat.textContent) || 0;
+                recordingStat.textContent = currentCount + 1;
+            }
+        }
+    });
+}
+
+// Audio Player Functions
+async function loadTableRecordings() {
+    if (!currentSession || !currentTable) return;
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/tables/${currentTable.table_number}/recordings`);
+        if (response.ok) {
+            const recordings = await response.json();
+            displayTableRecordings(recordings);
+        }
+    } catch (error) {
+        console.error('Error loading table recordings:', error);
+    }
+}
+
+function displayTableRecordings(recordings) {
+    const recordingsList = document.getElementById('recordingsList');
+    const noRecordingsMessage = document.getElementById('noRecordingsMessage');
+    const recordingCountBadge = document.getElementById('recordingCountBadge');
+    
+    if (!recordingsList) return;
+    
+    // Update badge count
+    if (recordingCountBadge) {
+        recordingCountBadge.textContent = recordings.length;
+    }
+    
+    if (recordings.length === 0) {
+        recordingsList.style.display = 'none';
+        noRecordingsMessage.style.display = 'block';
+        return;
+    }
+    
+    noRecordingsMessage.style.display = 'none';
+    recordingsList.style.display = 'block';
+    recordingsList.innerHTML = '';
+    
+    recordings.forEach((recording, index) => {
+        const recordingItem = document.createElement('div');
+        recordingItem.style.cssText = `
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        `;
+        
+        const createdAt = new Date(recording.created_at).toLocaleString();
+        const duration = recording.duration_seconds ? `${Math.round(recording.duration_seconds)}s` : '';
+        const fileSize = recording.file_size ? formatFileSize(recording.file_size) : '';
+        
+        recordingItem.innerHTML = `
+            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
+                <div>
+                    <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #333;">
+                        🎙️ Recording ${index + 1}
+                    </h4>
+                    <div style="font-size: 12px; color: #666;">
+                        ${createdAt} ${duration ? `• ${duration}` : ''} ${fileSize ? `• ${fileSize}` : ''}
+                    </div>
+                </div>
+                <div style="font-size: 12px; padding: 4px 8px; background: #e9ecef; border-radius: 12px; color: #666;">
+                    ${recording.status}
+                </div>
+            </div>
+            
+            <audio controls style="width: 100%; margin-bottom: 8px;" preload="metadata">
+                <source src="/recordings/${recording.filename}" type="${recording.mime_type || 'audio/wav'}">
+                <source src="/recordings/${recording.filename}" type="audio/wav">
+                <source src="/recordings/${recording.filename}" type="audio/webm">
+                Your browser does not support the audio element.
+            </audio>
+            
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button onclick="downloadRecording('${recording.filename}')" style="
+                    padding: 6px 12px;
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    color: #6c757d;
+                ">📥 Download</button>
+            </div>
+        `;
+        
+        recordingsList.appendChild(recordingItem);
+    });
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function downloadRecording(filename) {
+    const link = document.createElement('a');
+    link.href = `/recordings/${filename}`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // Analysis and reporting
@@ -6710,6 +6960,17 @@ async function uploadMediaFile(file) {
         
         // Update recording status
         updateRecordingStatus({ status: 'processing', timestamp: new Date() });
+        
+        // Update recording counter immediately
+        if (currentTable) {
+            updateTableRecordingCount(currentTable.id);
+        }
+        
+        // Refresh transcriptions and recordings to show any completed ones
+        setTimeout(() => {
+            loadExistingTranscriptions();
+            loadTableRecordings();
+        }, 2000);
         
         // Hide upload progress after 3 seconds
         setTimeout(() => {

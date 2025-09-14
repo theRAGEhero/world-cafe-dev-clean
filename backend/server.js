@@ -45,6 +45,7 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/recordings', express.static(path.join(__dirname, '../uploads')));
 app.use('/qr-codes', express.static(path.join(__dirname, 'public/qr-codes')));
 
 // Platform password protection middleware  
@@ -410,6 +411,144 @@ app.post('/api/sessions', async (req, res) => {
   } catch (error) {
     console.error('Error creating session:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Session import endpoint
+app.post('/api/sessions/import', async (req, res) => {
+  try {
+    const importData = req.body;
+    
+    // Validate import data
+    if (!importData.exportVersion || !importData.session || !importData.transcriptions) {
+      return res.status(400).json({ error: 'Invalid import data format' });
+    }
+    
+    if (!await db.isHealthy()) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    
+    const originalSession = importData.session;
+    const transcriptions = importData.transcriptions;
+    
+    // Generate new session ID to avoid conflicts
+    const newSessionId = uuidv4();
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
+    
+    // Create new session with imported data
+    const adminPassword = PasswordUtils.generatePassword(8);
+    const adminPasswordHash = PasswordUtils.hashPassword(adminPassword);
+    
+    const sessionData = {
+      title: `${originalSession.title} (Imported)`,
+      description: originalSession.description || `Imported session from ${importData.exportDate}`,
+      language: originalSession.language || 'en-US',
+      tableCount: originalSession.table_count || 10,
+      admin_password: adminPassword,
+      admin_password_hash: adminPasswordHash,
+      session_duration: originalSession.session_duration || 120,
+      rotation_enabled: originalSession.rotation_enabled || 0,
+      recording_enabled: originalSession.recording_enabled || 1,
+      max_participants: originalSession.max_participants || 100
+    };
+    
+    try {
+      // Create the session
+      const newSession = await Session.create(sessionData);
+      
+      // Create tables for the session
+      await Table.createTablesForSession(newSession.id, sessionData.tableCount);
+      
+      // Import participants if any
+      if (originalSession.tables) {
+        for (const table of originalSession.tables) {
+          if (table.participants && Array.isArray(table.participants)) {
+            for (const participant of table.participants) {
+              if (participant && participant.id && participant.name) {
+                try {
+                  await Participant.create({
+                    id: uuidv4(), // Generate new participant ID
+                    session_id: newSession.id,
+                    table_id: table.id,
+                    name: participant.name,
+                    is_facilitator: participant.is_facilitator || 0,
+                    joined_at: new Date()
+                  });
+                } catch (participantError) {
+                  console.warn('Failed to import participant:', participantError.message);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Import transcriptions
+      const Transcription = require('./database/models/Transcription');
+      const Recording = require('./database/models/Recording');
+      
+      for (const transcription of transcriptions) {
+        try {
+          // Create mock recording entry first using proper Recording.create method
+          const recordingInstance = new Recording();
+          const recording = await recordingInstance.create({
+            sessionId: newSession.id,
+            tableId: transcription.table_id || 1,
+            participantId: null,
+            filename: transcription.filename || `imported_${Date.now()}.wav`,
+            filePath: 'imported',
+            fileSize: 0,
+            duration: parseFloat(transcription.duration_seconds) || 0,
+            mimeType: 'audio/wav'
+          });
+          
+          // Update status to processed
+          await recordingInstance.updateStatus(recording.id, 'processed');
+          
+          // Create transcription
+          const transcriptionInstance = new Transcription();
+          await transcriptionInstance.create({
+            id: uuidv4(),
+            session_id: newSession.id,
+            table_id: transcription.table_id || 1,
+            recording_id: recording.id,
+            transcript_text: transcription.transcript_text || '',
+            confidence_score: parseFloat(transcription.confidence_score) || 0.9,
+            language: transcription.language || sessionData.language || 'en-US',
+            word_count: parseInt(transcription.word_count) || 0,
+            speaker_segments: JSON.stringify(transcription.speaker_segments || []),
+            timestamps: JSON.stringify(transcription.timestamps || [])
+          });
+        } catch (transcriptionError) {
+          console.warn('Failed to import transcription:', transcriptionError.message);
+        }
+      }
+      
+      // Generate QR codes for new session
+      await QRCode.generateSessionQRs(newSession.id, sessionData.tableCount, baseUrl);
+      
+      // Get complete session with stats
+      const importedSession = await Session.findWithStats(newSession.id);
+      
+      res.json({
+        sessionId: newSession.id,
+        title: importedSession.title,
+        success: true,
+        imported: {
+          transcriptions: transcriptions.length,
+          tables: sessionData.tableCount,
+          originalExportDate: importData.exportDate
+        },
+        ...importedSession
+      });
+      
+    } catch (error) {
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Import error:', error);
+    res.status(500).json({ error: `Import failed: ${error.message}` });
   }
 });
 
@@ -948,6 +1087,209 @@ app.get('/api/sessions/:sessionId/tables/:tableNumber', async (req, res) => {
   } catch (error) {
     console.error('Error fetching table:', error);
     res.status(500).json({ error: 'Failed to fetch table data' });
+  }
+});
+
+// Get recordings for a specific table
+app.get('/api/sessions/:sessionId/tables/:tableNumber/recordings', async (req, res) => {
+  try {
+    const { sessionId, tableNumber } = req.params;
+    
+    // Find the table
+    const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    
+    // Get recordings for this table
+    const recordings = await Recording.findByTableId(table.id);
+    
+    res.json(recordings);
+  } catch (error) {
+    console.error('Error fetching table recordings:', error);
+    res.status(500).json({ error: 'Failed to fetch recordings' });
+  }
+});
+
+// Live Transcription audio save endpoint
+app.post('/api/recordings/live-transcription', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+    
+    const { sessionId, tableId, tableNumber, duration, source } = req.body;
+    
+    if (!sessionId || !tableId || !tableNumber) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    
+    const audioPath = req.file.path;
+    const fileStats = fs.statSync(audioPath);
+    
+    console.log(`💾 Saving live transcription audio: ${req.file.filename}, ${fileStats.size} bytes, ${duration}s`);
+    
+    // Create recording record with live-transcription source
+    const recordingModel = new Recording();
+    const recording = await recordingModel.create({
+      sessionId,
+      tableId,
+      filename: req.file.filename,
+      filePath: audioPath,
+      fileSize: fileStats.size,
+      duration: parseFloat(duration) || null,
+      mimeType: req.file.mimetype || 'audio/webm'
+    });
+    
+    console.log(`💾 Live transcription recording saved with ID: ${recording.id}`);
+    
+    res.json({
+      success: true,
+      recordingId: recording.id,
+      filename: req.file.filename,
+      fileSize: fileStats.size,
+      duration: parseFloat(duration) || null,
+      message: 'Live transcription audio saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error saving live transcription audio:', error);
+    res.status(500).json({ 
+      error: 'Failed to save live transcription audio',
+      details: error.message
+    });
+  }
+});
+
+// Create transcription record endpoint (for Live Transcription)
+app.post('/api/transcriptions', async (req, res) => {
+  try {
+    const { recordingId, sessionId, tableId, transcriptText, speakerSegments, confidenceScore, source } = req.body;
+    
+    if (!recordingId || !sessionId || !tableId || !transcriptText) {
+      return res.status(400).json({ error: 'Missing required transcription parameters' });
+    }
+    
+    console.log(`📝 Creating transcription record for recording ${recordingId}, ${transcriptText.length} chars, ${speakerSegments?.length || 0} segments`);
+    
+    // Create transcription record
+    const transcriptionModel = new Transcription();
+    const transcription = await transcriptionModel.create({
+      recordingId: recordingId,
+      sessionId: sessionId,
+      tableId: tableId,
+      transcriptText: transcriptText,
+      speakerSegments: speakerSegments || [],
+      confidenceScore: parseFloat(confidenceScore) || 0.9
+    });
+    
+    console.log(`📝 Transcription record created with ID: ${transcription.id}`);
+    
+    res.json({
+      success: true,
+      transcriptionId: transcription.id,
+      recordingId: recordingId,
+      wordCount: transcription.word_count,
+      message: 'Transcription saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error creating transcription record:', error);
+    res.status(500).json({ 
+      error: 'Failed to create transcription record',
+      details: error.message
+    });
+  }
+});
+
+// Reprocess Live Transcription audio endpoint (for failed transcriptions)
+app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    // Find the recording
+    const recordingModel = new Recording();
+    const recording = await recordingModel.findWithTranscription(recordingId);
+    
+    if (!recording) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(recording.file_path)) {
+      return res.status(404).json({ error: 'Audio file not found on disk' });
+    }
+    
+    // Find the session to get language setting
+    const session = await Session.findById(recording.session_id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    console.log(`🔄 Reprocessing audio for recording ${recordingId}: ${recording.filename}`);
+    
+    // Mark as processing
+    await recordingModel.markProcessing(recordingId);
+    
+    try {
+      // Reprocess transcription
+      const transcriptionOptions = { language: session.language || 'en-US' };
+      const transcriptionResult = await transcriptionService.transcribeFile(recording.file_path, transcriptionOptions);
+      
+      // Extract duration if available
+      const duration = transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.words?.slice(-1)?.[0]?.end || 0;
+      if (duration > 0) {
+        await recordingModel.updateDuration(recordingId, duration);
+      }
+      
+      // Create new transcription record (if none exists) or update existing
+      const transcriptionModel = new Transcription();
+      let transcription;
+      
+      if (recording.transcription_id) {
+        // Update existing transcription
+        transcription = await transcriptionModel.update(recording.transcription_id, {
+          transcript_text: transcriptionService.extractTranscript(transcriptionResult),
+          speaker_segments: JSON.stringify(transcriptionService.extractSpeakerSegments(transcriptionResult)),
+          confidence_score: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0,
+          updated_at: new Date()
+        });
+      } else {
+        // Create new transcription
+        transcription = await transcriptionModel.create({
+          recordingId: recordingId,
+          sessionId: recording.session_id,
+          tableId: recording.table_id,
+          transcriptText: transcriptionService.extractTranscript(transcriptionResult),
+          speakerSegments: transcriptionService.extractSpeakerSegments(transcriptionResult),
+          confidenceScore: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0
+        });
+      }
+      
+      // Mark recording as completed
+      await recordingModel.markCompleted(recordingId);
+      
+      console.log(`🔄 Reprocessing completed for recording ${recordingId}`);
+      
+      res.json({
+        success: true,
+        recordingId: recordingId,
+        transcriptionId: transcription.id,
+        message: 'Recording reprocessed successfully'
+      });
+      
+    } catch (transcriptionError) {
+      console.error('Transcription reprocessing failed:', transcriptionError);
+      await recordingModel.markFailed(recordingId);
+      throw transcriptionError;
+    }
+    
+  } catch (error) {
+    console.error('Error reprocessing recording:', error);
+    res.status(500).json({ 
+      error: 'Failed to reprocess recording',
+      details: error.message
+    });
   }
 });
 
