@@ -41,7 +41,7 @@ docker-compose logs -f app
 ```
 
 ### 3. Access the Platform
-- **Web Interface**: http://localhost:3005
+- **Web Interface**: http://localhost:3005 (development) or http://localhost (production)
 - **Admin Panel**: Use the admin password from your .env file
 - **API Health**: http://localhost:3005/api/admin/settings/status
 
