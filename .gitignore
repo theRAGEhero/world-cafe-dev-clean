@@ -39,3 +39,6 @@ test_diarization.js
 mysql_data/
 qr_data/
 uploads_data/
+
+# Docker image exports
+exports/

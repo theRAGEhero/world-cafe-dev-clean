@@ -37,17 +37,35 @@ nano .env
 
 ### 3. Deploy with Docker
 
-#### For Development:
+#### Option A: Build from Source (Development)
 ```bash
 docker-compose up -d
 ```
 Access at: http://localhost:3005
 
-#### For Production:
+#### Option B: Use Pre-built Images (Recommended for Production)
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+# Using Docker Hub (Development - port 3005)
+docker-compose -f docker-compose.hub.yml up -d
+
+# Using Docker Hub (Production - port 80)
+docker-compose -f docker-compose.hub.prod.yml up -d
+
+# Using GitHub Container Registry
+docker-compose -f docker-compose.ghcr.yml up -d
 ```
-Access at: http://localhost (port 80)
+
+#### Option C: Import Pre-built Image
+```bash
+# On development server - export the image
+./scripts/export-image.sh
+
+# Copy exports/world-cafe-platform.tar.gz to production server
+# On production server - import and deploy
+docker load < world-cafe-platform.tar.gz
+docker tag world-cafe-dev-clean-app:latest world-cafe-platform:latest
+docker-compose -f docker-compose.exported.yml up -d
+```
 
 ### 4. Verify Deployment
 ```bash
@@ -57,6 +75,31 @@ docker ps
 # Check application health
 curl http://localhost/api/admin/settings/status
 ```
+
+## Docker Image Consistency
+
+### Why Images Differ Between Environments
+
+When you clone the repository and run `docker-compose build`, each server creates a **different Docker image** because:
+
+- **Build timestamps** create unique layer IDs
+- **Node.js dependencies** may have different versions
+- **Build context** includes different files or states
+
+### Solution: Use Identical Images
+
+**Option 1: GitHub Container Registry (Automated)**
+- Push code to GitHub → Automatic image build → Pull same image everywhere
+- Uses `.github/workflows/docker-publish.yml`
+
+**Option 2: Docker Hub (Manual)**
+- Build once, push to Docker Hub, pull everywhere
+- Requires Docker Hub account
+
+**Option 3: Export/Import (Simple)**
+- Export image from dev server: `./scripts/export-image.sh`
+- Copy tar.gz file to production server
+- Import and deploy with identical image
 
 ## Detailed Configuration
 

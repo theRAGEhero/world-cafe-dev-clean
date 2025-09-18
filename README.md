@@ -20,8 +20,8 @@ A digital platform for World Café discussion sessions with real-time recording,
 
 ### 1. Clone & Configure
 ```bash
-git clone <repository-url>
-cd world-cafe-platform
+git clone https://github.com/alexdoit/world-cafe-dev-clean.git
+cd world-cafe-dev-clean
 
 # Copy and configure environment variables
 cp .env.example .env
@@ -30,8 +30,14 @@ cp .env.example .env
 
 ### 2. Deploy with Docker
 ```bash
-# Start the platform (MySQL + App)
+# Option A: Build from source (Development)
 docker-compose up -d
+
+# Option B: Use pre-built image (Recommended)
+docker-compose -f docker-compose.hub.yml up -d
+
+# Option C: Production deployment (port 80)
+docker-compose -f docker-compose.hub.prod.yml up -d
 
 # Check status
 docker-compose ps
