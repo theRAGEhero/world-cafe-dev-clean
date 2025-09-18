@@ -13,6 +13,14 @@ class LLMAnalysisService {
     // Default model - using Llama 3.3 70B for high-quality analysis
     this.model = 'llama-3.3-70b-versatile';
     
+    // Model-specific token limits
+    this.modelLimits = {
+      'llama-3.3-70b-versatile': 12000,
+      'llama-3.1-70b-versatile': 128000,
+      'llama-3.1-8b-instant': 128000,
+      'mixtral-8x7b-32768': 32768
+    };
+    
     // Analysis prompts - configurable by admin
     this.prompts = {
       conflictDetection: {
@@ -46,77 +54,102 @@ class LLMAnalysisService {
     this.prompts = { ...this.prompts, ...newPrompts };
   }
 
+  estimateTokenCount(text) {
+    // Rough estimation: average 4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+
+  truncateTranscripts(transcripts, maxTokens) {
+    // Truncate transcripts to fit within token limit
+    const maxChars = maxTokens * 4;
+    let currentChars = 0;
+    const truncatedTranscripts = [];
+    
+    for (const transcriptItem of transcripts) {
+      const tableInfo = `\n\n--- Table ${transcriptItem.tableId} ---\n`;
+      const transcriptText = transcriptItem.transcript || '';
+      const speakerInfo = transcriptItem.speakers ? 
+        transcriptItem.speakers.map(s => `Speaker ${s.speaker}: ${s.text || s.transcript || ''}`).join('\n') :
+        transcriptText;
+      
+      const fullText = tableInfo + speakerInfo;
+      
+      if (currentChars + fullText.length > maxChars) {
+        // Add truncated version if we have space
+        const remainingChars = maxChars - currentChars - tableInfo.length;
+        if (remainingChars > 100) { // Only if meaningful content can fit
+          const truncatedContent = speakerInfo.substring(0, remainingChars - 50) + '... [truncated]';
+          truncatedTranscripts.push({
+            ...transcriptItem,
+            transcript: truncatedContent,
+            speakers: null // Simplify structure
+          });
+        }
+        break;
+      }
+      
+      truncatedTranscripts.push(transcriptItem);
+      currentChars += fullText.length;
+    }
+    
+    return truncatedTranscripts;
+  }
+
+  buildCombinedText(transcripts) {
+    return transcripts.map(t => {
+      const tableInfo = `\n\n--- Table ${t.tableId} ---\n`;
+      const transcriptText = t.transcript || '';
+      const speakerInfo = t.speakers && t.speakers.length > 0 ? 
+        t.speakers.map(s => `Speaker ${s.speaker}: ${s.transcript || s.text || ''}`).join('\n') :
+        transcriptText;
+      
+      return tableInfo + speakerInfo;
+    }).join('\n');
+  }
+
+  buildSystemPrompt(analysisType) {
+    return `You are an expert facilitator and conversation analyst specializing in World Café methodology. Your task is to analyze discussion transcripts and provide insightful, actionable analysis.
+
+Please provide your response in valid JSON format based on the analysis type: ${analysisType}
+
+Keep responses concise but insightful. If content is truncated, provide the best analysis possible with available data.`;
+  }
+
   async analyzeWithLLM(prompt, transcripts, analysisType) {
     try {
-      // Combine all transcripts into a single text for analysis
-      const combinedText = transcripts.map(t => {
-        const tableInfo = `\n\n--- Table ${t.tableId} ---\n`;
-        const transcript = t.transcript || '';
-        const speakerInfo = t.speakers ? 
-          t.speakers.map(s => `Speaker ${s.speaker}: ${s.transcript}`).join('\n') :
-          transcript;
+      const maxTokens = this.modelLimits[this.model] || 12000;
+      const reservedTokens = 3000; // Reserve for response and system prompt
+      const availableTokens = maxTokens - reservedTokens;
+      
+      console.log(`[LLM Analysis] Starting ${analysisType} with available tokens: ${availableTokens}`);
+      
+      // Check if we need to truncate transcripts
+      let workingTranscripts = transcripts;
+      const systemPromptSize = this.estimateTokenCount(this.buildSystemPrompt(analysisType));
+      const maxTranscriptTokens = availableTokens - systemPromptSize - 200; // Extra buffer
+      
+      // Estimate initial size
+      let combinedText = this.buildCombinedText(workingTranscripts);
+      let estimatedTokens = this.estimateTokenCount(combinedText);
+      
+      console.log(`[LLM Analysis] Initial tokens: ${estimatedTokens}, Max allowed: ${maxTranscriptTokens}`);
+      
+      if (estimatedTokens > maxTranscriptTokens) {
+        console.log(`[LLM Analysis] Truncating transcripts for ${analysisType}`);
+        workingTranscripts = this.truncateTranscripts(workingTranscripts, maxTranscriptTokens);
+        combinedText = this.buildCombinedText(workingTranscripts);
+        estimatedTokens = this.estimateTokenCount(combinedText);
         
-        return tableInfo + speakerInfo;
-      }).join('\n');
+        console.log(`[LLM Analysis] After truncation: ${estimatedTokens} tokens`);
+      }
+      
+      // Final safety check
+      if (estimatedTokens > maxTranscriptTokens) {
+        console.warn(`[LLM Analysis] Still too large (${estimatedTokens} tokens), using minimal summary`);
+        combinedText = `Session contains ${transcripts.length} transcriptions across multiple tables. Content too large for detailed analysis. Providing summary-level analysis only.`;
+      }
 
-      const systemPrompt = `You are an expert facilitator and conversation analyst specializing in World Café methodology. Your task is to analyze discussion transcripts and provide insightful, actionable analysis.
-
-${prompt}
-
-Please provide your response in valid JSON format with the following structure based on the analysis type:
-
-For conflict detection:
-{
-  "conflicts": [
-    {
-      "tableId": number,
-      "text": "exact quote showing conflict",
-      "severity": number (0-1),
-      "description": "brief explanation of the conflict",
-      "participants": ["participant references if identifiable"],
-      "context": "surrounding context"
-    }
-  ]
-}
-
-For agreement detection:
-{
-  "agreements": [
-    {
-      "tableId": number,
-      "text": "exact quote showing agreement",
-      "strength": number (0-1),
-      "description": "brief explanation of the agreement",
-      "participants": ["participant references if identifiable"],
-      "context": "surrounding context"
-    }
-  ]
-}
-
-For theme extraction:
-{
-  "themes": [
-    {
-      "theme": "theme name",
-      "frequency": number,
-      "description": "detailed description",
-      "tables": [list of table IDs where this theme appears],
-      "sentiment": number (-1 to 1),
-      "keyQuotes": ["representative quotes"]
-    }
-  ]
-}
-
-For sentiment analysis:
-{
-  "overall": number (-1 to 1),
-  "byTable": {
-    "1": number,
-    "2": number
-  },
-  "interpretation": "descriptive interpretation",
-  "insights": ["key emotional insights"]
-}`;
+      const systemPrompt = this.buildSystemPrompt(analysisType) + `\n\n${prompt}\n\nProvide concise but insightful analysis in valid JSON format. Include relevant quotes and specific table references when possible.`;
 
       const completion = await this.groq.chat.completions.create({
         messages: [
@@ -141,18 +174,23 @@ For sentiment analysis:
     } catch (error) {
       console.error(`LLM Analysis Error (${analysisType}):`, error);
       
+      // Check for token limit errors
+      if (error.message && (error.message.includes('too large') || error.message.includes('context_length'))) {
+        console.warn(`Token limit exceeded for ${analysisType} analysis`);
+      }
+      
       // Fallback to empty results if LLM fails
       switch (analysisType) {
         case 'conflicts':
-          return { conflicts: [] };
+          return { conflicts: [], note: 'Analysis limited due to content size' };
         case 'agreements':
-          return { agreements: [] };
+          return { agreements: [], note: 'Analysis limited due to content size' };
         case 'themes':
-          return { themes: [] };
+          return { themes: [], note: 'Analysis limited due to content size' };
         case 'sentiment':
-          return { overall: 0, byTable: {}, interpretation: 'Analysis unavailable', insights: [] };
+          return { overall: 0, byTable: {}, interpretation: 'Analysis limited due to content size', insights: [] };
         default:
-          return {};
+          return { note: 'Analysis limited due to content size' };
       }
     }
   }
@@ -373,24 +411,27 @@ For sentiment analysis:
     
     let totalLength = 0;
     
-    for (const transcript of transcriptions) {
-      totalLength += transcript.transcript.length;
+    for (const transcription of transcriptions) {
+      const transcriptText = transcription.transcript || '';
+      totalLength += transcriptText.length;
       
-      if (transcript.speakers && transcript.speakers.length > 1) {
+      if (transcription.speakers && transcription.speakers.length > 1) {
         stats.tablesWithMultipleSpeakers++;
         
-        transcript.speakers.forEach(speaker => {
-          const speakerId = `Table${transcript.tableId}_Speaker${speaker.speaker}`;
+        transcription.speakers.forEach(speaker => {
+          const speakerId = `Table${transcription.tableId}_Speaker${speaker.speaker}`;
           if (!stats.speakerDistribution[speakerId]) {
             stats.speakerDistribution[speakerId] = {
-              tableId: transcript.tableId,
+              tableId: transcription.tableId,
               speaker: speaker.speaker,
               wordCount: 0,
               duration: 0
             };
           }
-          stats.speakerDistribution[speakerId].wordCount += speaker.transcript.split(' ').length;
-          stats.speakerDistribution[speakerId].duration += (speaker.end - speaker.start);
+          // Safety check for speaker text
+          const speakerText = speaker.transcript || speaker.text || '';
+          stats.speakerDistribution[speakerId].wordCount += speakerText.split(' ').length;
+          stats.speakerDistribution[speakerId].duration += (speaker.end - speaker.start) || 0;
         });
       }
     }

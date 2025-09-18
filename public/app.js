@@ -271,8 +271,23 @@ async function loadExistingTranscriptions() {
 
 // Display existing transcriptions with speaker diarization
 function displayExistingTranscriptions(transcriptions) {
-    const transcriptDisplay = document.getElementById('liveTranscript');
-    transcriptDisplay.innerHTML = ''; // Clear existing content
+    // Clear all tab containers, but preserve live transcription content if there are active chat bubbles
+    const startRecordingContent = document.getElementById('startRecordingContent');
+    const uploadMediaContent = document.getElementById('uploadMediaContent');
+    const liveTranscriptionContent = document.getElementById('liveTranscriptionContent');
+    
+    if (startRecordingContent) startRecordingContent.innerHTML = '';
+    if (uploadMediaContent) uploadMediaContent.innerHTML = '';
+    
+    // Only clear live transcription content if there are no chat bubbles (no active session)
+    if (liveTranscriptionContent) {
+        const existingBubbles = liveTranscriptionContent.querySelectorAll('.chat-bubble');
+        if (existingBubbles.length === 0) {
+            liveTranscriptionContent.innerHTML = '';
+        } else {
+            console.log(`📝 Preserving ${existingBubbles.length} existing live transcription bubbles`);
+        }
+    }
     
     transcriptions.forEach((transcription, index) => {
         const transcriptItem = document.createElement('div');
@@ -311,40 +326,29 @@ function displayExistingTranscriptions(transcriptions) {
         const createdAt = new Date(transcription.created_at).toLocaleString();
         const confidence = transcription.confidence ? `${(transcription.confidence * 100).toFixed(1)}% confidence` : '';
         
-        let transcriptContent = '';
-        
         if (speakers && speakers.length > 0) {
             // Consolidate consecutive speaker segments
-            console.log('📝 Upload Media - Consolidating', speakers.length, 'speaker segments');
+            console.log('📝 Consolidating', speakers.length, 'speaker segments');
             const consolidatedSpeakers = consolidateSpeakerSegments(speakers);
-            console.log('📝 Upload Media - After consolidation:', consolidatedSpeakers.length, 'segments');
-            if (consolidatedSpeakers.length > 0) {
-                console.log('📝 Upload Media - Consolidated example:', consolidatedSpeakers[0]);
-            }
+            console.log('📝 After consolidation:', consolidatedSpeakers.length, 'segments');
             
-            // Check if there's actually multiple speakers
-            const uniqueSpeakers = new Set(consolidatedSpeakers.map(s => s.speaker));
-            
-            // Always display with speaker diarization (even for single speaker)
-            transcriptContent = consolidatedSpeakers.map(segment => {
-                const speakerNum = (segment.speaker !== undefined ? segment.speaker : 0) + 1;
-                const speakerClass = `speaker-${speakerNum % 5}`;
-                const startTime = segment.startTime ? `${Math.floor(segment.startTime)}s` : '';
-                const endTime = segment.endTime ? `${Math.floor(segment.endTime)}s` : '';
-                const timeRange = startTime && endTime ? `${startTime}-${endTime}` : '';
-                
-                return `
-                <div class="speaker-segment ${speakerClass}">
-                    <div class="speaker-label">
-                        <strong>Speaker ${speakerNum}</strong>
-                        ${timeRange ? `<span class="speaker-timestamp">${timeRange}</span>` : ''}
-                    </div>
-                    <div class="speaker-text">${segment.consolidatedText}</div>
-                </div>
+            // Add metadata header
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'transcript-meta';
+            metaDiv.style.cssText = 'margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;';
+            metaDiv.innerHTML = `
+                <span><strong>Recording ${transcriptions.length - index}</strong></span>
+                <span>${createdAt}</span>
+                <span>${confidence}</span>
             `;
-            }).join('');
+            transcriptItem.appendChild(metaDiv);
+            
+            // Create chat bubbles for each speaker segment  
+            consolidatedSpeakers.forEach(segment => {
+                createChatBubble(segment.speaker, segment.consolidatedText, transcription.source, transcriptItem);
+            });
         } else {
-            console.log('📝 Upload Media - No speakers found, using fallback transcript for:', transcription.id);
+            console.log('📝 No speakers found, using fallback transcript for:', transcription.id);
             // Display without diarization - ensure we get text, not object
             const transcriptText = (typeof transcription.transcript === 'string' ? transcription.transcript : null) ||
                                  (typeof transcription.transcript_text === 'string' ? transcription.transcript_text : null) ||
@@ -360,24 +364,77 @@ function displayExistingTranscriptions(transcriptions) {
                     keys: Object.keys(transcription)
                 });
             }
-                                 
-            transcriptContent = `<div class="transcript-text">${transcriptText}</div>`;
-        }
-        
-        transcriptItem.innerHTML = `
-            <div class="transcript-meta">
+            
+            // Add metadata header
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'transcript-meta';
+            metaDiv.style.cssText = 'margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;';
+            metaDiv.innerHTML = `
                 <span><strong>Recording ${transcriptions.length - index}</strong></span>
                 <span>${createdAt}</span>
                 <span>${confidence}</span>
-            </div>
-            ${transcriptContent}
-        `;
+            `;
+            transcriptItem.appendChild(metaDiv);
+            
+            // Create a single bubble for the full transcript
+            createChatBubble(0, transcriptText, transcription.source, transcriptItem);
+        }
         
-        transcriptDisplay.appendChild(transcriptItem);
+        // Route to appropriate tab based on source
+        let targetContainer;
+        switch (transcription.source) {
+            case 'start-recording':
+            case 'recording':
+                targetContainer = startRecordingContent;
+                break;
+            case 'upload-media':
+            case 'upload':
+                targetContainer = uploadMediaContent;
+                break;
+            case 'live-transcription':
+            default:
+                targetContainer = liveTranscriptionContent;
+                break;
+        }
+        
+        if (targetContainer) {
+            // For live transcription content, check if there are active chat bubbles
+            if (targetContainer.id === 'liveTranscriptionContent') {
+                const existingBubbles = targetContainer.querySelectorAll('.chat-bubble');
+                if (existingBubbles.length > 0 && transcription.source === 'live-transcription') {
+                    // Skip saved live transcriptions when there are already live bubbles to avoid duplication
+                    console.log(`📝 Skipping saved live transcription to avoid duplication with ${existingBubbles.length} live bubbles`);
+                    return; // Skip this transcription
+                } else {
+                    // No active bubbles or not a live transcription, safe to add
+                    targetContainer.appendChild(transcriptItem);
+                }
+            } else {
+                targetContainer.appendChild(transcriptItem);
+            }
+        }
     });
     
-    if (transcriptions.length === 0) {
-        transcriptDisplay.innerHTML = '<p style="color: #666; font-style: italic; text-align: center; padding: 2rem;">No transcriptions available yet. Start recording to create your first transcription.</p>';
+    // Add empty messages to tabs that have no content
+    const emptyMessage = '<p style="color: #666; font-style: italic; text-align: center; padding: 2rem;">No transcriptions available yet for this method.</p>';
+    
+    if (startRecordingContent && startRecordingContent.innerHTML.trim() === '') {
+        startRecordingContent.innerHTML = emptyMessage;
+    }
+    if (uploadMediaContent && uploadMediaContent.innerHTML.trim() === '') {
+        uploadMediaContent.innerHTML = emptyMessage;
+    }
+    if (liveTranscriptionContent) {
+        const existingBubbles = liveTranscriptionContent.querySelectorAll('.chat-bubble');
+        const existingTranscripts = liveTranscriptionContent.querySelectorAll('.transcript-item');
+        if (existingBubbles.length === 0 && existingTranscripts.length === 0 && liveTranscriptionContent.innerHTML.trim() === '') {
+            liveTranscriptionContent.innerHTML = emptyMessage;
+        }
+    }
+    
+    // Update tab counts
+    if (typeof updateTranscriptionTabCounts === 'function') {
+        updateTranscriptionTabCounts();
     }
 }
 
@@ -4710,9 +4767,10 @@ function stopRecording() {
     }
 }
 
-async function uploadAudio(audioBlob) {
+async function uploadAudio(audioBlob, source = 'start-recording') {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('source', source);
     
     const tableNumber = currentTable.table_number || currentTable.id;
     
@@ -4781,18 +4839,43 @@ function updateRecordingStatus(data) {
 }
 
 function displayTranscription(data) {
-    const transcriptDisplay = document.getElementById('liveTranscript');
+    // Determine target container based on source
+    let targetContainer;
+    let targetTab;
     
-    if (!transcriptDisplay) {
-        console.warn('liveTranscript element not found');
-        return;
+    switch (data.source) {
+        case 'start-recording':
+        case 'recording':
+            targetContainer = document.getElementById('startRecordingContent');
+            targetTab = 'start-recording';
+            break;
+        case 'upload-media':
+        case 'upload':
+            targetContainer = document.getElementById('uploadMediaContent');
+            targetTab = 'upload-media';
+            break;
+        case 'live-transcription':
+        default:
+            targetContainer = document.getElementById('liveTranscriptionContent');
+            targetTab = 'live-transcription';
+            break;
     }
     
+    // Fallback to original element if tabbed container not found
+    if (!targetContainer) {
+        targetContainer = document.getElementById('liveTranscript');
+        if (!targetContainer) {
+            console.warn('No transcription display element found');
+            return;
+        }
+    }
+    
+    console.log(`📝 Displaying transcription in ${targetTab} tab from source: ${data.source}`);
+    
     // Clear initial placeholder message on first transcription
-    if (transcriptDisplay.children.length === 1 && transcriptDisplay.children[0].style.textAlign === 'center') {
-        transcriptDisplay.innerHTML = '';
-        transcriptDisplay.style.border = 'none';
-        transcriptDisplay.style.background = '#ffffff';
+    const emptyState = targetContainer.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.style.display = 'none';
     }
     
     // Debug logging
@@ -4826,17 +4909,28 @@ function displayTranscription(data) {
             
             // Create chat bubbles for each speaker segment
             consolidatedSpeakers.forEach(segment => {
-                createChatBubble(segment.speaker, segment.consolidatedText, data.source);
+                createChatBubble(segment.speaker, segment.consolidatedText, data.source, targetContainer);
             });
             
             // Auto-scroll to bottom
-            transcriptDisplay.scrollTop = transcriptDisplay.scrollHeight;
+            targetContainer.scrollTop = targetContainer.scrollHeight;
+            
+            // Auto-activate tab for any new transcription content
+            if (typeof switchTranscriptionTab === 'function') {
+                console.log(`🔄 Auto-activating tab for source: ${data.source}`);
+                switchTranscriptionTab(targetTab);
+            }
+            
+            // Update tab counts
+            if (typeof updateTranscriptionTabCounts === 'function') {
+                updateTranscriptionTabCounts();
+            }
         }
     }
 }
 
-function createChatBubble(speakerIndex, text, source = '') {
-    const transcriptDisplay = document.getElementById('liveTranscript');
+function createChatBubble(speakerIndex, text, source = '', targetContainer = null) {
+    const transcriptDisplay = targetContainer || document.getElementById('liveTranscript');
     if (!transcriptDisplay || !text || text.trim() === '') return;
     
     const speakerNum = (speakerIndex || 0) + 1;
@@ -4998,14 +5092,20 @@ function displayTableRecordings(recordings) {
         `;
         
         const createdAt = new Date(recording.created_at).toLocaleString();
+        const createdDate = new Date(recording.created_at).toLocaleDateString();
         const duration = recording.duration_seconds ? `${Math.round(recording.duration_seconds)}s` : '';
         const fileSize = recording.file_size ? formatFileSize(recording.file_size) : '';
+        
+        // Create informative title: SessionName - TableName - Date
+        const sessionName = currentSession?.title || 'Session';
+        const tableName = currentTable?.name || `Table ${currentTable?.table_number || ''}`;
+        const informativeTitle = `${sessionName} - ${tableName} - ${createdDate}`;
         
         recordingItem.innerHTML = `
             <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
                 <div>
                     <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #333;">
-                        🎙️ Recording ${index + 1}
+                        🎙️ ${informativeTitle}
                     </h4>
                     <div style="font-size: 12px; color: #666;">
                         ${createdAt} ${duration ? `• ${duration}` : ''} ${fileSize ? `• ${fileSize}` : ''}
@@ -6040,11 +6140,34 @@ async function sendSimpleChatMessage() {
         if (response.ok && result.success) {
             addSimpleMessage('ai', result.response);
         } else {
-            let errorMsg = result.error || 'Failed to get response';
-            if (result.suggestion) {
-                errorMsg += '\n\n💡 ' + result.suggestion;
+            // Handle new structured error format
+            if (result.message && result.suggestions) {
+                let errorMsg = result.message;
+                if (result.details) {
+                    errorMsg += '\n\n' + result.details;
+                }
+                
+                if (result.suggestions && result.suggestions.length > 0) {
+                    errorMsg += '\n\n💡 Suggestions:';
+                    result.suggestions.forEach(suggestion => {
+                        errorMsg += '\n• ' + suggestion;
+                    });
+                }
+                
+                // Add technical info for debugging if available
+                if (result.technicalInfo && result.technicalInfo.estimated) {
+                    errorMsg += '\n\n🔧 Technical: ' + result.technicalInfo.estimated.toLocaleString() + ' tokens (limit: ' + result.technicalInfo.limit.toLocaleString() + ')';
+                }
+                
+                addSimpleMessage('error', errorMsg);
+            } else {
+                // Fallback for old format
+                let errorMsg = result.error || result.message || 'Failed to get response';
+                if (result.suggestion) {
+                    errorMsg += '\n\n💡 ' + result.suggestion;
+                }
+                addSimpleMessage('error', errorMsg);
             }
-            addSimpleMessage('error', errorMsg);
         }
         
     } catch (error) {
@@ -6906,6 +7029,7 @@ async function handleMediaFileUpload(event) {
 async function uploadMediaFile(file) {
     const formData = new FormData();
     formData.append('audio', file, file.name); // Using 'audio' field name to match existing endpoint
+    formData.append('source', 'upload-media'); // Specify source for Upload Media tab
     
     const tableNumber = currentTable.table_number || currentTable.id;
     
@@ -6966,9 +7090,8 @@ async function uploadMediaFile(file) {
             updateTableRecordingCount(currentTable.id);
         }
         
-        // Refresh transcriptions and recordings to show any completed ones
+        // Refresh recordings to show any completed ones
         setTimeout(() => {
-            loadExistingTranscriptions();
             loadTableRecordings();
         }, 2000);
         

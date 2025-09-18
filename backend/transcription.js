@@ -11,7 +11,7 @@ class DeepgramSTT {
         this.deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     }
 
-    async transcribeFile(audioFilePath, options = {}) {
+    async transcribeFile(audioFilePath, options = {}, retries = 2) {
         try {
             if (!fs.existsSync(audioFilePath)) {
                 throw new Error(`Audio file not found: ${audioFilePath}`);
@@ -20,30 +20,56 @@ class DeepgramSTT {
             const audioBuffer = fs.readFileSync(audioFilePath);
             
             const defaultOptions = {
-                model: 'nova-2',
+                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 diarize: true,
-                diarize_version: '2023-10-19',
                 utterances: true,
                 paragraphs: true,
-                utt_split: 0.5,
+                utt_split: 0.8,
                 multichannel: false,
                 ...options
             };
 
             console.log(`🌍 Backend transcription language: ${defaultOptions.language}`);
-            const { result, error } = await this.deepgram.listen.prerecorded.transcribeFile(
-                audioBuffer,
-                defaultOptions
-            );
-
-            if (error) {
-                throw error;
+            console.log(`🔍 Audio buffer size: ${audioBuffer.length} bytes`);
+            console.log(`🔧 Transcription options:`, JSON.stringify(defaultOptions, null, 2));
+            
+            try {
+                const { result, error } = await this.deepgram.listen.prerecorded.transcribeFile(
+                    audioBuffer,
+                    defaultOptions
+                );
+                
+                if (error) {
+                    console.error(`❌ Deepgram API returned error:`, error);
+                    throw error;
+                }
+                
+                console.log(`✅ Transcription successful`);
+                return result;
+                
+            } catch (apiError) {
+                console.error(`💥 Deepgram API call failed:`, apiError);
+                
+                // Check if this is the HTML response error and we have retries left
+                if (apiError.message && apiError.message.includes('Unexpected token') && retries > 0) {
+                    console.warn(`🔄 HTML response detected, retrying... (${retries} attempts left)`);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                    return this.transcribeFile(audioFilePath, options, retries - 1);
+                }
+                
+                if (apiError.message && apiError.message.includes('Unexpected token')) {
+                    console.error(`🔍 Looks like we got HTML instead of JSON. This usually indicates:
+                    1. Network proxy interfering with the request
+                    2. Firewall blocking the request
+                    3. Rate limiting from Deepgram
+                    4. API endpoint issues`);
+                }
+                
+                throw apiError;
             }
-
-            return result;
         } catch (error) {
             console.error('Error transcribing file:', error);
             throw error;
@@ -53,15 +79,14 @@ class DeepgramSTT {
     async transcribeUrl(audioUrl, options = {}) {
         try {
             const defaultOptions = {
-                model: 'nova-2',
+                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 diarize: true,
-                diarize_version: '2023-10-19',
                 utterances: true,
                 paragraphs: true,
-                utt_split: 0.5,
+                utt_split: 0.8,
                 multichannel: false,
                 ...options
             };

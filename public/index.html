@@ -195,6 +195,37 @@
             padding: 16px !important;
             line-height: 1.4 !important;
         }
+
+        /* Transcription tab styles */
+        .transcription-count {
+            background: #007bff;
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        .transcription-tab-content {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Tab hover effects */
+        button[onclick*="switchTranscriptionTab"]:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
+        button[onclick*="switchTranscriptionTab"].active {
+            background: #007bff !important;
+            color: white !important;
+        }
+
+        button[onclick*="switchTranscriptionTab"].active .transcription-count {
+            background: rgba(255,255,255,0.2) !important;
+        }
         
         /* Chat bubbles mobile optimization */
         .chat-bubble {
@@ -1895,7 +1926,7 @@
                                 </div>
                             </div>
                             
-                            <!-- Live Transcription Section -->
+                            <!-- Tabbed Transcription Section -->
                             <div style="
                                 background: white;
                                 border: 1px solid #e0e0e0;
@@ -1913,9 +1944,78 @@
                                     border-bottom: 1px solid #f0f0f0;
                                 ">
                                     <span style="font-size: 24px;">📝</span>
-                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Live Transcription</h3>
+                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Transcriptions by Recording Method</h3>
                                 </div>
-                                <div id="liveTranscript" style="
+                                
+                                <!-- Transcription Tabs -->
+                                <div style="
+                                    display: flex;
+                                    border-bottom: 1px solid #e0e0e0;
+                                    margin-bottom: 20px;
+                                    gap: 4px;
+                                ">
+                                    <button id="startRecordingTab" onclick="switchTranscriptionTab('start-recording')" style="
+                                        flex: 1;
+                                        padding: 12px 16px;
+                                        border: none;
+                                        background: #f8f9fa;
+                                        border-radius: 8px 8px 0 0;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        cursor: pointer;
+                                        transition: all 0.2s;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                    ">
+                                        🎙️ Start Recording
+                                        <span id="startRecordingCount" class="transcription-count">0</span>
+                                    </button>
+                                    
+                                    <button id="uploadMediaTab" onclick="switchTranscriptionTab('upload-media')" style="
+                                        flex: 1;
+                                        padding: 12px 16px;
+                                        border: none;
+                                        background: #f8f9fa;
+                                        border-radius: 8px 8px 0 0;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        cursor: pointer;
+                                        transition: all 0.2s;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                    ">
+                                        📎 Upload Media
+                                        <span id="uploadMediaCount" class="transcription-count">0</span>
+                                    </button>
+                                    
+                                    <button id="liveTranscriptionTab" onclick="switchTranscriptionTab('live-transcription')" style="
+                                        flex: 1;
+                                        padding: 12px 16px;
+                                        border: none;
+                                        background: #007bff;
+                                        color: white;
+                                        border-radius: 8px 8px 0 0;
+                                        font-size: 14px;
+                                        font-weight: 500;
+                                        cursor: pointer;
+                                        transition: all 0.2s;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                    ">
+                                        🔴 Live Transcription
+                                        <span id="liveTranscriptionCount" class="transcription-count" style="background: rgba(255,255,255,0.2);">0</span>
+                                    </button>
+                                </div>
+                                
+                                <!-- Tab Content Containers -->
+                                <div id="startRecordingContent" class="transcription-tab-content" style="
+                                    display: none;
                                     min-height: 200px;
                                     padding: 20px;
                                     background: #f8f9fa;
@@ -1927,12 +2027,55 @@
                                     overflow-y: auto;
                                     max-height: 400px;
                                 ">
-                                    <div style="text-align: center; margin-top: 40px; opacity: 0.7;">
-                                        <div style="font-size: 32px; margin-bottom: 16px;">💬</div>
-                                        <p><strong>Live Transcription</strong></p>
-                                        <p style="font-size: 12px; color: #999;">Start Recording, Upload Media, or use Live Transcription<br>Chat bubbles will appear here with speaker diarization</p>
+                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
+                                        <div style="font-size: 32px; margin-bottom: 16px;">🎙️</div>
+                                        <p><strong>Start Recording Transcriptions</strong></p>
+                                        <p style="font-size: 12px; color: #999;">Transcriptions from Start Recording sessions will appear here</p>
                                     </div>
                                 </div>
+                                
+                                <div id="uploadMediaContent" class="transcription-tab-content" style="
+                                    display: none;
+                                    min-height: 200px;
+                                    padding: 20px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    color: #666;
+                                    font-size: 14px;
+                                    line-height: 1.6;
+                                    border: 2px dashed #ddd;
+                                    overflow-y: auto;
+                                    max-height: 400px;
+                                ">
+                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
+                                        <div style="font-size: 32px; margin-bottom: 16px;">📎</div>
+                                        <p><strong>Upload Media Transcriptions</strong></p>
+                                        <p style="font-size: 12px; color: #999;">Transcriptions from uploaded audio files will appear here</p>
+                                    </div>
+                                </div>
+                                
+                                <div id="liveTranscriptionContent" class="transcription-tab-content" style="
+                                    display: block;
+                                    min-height: 200px;
+                                    padding: 20px;
+                                    background: #f8f9fa;
+                                    border-radius: 12px;
+                                    color: #666;
+                                    font-size: 14px;
+                                    line-height: 1.6;
+                                    border: 2px dashed #ddd;
+                                    overflow-y: auto;
+                                    max-height: 400px;
+                                ">
+                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
+                                        <div style="font-size: 32px; margin-bottom: 16px;">🔴</div>
+                                        <p><strong>Live Transcription</strong></p>
+                                        <p style="font-size: 12px; color: #999;">Real-time transcriptions will appear here with speaker diarization</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Keep the original liveTranscript div for backward compatibility -->
+                                <div id="liveTranscript" style="display: none;"></div>
                                 
                                 <!-- Audio Player Section -->
                                 <div style="margin-top: 20px;">
@@ -3406,6 +3549,12 @@
         let currentTranscriptionBubble = null;
         const DEEPGRAM_API_KEY = '5c0e7b6e611060387891a21b4d309ac439d0a404';
         
+        // Reconnection variables
+        let liveTranscriptionActive = false;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        let reconnectTimeout = null;
+        
         // Live Transcription Elements
         const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
         const stopTranscriptionBtn = document.getElementById('stopTranscriptionBtn');
@@ -3419,8 +3568,171 @@
             stopTranscriptionBtn.onclick = stopLiveTranscription;
         }
 
+        function connectWebSocket() {
+            if (!liveTranscriptionActive) return;
+            
+            // Build WebSocket URL with Deepgram using session language
+            const sessionLanguage = currentSession?.language || 'en-US';
+            // Convert language code format (it-IT -> it for Deepgram)
+            const deepgramLanguage = sessionLanguage.split('-')[0];
+            console.log(`🌍 Live transcription language: ${sessionLanguage} -> ${deepgramLanguage}`);
+            let wsUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&diarize=true&language=${deepgramLanguage}&punctuate=true&interim_results=true&v=${Date.now()}`;
+
+            // Connect to Deepgram WebSocket
+            liveTranscriptionSocket = new WebSocket(wsUrl, ['token', DEEPGRAM_API_KEY]);
+
+            liveTranscriptionSocket.onopen = () => {
+                console.log('Live Transcription WebSocket connected');
+                reconnectAttempts = 0; // Reset reconnection attempts on successful connection
+                
+                liveTranscriptionBtn.style.display = 'none';
+                stopTranscriptionBtn.style.display = 'flex';
+                
+                // Start MediaRecorders only on first connection
+                if (liveTranscriptionMediaRecorder && liveTranscriptionMediaRecorder.state === 'inactive') {
+                    liveTranscriptionMediaRecorder.start(250); // Collect 250ms of audio at a time for real-time
+                }
+                if (liveTranscriptionSaveRecorder && liveTranscriptionSaveRecorder.state === 'inactive') {
+                    liveTranscriptionSaveRecorder.start(1000); // Collect 1s chunks for saving
+                }
+                
+                // Clear initial message and prepare for bubbles (only on first connection)
+                if (!liveTranscriptEl.innerHTML || liveTranscriptEl.innerHTML.includes('❌')) {
+                    liveTranscriptEl.innerHTML = '';
+                    liveTranscriptEl.style.border = 'none';
+                    liveTranscriptEl.style.background = '#ffffff';
+                    currentTranscriptionSpeaker = null;
+                    currentTranscriptionBubble = null;
+                }
+            };
+
+            liveTranscriptionSocket.onclose = (event) => {
+                console.log('Live Transcription WebSocket closed:', event.code, event.reason);
+                
+                // Only attempt reconnection if transcription is still active and we haven't exceeded max attempts
+                if (liveTranscriptionActive && reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000); // Exponential backoff, max 10s
+                    console.log(`🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+                    
+                    reconnectTimeout = setTimeout(() => {
+                        connectWebSocket();
+                    }, delay);
+                } else if (liveTranscriptionActive) {
+                    console.error('🔴 Max reconnection attempts reached, stopping transcription');
+                    liveTranscriptEl.innerHTML += '<div style="color: #dc3545; margin-top: 10px;">❌ Connection lost. Please restart transcription.</div>';
+                    cleanupLiveTranscription();
+                }
+            };
+
+            liveTranscriptionSocket.onerror = (error) => {
+                console.error('Live Transcription WebSocket error:', error);
+                console.error('WebSocket URL used:', wsUrl);
+                console.error('API Key length:', DEEPGRAM_API_KEY ? DEEPGRAM_API_KEY.length : 'undefined');
+                
+                // Don't cleanup immediately on error, let onclose handle reconnection
+                if (reconnectAttempts === 0) {
+                    liveTranscriptEl.innerHTML += '<div style="color: #ffc107; margin-top: 10px;">⚠️ Connection issue, attempting to reconnect...</div>';
+                }
+            };
+
+            liveTranscriptionSocket.onmessage = (message) => {
+                try {
+                    const data = JSON.parse(message.data);
+                    if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
+                        const alternative = data.channel.alternatives[0];
+                        
+                        // Debug logging
+                        console.log('🎤 Deepgram message:', {
+                            is_final: data.is_final,
+                            words_count: alternative.words?.length || 0,
+                            transcript: alternative.transcript,
+                            speech_final: data.speech_final
+                        });
+                        
+                        // Only process final results to avoid duplicates from interim results
+                        if (data.is_final && alternative.transcript && alternative.transcript.trim()) {
+                            const words = alternative.words || [];
+                            let speakers = [];
+                            
+                            if (words.length > 0 && words.some(w => w.speaker !== undefined)) {
+                                // Group words by speaker
+                                const speakerGroups = {};
+                                words.forEach(word => {
+                                    const speaker = word.speaker || 0;
+                                    if (!speakerGroups[speaker]) {
+                                        speakerGroups[speaker] = [];
+                                    }
+                                    speakerGroups[speaker].push(word);
+                                });
+                                
+                                // Create speaker segments
+                                Object.keys(speakerGroups).forEach(speakerId => {
+                                    const speakerWords = speakerGroups[speakerId];
+                                    const text = speakerWords.map(w => w.word).join(' ');
+                                    
+                                    if (text.trim()) {
+                                        speakers.push({
+                                            speaker: parseInt(speakerId),
+                                            text: text.trim(),
+                                            confidence: speakerWords[0]?.confidence || 0.9,
+                                            start: speakerWords[0]?.start || 0,
+                                            end: speakerWords[speakerWords.length - 1]?.end || 0
+                                        });
+                                    }
+                                });
+                            } else {
+                                // No speaker diarization, create single speaker segment
+                                speakers.push({
+                                    speaker: 0,
+                                    text: alternative.transcript.trim(),
+                                    confidence: alternative.confidence || 0.9,
+                                    start: 0,
+                                    end: 0
+                                });
+                            }
+                            
+                            // Use the existing displayTranscription function
+                            if (speakers.length > 0 && typeof displayTranscription === 'function') {
+                                displayTranscription({
+                                    transcription: {
+                                        speakers: speakers,
+                                        transcript: alternative.transcript || speakers.map(s => s.text).join(' '),
+                                        confidence: alternative.confidence || 0.9
+                                    },
+                                    source: 'live-transcription'
+                                });
+                                
+                                // Collect segments for database storage
+                                speakers.forEach(segment => {
+                                    liveTranscriptionSegments.push(segment);
+                                    liveTranscriptionFullText += segment.text + ' ';
+                                });
+                                
+                                console.log(`📝 Collected ${speakers.length} segments. Total segments: ${liveTranscriptionSegments.length}`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing transcription message:', error);
+                }
+            };
+
+            // Set up MediaRecorder data handling
+            if (liveTranscriptionMediaRecorder) {
+                liveTranscriptionMediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && liveTranscriptionSocket.readyState === WebSocket.OPEN) {
+                        liveTranscriptionSocket.send(event.data);
+                    }
+                };
+            }
+        }
+
         async function startLiveTranscription() {
             try {
+                liveTranscriptionActive = true;
+                reconnectAttempts = 0;
+                
                 // Request microphone access
                 liveTranscriptionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 liveTranscriptionMediaRecorder = new MediaRecorder(liveTranscriptionStream, { mimeType: 'audio/webm' });
@@ -3437,159 +3749,7 @@
                     liveTranscriptionSaveRecorder = null;
                 }
 
-                // Build WebSocket URL with Deepgram using session language
-                const sessionLanguage = currentSession?.language || 'en-US';
-                // Convert language code format (it-IT -> it for Deepgram)
-                const deepgramLanguage = sessionLanguage.split('-')[0];
-                console.log(`🌍 Live transcription language: ${sessionLanguage} -> ${deepgramLanguage}`);
-                let wsUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&diarize=true&language=${deepgramLanguage}&punctuate=true&interim_results=true&v=${Date.now()}`;
-
-                // Connect to Deepgram WebSocket
-                liveTranscriptionSocket = new WebSocket(wsUrl, ['token', DEEPGRAM_API_KEY]);
-
-                liveTranscriptionSocket.onopen = () => {
-                    console.log('Live Transcription WebSocket connected');
-                    liveTranscriptionBtn.style.display = 'none';
-                    stopTranscriptionBtn.style.display = 'flex';
-                    liveTranscriptionMediaRecorder.start(250); // Collect 250ms of audio at a time for real-time
-                    if (liveTranscriptionSaveRecorder) {
-                        liveTranscriptionSaveRecorder.start(1000); // Collect 1s chunks for saving
-                    }
-                    // Clear initial message and prepare for bubbles
-                    liveTranscriptEl.innerHTML = '';
-                    liveTranscriptEl.style.border = 'none';
-                    liveTranscriptEl.style.background = '#ffffff';
-                    currentTranscriptionSpeaker = null;
-                    currentTranscriptionBubble = null;
-                };
-
-                // Track processed words to avoid duplicates
-                let processedWordCount = 0;
-                let lastFinalTranscript = '';
-                let isProcessingFinal = false;
-                
-                liveTranscriptionSocket.onmessage = (message) => {
-                    try {
-                        const data = JSON.parse(message.data);
-                        if (data.type === 'Results' && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
-                            const alternative = data.channel.alternatives[0];
-                            
-                            // Debug logging
-                            console.log('🎤 Deepgram message:', {
-                                is_final: data.is_final,
-                                words_count: alternative.words?.length || 0,
-                                transcript: alternative.transcript,
-                                speech_final: data.speech_final,
-                                processedWordCount: processedWordCount
-                            });
-                            
-                            // Only process final results to avoid duplicates from interim results
-                            if (!data.is_final && !data.speech_final) {
-                                console.log('🎤 Skipping interim result to avoid duplicates');
-                                return;
-                            }
-                            
-                            if (alternative.words && alternative.words.length > 0) {
-                                // Only process truly new words since last final result
-                                const newWords = alternative.words.slice(processedWordCount);
-                                
-                                if (newWords.length === 0) {
-                                    console.log('🎤 No new words, skipping...');
-                                    return;
-                                }
-                                
-                                // Update processed word count for final results
-                                processedWordCount = alternative.words.length;
-                                
-                                console.log('🎤 Processing', newWords.length, 'new words:', newWords.map(w => w.word));
-                                
-                                // Convert Deepgram format to our displayTranscription format
-                                const speakers = [];
-                                let currentSpeaker = null;
-                                let currentText = '';
-                                
-                                for (const wordObj of newWords) {
-                                    const speaker = wordObj.speaker || 0;
-                                    if (currentSpeaker !== speaker) {
-                                        // Save previous speaker segment if exists
-                                        if (currentSpeaker !== null && currentText.trim()) {
-                                            speakers.push({
-                                                speaker: currentSpeaker,
-                                                text: currentText.trim(),
-                                                start: 0, // Real-time doesn't have exact timing
-                                                end: 0
-                                            });
-                                        }
-                                        // Start new speaker segment
-                                        currentSpeaker = speaker;
-                                        currentText = wordObj.word + ' ';
-                                    } else {
-                                        currentText += wordObj.word + ' ';
-                                    }
-                                }
-                                
-                                // Add final speaker segment
-                                if (currentSpeaker !== null && currentText.trim()) {
-                                    speakers.push({
-                                        speaker: currentSpeaker,
-                                        text: currentText.trim(),
-                                        start: 0,
-                                        end: 0
-                                    });
-                                }
-                                
-                                // Use the existing displayTranscription function
-                                if (speakers.length > 0 && typeof displayTranscription === 'function') {
-                                    displayTranscription({
-                                        transcription: {
-                                            speakers: speakers,
-                                            transcript: alternative.transcript || newWords.map(w => w.word).join(' '),
-                                            confidence: alternative.confidence || 0.9
-                                        },
-                                        source: 'live-transcription'
-                                    });
-                                    
-                                    // Collect segments for database storage
-                                    speakers.forEach(segment => {
-                                        liveTranscriptionSegments.push(segment);
-                                        liveTranscriptionFullText += segment.text + ' ';
-                                    });
-                                    
-                                    console.log(`📝 Collected ${speakers.length} segments. Total segments: ${liveTranscriptionSegments.length}`);
-                                }
-                                
-                                // Reset word count if we get a new speech segment
-                                if (data.speech_final) {
-                                    processedWordCount = 0;
-                                    lastTranscriptText = '';
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error processing transcription message:', error);
-                    }
-                };
-
-                liveTranscriptionSocket.onclose = (event) => {
-                    console.log('Live Transcription WebSocket closed:', event.code, event.reason);
-                    cleanupLiveTranscription();
-                };
-
-                liveTranscriptionSocket.onerror = (error) => {
-                    console.error('Live Transcription WebSocket error:', error);
-                    console.error('WebSocket URL used:', wsUrl);
-                    console.error('API Key length:', DEEPGRAM_API_KEY ? DEEPGRAM_API_KEY.length : 'undefined');
-                    liveTranscriptEl.innerHTML = '<div style="color: #dc3545;">❌ Connection failed. Check console for details.</div>';
-                    cleanupLiveTranscription();
-                };
-
-                liveTranscriptionMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0 && liveTranscriptionSocket.readyState === WebSocket.OPEN) {
-                        liveTranscriptionSocket.send(event.data);
-                    }
-                };
-
-                // New: Save audio chunks for server upload
+                // Set up save recorder handlers
                 if (liveTranscriptionSaveRecorder) {
                     liveTranscriptionSaveRecorder.ondataavailable = (event) => {
                         if (event.data.size > 0) {
@@ -3601,6 +3761,9 @@
                 }
 
                 liveTranscriptionMediaRecorder.onstop = cleanupLiveTranscription;
+                
+                // Start WebSocket connection
+                connectWebSocket();
 
             } catch (error) {
                 console.error('Error starting live transcription:', error);
@@ -3610,6 +3773,14 @@
         }
 
         function stopLiveTranscription() {
+            liveTranscriptionActive = false; // Stop any reconnection attempts
+            
+            // Clear any pending reconnection timeout
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+            
             if (liveTranscriptionMediaRecorder) {
                 liveTranscriptionMediaRecorder.stop();
             }
@@ -3629,18 +3800,24 @@
                 
                 // Create complete audio blob from chunks
                 const audioBlob = new Blob(liveTranscriptionAudioChunks, { type: 'audio/webm' });
-                const duration = (new Date() - liveTranscriptionStartTime) / 1000; // Duration in seconds
+                let duration = (new Date() - liveTranscriptionStartTime) / 1000; // Duration in seconds
+                
+                // Safeguard: Ensure duration is reasonable (max 1 hour = 3600 seconds)
+                if (!liveTranscriptionStartTime || isNaN(duration) || duration < 0 || duration > 3600) {
+                    console.warn(`⚠️ Invalid duration calculated: ${duration}s, using default 10s`);
+                    duration = 10; // Default fallback
+                }
                 
                 // Generate filename
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const filename = `live-transcription-${currentSession.id}-table-${currentTableNumber}-${timestamp}.webm`;
+                const filename = `live-transcription-${currentSession.id}-table-${currentTable.table_number}-${timestamp}.webm`;
                 
                 // Create FormData for upload
                 const formData = new FormData();
                 formData.append('audio', audioBlob, filename);
                 formData.append('sessionId', currentSession.id);
-                formData.append('tableId', currentTableId);
-                formData.append('tableNumber', currentTableNumber);
+                formData.append('tableId', currentTable.id);
+                formData.append('tableNumber', currentTable.table_number);
                 formData.append('duration', duration.toString());
                 formData.append('source', 'live-transcription');
                 
@@ -3669,7 +3846,7 @@
                                 body: JSON.stringify({
                                     recordingId: result.recordingId,
                                     sessionId: currentSession.id,
-                                    tableId: currentTableId,
+                                    tableId: currentTable.id,
                                     transcriptText: liveTranscriptionFullText.trim(),
                                     speakerSegments: liveTranscriptionSegments,
                                     confidenceScore: 0.95, // Average confidence for live transcription
@@ -3714,6 +3891,14 @@
         }
 
         function cleanupLiveTranscription() {
+            liveTranscriptionActive = false; // Ensure reconnection stops
+            
+            // Clear any pending reconnection timeout
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+            
             if (liveTranscriptionSocket && liveTranscriptionSocket.readyState !== WebSocket.CLOSED) {
                 liveTranscriptionSocket.close();
             }
@@ -3728,6 +3913,111 @@
             // Clean up save recorder variables (but don't clear chunks/segments until save completes)
             liveTranscriptionSaveRecorder = null;
             liveTranscriptionStartTime = null;
+        }
+
+        // Transcription Tab Management
+        let currentTranscriptionTab = 'live-transcription';
+        
+        function getTabIdFromName(tabName) {
+            // Map tab names to their actual IDs
+            const tabMapping = {
+                'start-recording': 'startRecordingTab',
+                'upload-media': 'uploadMediaTab', 
+                'live-transcription': 'liveTranscriptionTab'
+            };
+            return tabMapping[tabName];
+        }
+        
+        function getContentIdFromName(tabName) {
+            // Map tab names to their content IDs
+            const contentMapping = {
+                'start-recording': 'startRecordingContent',
+                'upload-media': 'uploadMediaContent',
+                'live-transcription': 'liveTranscriptionContent'
+            };
+            return contentMapping[tabName];
+        }
+        
+        function switchTranscriptionTab(tabName) {
+            // Update current tab
+            currentTranscriptionTab = tabName;
+            
+            // Hide all tab contents
+            document.querySelectorAll('.transcription-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('button[onclick*="switchTranscriptionTab"]').forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.background = '#f8f9fa';
+                tab.style.color = '#333';
+                // Reset count badge style
+                const countBadge = tab.querySelector('.transcription-count');
+                if (countBadge) {
+                    countBadge.style.background = '#007bff';
+                    countBadge.style.color = 'white';
+                }
+            });
+            
+            // Show selected tab content
+            const contentId = getContentIdFromName(tabName);
+            const targetContent = document.getElementById(contentId);
+            if (targetContent) {
+                targetContent.style.display = 'block';
+            } else {
+                console.error(`❌ Could not find content element with ID: ${contentId}`);
+            }
+            
+            // Add active class to selected tab
+            const tabId = getTabIdFromName(tabName);
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) {
+                activeTab.classList.add('active');
+                activeTab.style.background = '#007bff';
+                activeTab.style.color = 'white';
+                // Update count badge style for active tab
+                const countBadge = activeTab.querySelector('.transcription-count');
+                if (countBadge) {
+                    countBadge.style.background = 'rgba(255,255,255,0.2)';
+                    countBadge.style.color = 'white';
+                }
+            } else {
+                console.error(`❌ Could not find tab element with ID: ${tabId}`);
+            }
+            
+            console.log(`📋 Switched to transcription tab: ${tabName}`);
+        }
+        
+        function updateTranscriptionTabCounts() {
+            // This will be called to update the counts in each tab
+            console.log('📊 Updating transcription tab counts');
+            
+            // Update Start Recording count
+            const startRecordingCount = document.querySelectorAll('#startRecordingContent .chat-bubble').length;
+            document.getElementById('startRecordingCount').textContent = startRecordingCount;
+            
+            // Update Upload Media count  
+            const uploadMediaCount = document.querySelectorAll('#uploadMediaContent .chat-bubble').length;
+            document.getElementById('uploadMediaCount').textContent = uploadMediaCount;
+            
+            // Update Live Transcription count
+            const liveTranscriptionCount = document.querySelectorAll('#liveTranscriptionContent .chat-bubble').length;
+            document.getElementById('liveTranscriptionCount').textContent = liveTranscriptionCount;
+        }
+
+        function activateRecordingMethodTab(method) {
+            // Auto-switch tabs based on active recording method
+            const tabMapping = {
+                'start-recording': 'start-recording',
+                'upload-media': 'upload-media', 
+                'live-transcription': 'live-transcription'
+            };
+            
+            if (tabMapping[method]) {
+                switchTranscriptionTab(tabMapping[method]);
+                console.log(`🎯 Auto-activated tab for recording method: ${method}`);
+            }
         }
 
     </script>

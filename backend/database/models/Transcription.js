@@ -10,6 +10,7 @@ class Transcription extends BaseModel {
     const transcriptionData = {
       id: uuidv4(),
       recording_id: data.recordingId,
+      source: data.source || 'start-recording',
       session_id: data.sessionId,
       table_id: data.tableId,
       transcript_text: data.transcriptText,

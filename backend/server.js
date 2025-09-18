@@ -490,8 +490,7 @@ app.post('/api/sessions/import', async (req, res) => {
       for (const transcription of transcriptions) {
         try {
           // Create mock recording entry first using proper Recording.create method
-          const recordingInstance = new Recording();
-          const recording = await recordingInstance.create({
+          const recording = await Recording.create({
             sessionId: newSession.id,
             tableId: transcription.table_id || 1,
             participantId: null,
@@ -1130,8 +1129,7 @@ app.post('/api/recordings/live-transcription', upload.single('audio'), async (re
     console.log(`💾 Saving live transcription audio: ${req.file.filename}, ${fileStats.size} bytes, ${duration}s`);
     
     // Create recording record with live-transcription source
-    const recordingModel = new Recording();
-    const recording = await recordingModel.create({
+    const recording = await Recording.create({
       sessionId,
       tableId,
       filename: req.file.filename,
@@ -1173,14 +1171,14 @@ app.post('/api/transcriptions', async (req, res) => {
     console.log(`📝 Creating transcription record for recording ${recordingId}, ${transcriptText.length} chars, ${speakerSegments?.length || 0} segments`);
     
     // Create transcription record
-    const transcriptionModel = new Transcription();
-    const transcription = await transcriptionModel.create({
+    const transcription = await Transcription.create({
       recordingId: recordingId,
       sessionId: sessionId,
       tableId: tableId,
       transcriptText: transcriptText,
       speakerSegments: speakerSegments || [],
-      confidenceScore: parseFloat(confidenceScore) || 0.9
+      confidenceScore: parseFloat(confidenceScore) || 0.9,
+      source: source || 'live-transcription'
     });
     
     console.log(`📝 Transcription record created with ID: ${transcription.id}`);
@@ -1208,8 +1206,7 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
     const { recordingId } = req.params;
     
     // Find the recording
-    const recordingModel = new Recording();
-    const recording = await recordingModel.findWithTranscription(recordingId);
+    const recording = await Recording.findWithTranscription(recordingId);
     
     if (!recording) {
       return res.status(404).json({ error: 'Recording not found' });
@@ -1301,6 +1298,7 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
     }
     
     const { sessionId, tableNumber } = req.params;
+    const { source } = req.body; // Extract source from request body
     
     // Find the table
     const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
@@ -1361,7 +1359,8 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
         tableId: table.id, // This ensures each table has its own transcriptions
         transcriptText: transcriptionService.extractTranscript(transcriptionResult),
         speakerSegments: transcriptionService.extractSpeakerSegments(transcriptionResult),
-        confidenceScore: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0
+        confidenceScore: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0,
+        source: source || 'start-recording' // Use provided source or default to start-recording
       });
       
       // Mark recording as completed
@@ -1390,7 +1389,8 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
           })(),
           wordCount: transcription.word_count,
           confidence: transcription.confidence_score
-        }
+        },
+        source: source || 'start-recording' // Use provided source or default to start-recording
       });
       
       res.json({
