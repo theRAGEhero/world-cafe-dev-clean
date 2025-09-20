@@ -4740,10 +4740,23 @@ async function startRecording() {
         });
         
         console.log('Recording started');
+        showToast('Recording started successfully!', 'success');
         
     } catch (error) {
         console.error('Error starting recording:', error);
-        console.error('Error accessing microphone. Please check permissions.');
+        
+        let errorMessage = 'Error starting recording. ';
+        if (error.name === 'NotAllowedError') {
+            errorMessage += 'Microphone permission denied. Please allow microphone access and try again.';
+        } else if (error.name === 'NotFoundError') {
+            errorMessage += 'No microphone found. Please connect a microphone and try again.';
+        } else if (error.name === 'NotSupportedError') {
+            errorMessage += 'Recording is not supported in this browser.';
+        } else {
+            errorMessage += 'Please check your microphone and try again.';
+        }
+        
+        showToast(errorMessage, 'error');
     }
 }
 
@@ -4764,6 +4777,9 @@ function stopRecording() {
         });
         
         console.log('Recording stopped, processing...');
+        showToast('Recording stopped. Processing audio...', 'info');
+    } else {
+        showToast('No active recording to stop.', 'warning');
     }
 }
 
@@ -4872,6 +4888,41 @@ function displayTranscription(data) {
     
     console.log(`📝 Displaying transcription in ${targetTab} tab from source: ${data.source}`);
     
+    // Auto-switch to the appropriate tab when transcription is received
+    if (targetTab) {
+        try {
+            if (typeof window.switchTranscriptionTab === 'function') {
+                window.switchTranscriptionTab(targetTab);
+                console.log(`🎯 Auto-switched to ${targetTab} tab for new transcription`);
+            } else {
+                // Fallback: manually show/hide tabs
+                console.log(`📋 Using fallback tab switching for ${targetTab}`);
+                
+                // Hide all tab contents first
+                document.querySelectorAll('.transcription-tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                
+                // Show the target container
+                targetContainer.style.display = 'block';
+                
+                // Update tab button states
+                document.querySelectorAll('button[onclick*="switchTranscriptionTab"]').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                
+                const targetTabButton = document.querySelector(`button[onclick*="'${targetTab}'"]`);
+                if (targetTabButton) {
+                    targetTabButton.classList.add('active');
+                }
+            }
+        } catch (error) {
+            console.warn('Error switching tabs:', error);
+            // Ensure the target container is at least visible
+            targetContainer.style.display = 'block';
+        }
+    }
+    
     // Clear initial placeholder message on first transcription
     const emptyState = targetContainer.querySelector('.empty-state');
     if (emptyState) {
@@ -4916,14 +4967,22 @@ function displayTranscription(data) {
             targetContainer.scrollTop = targetContainer.scrollHeight;
             
             // Auto-activate tab for any new transcription content
-            if (typeof switchTranscriptionTab === 'function') {
-                console.log(`🔄 Auto-activating tab for source: ${data.source}`);
-                switchTranscriptionTab(targetTab);
+            try {
+                if (typeof window.switchTranscriptionTab === 'function') {
+                    console.log(`🔄 Auto-activating tab for source: ${data.source}`);
+                    window.switchTranscriptionTab(targetTab);
+                }
+            } catch (error) {
+                console.warn('Error auto-activating tab:', error);
             }
             
             // Update tab counts
-            if (typeof updateTranscriptionTabCounts === 'function') {
-                updateTranscriptionTabCounts();
+            try {
+                if (typeof window.updateTranscriptionTabCounts === 'function') {
+                    window.updateTranscriptionTabCounts();
+                }
+            } catch (error) {
+                console.warn('Error updating tab counts:', error);
             }
         }
     }
