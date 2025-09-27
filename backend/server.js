@@ -13,14 +13,11 @@ require('dotenv').config();
 // Database
 const db = require('./database/connection');
 const { Session, Table, Participant, Recording, Transcription, QRCode, Settings } = require('./database/models');
-const SessionAnalysis = require('./database/models/SessionAnalysis');
 
 // Services
 const TranscriptionService = require('./transcription');
-const AnalysisService = require('./analysis');
 const logger = require('./utils/logger');
 const SessionChatService = require('./sessionChatService');
-const LLMAnalysisService = require('./llmAnalysis');
 const PasswordUtils = require('./passwordUtils');
 const { checkTableStructure } = require('./migrate');
 
@@ -155,22 +152,7 @@ const upload = multer({
 
 // Initialize services
 const transcriptionService = new TranscriptionService();
-const analysisService = new AnalysisService();
-let llmAnalysisService = null;
-let sessionChatService = null;
-
-// Initialize LLM service if API key is available
-try {
-  llmAnalysisService = new LLMAnalysisService();
-  console.log('LLM Analysis Service initialized with Groq');
-  
-  // Initialize chat service if LLM service is available
-  sessionChatService = new SessionChatService(llmAnalysisService.groq);
-  console.log('Session Chat Service initialized');
-} catch (error) {
-  console.log('LLM Analysis Service not available:', error.message);
-  console.log('Falling back to basic analysis service');
-}
+// Chat service disabled - requires AI services
 
 // Initialize database connection
 async function initializeDatabase() {
@@ -1485,130 +1467,16 @@ app.get('/api/sessions/:sessionId/all-transcriptions', async (req, res) => {
   }
 });
 
-// Analysis endpoints - Updated to work with database
-app.get('/api/sessions/:sessionId/analysis', async (req, res) => {
-  try {
-    const session = await Session.findById(req.params.sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    // Get all transcriptions for the session
-    const transcriptions = await Transcription.findBySessionId(req.params.sessionId);
-    
-    if (transcriptions.length === 0) {
-      return res.json({ 
-        message: 'No transcriptions available for analysis',
-        conflicts: [],
-        agreements: [],
-        themes: [],
-        llmPowered: false
-      });
-    }
-    
-    // Transform transcriptions to expected format
-    const transformedTranscriptions = transcriptions.map(tr => ({
-      id: tr.id,
-      tableId: tr.table_id,
-      transcript: tr.transcript_text,
-      speakers: (() => {
-        try {
-          const segments = tr.speaker_segments;
-          if (typeof segments === 'string') {
-            return JSON.parse(segments);
-          } else if (Array.isArray(segments)) {
-            return segments;
-          }
-          return [];
-        } catch (e) {
-          console.error('Error parsing speaker_segments for analysis:', tr.id, segments, e);
-          return [];
-        }
-      })(),
-      timestamp: tr.created_at
-    }));
-    
-    // Create a session object with transcriptions for analysis
-    const sessionForAnalysis = {
-      ...session,
-      transcriptions: transformedTranscriptions
-    };
-    
-    // Use LLM analysis service if available, otherwise fall back to basic analysis
-    const activeAnalysisService = llmAnalysisService || analysisService;
-    const analysis = await activeAnalysisService.analyzeSession(sessionForAnalysis);
-    
-    res.json(analysis);
-    
-  } catch (error) {
-    console.error('Error generating analysis:', error);
-    res.status(500).json({ error: 'Failed to generate analysis: ' + error.message });
-  }
-});
 
-// Generate final report
-app.post('/api/sessions/:sessionId/report', async (req, res) => {
-  try {
-    const session = await Session.findById(req.params.sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    // Get all transcriptions for the session
-    const transcriptions = await Transcription.findBySessionId(req.params.sessionId);
-    
-    // Transform transcriptions to expected format
-    const transformedTranscriptions = transcriptions.map(tr => ({
-      id: tr.id,
-      tableId: tr.table_id,
-      transcript: tr.transcript_text,
-      speakers: (() => {
-        try {
-          const segments = tr.speaker_segments;
-          if (typeof segments === 'string') {
-            return JSON.parse(segments);
-          } else if (Array.isArray(segments)) {
-            return segments;
-          }
-          return [];
-        } catch (e) {
-          console.error('Error parsing speaker_segments for report:', tr.id, segments, e);
-          return [];
-        }
-      })(),
-      timestamp: tr.created_at
-    }));
-    
-    // Create session object with transcriptions and tables
-    const tables = await Table.findBySessionId(session.id);
-    const sessionForReport = {
-      ...session,
-      transcriptions: transformedTranscriptions,
-      tables: tables
-    };
-    
-    // Use LLM analysis service if available, otherwise fall back to basic analysis
-    const activeAnalysisService = llmAnalysisService || analysisService;
-    const report = await activeAnalysisService.generateFinalReport(sessionForReport);
-    
-    // Save report to database could be implemented here
-    
-    res.json(report);
-    
-  } catch (error) {
-    console.error('Error generating report:', error);
-    res.status(500).json({ error: 'Failed to generate report: ' + error.message });
-  }
-});
 
 // Admin settings routes
 app.post('/api/admin/settings/api-keys', async (req, res) => {
   try {
-    const { deepgram_api_key, groq_api_key } = req.body;
+    const { deepgram_api_key } = req.body;
     
-    // Save to database
+    // Save to database (only Deepgram key)
     const settings = new Settings(db);
-    const success = await settings.setApiKeys(deepgram_api_key, groq_api_key);
+    const success = await settings.setApiKeys(deepgram_api_key, null);
     
     if (!success) {
       return res.status(500).json({ error: 'Failed to save API keys to database' });
@@ -1618,30 +1486,11 @@ app.post('/api/admin/settings/api-keys', async (req, res) => {
     if (deepgram_api_key) {
       process.env.DEEPGRAM_API_KEY = deepgram_api_key;
     }
-    if (groq_api_key) {
-      process.env.GROQ_API_KEY = groq_api_key;
-    }
-    
-    // Reinitialize services with new API keys
-    try {
-      if (groq_api_key && llmAnalysisService) {
-        // Reinitialize LLM service with new key
-        llmAnalysisService = new LLMAnalysisService();
-        console.log('LLM Analysis Service reinitialized with new Groq API key');
-      } else if (groq_api_key && !llmAnalysisService) {
-        // Initialize LLM service if it wasn't available before
-        llmAnalysisService = new LLMAnalysisService();
-        console.log('LLM Analysis Service initialized with new Groq API key');
-      }
-    } catch (error) {
-      console.warn('Failed to reinitialize LLM service:', error.message);
-    }
     
     res.json({ 
       success: true, 
       message: 'API keys updated and saved to database successfully',
-      deepgram_configured: !!process.env.DEEPGRAM_API_KEY,
-      groq_configured: !!process.env.GROQ_API_KEY
+      deepgram_configured: !!process.env.DEEPGRAM_API_KEY
     });
     
   } catch (error) {
@@ -1777,22 +1626,9 @@ app.get('/api/admin/settings/test-apis', async (req, res) => {
       results.deepgram.error = 'API key not configured';
     }
     
-    // Test Groq API
-    if (process.env.GROQ_API_KEY) {
-      results.groq.configured = true;
-      try {
-        // Test LLM service availability
-        if (llmAnalysisService) {
-          results.groq.working = true;
-        } else {
-          results.groq.error = 'LLM service not initialized';
-        }
-      } catch (error) {
-        results.groq.error = error.message;
-      }
-    } else {
-      results.groq.error = 'API key not configured';
-    }
+    // Groq API removed (AI analysis disabled)
+    results.groq.configured = false;
+    results.groq.error = 'AI analysis features disabled';
     
     res.json(results);
     
@@ -1845,8 +1681,8 @@ app.get('/api/admin/settings/status', async (req, res) => {
         }
       },
       llm_service: {
-        available: !!llmAnalysisService,
-        status: llmAnalysisService ? 'Available' : 'Unavailable'
+        available: false,
+        status: 'Disabled (AI analysis removed)'
       },
       transcription_service: {
         available: !!transcriptionService,
@@ -1867,29 +1703,7 @@ app.get('/api/admin/settings/status', async (req, res) => {
   }
 });
 
-// Admin routes
-app.get('/api/admin/prompts', (req, res) => {
-  const activeAnalysisService = llmAnalysisService || analysisService;
-  const prompts = activeAnalysisService.getPrompts();
-  res.json(prompts);
-});
-
-app.put('/api/admin/prompts', (req, res) => {
-  try {
-    const { password, prompts } = req.body;
-    
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const activeAnalysisService = llmAnalysisService || analysisService;
-    activeAnalysisService.updatePrompts(prompts);
-    res.json({ success: true });
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Admin routes - Analysis prompts removed (AI analysis disabled)
 
 // Database status endpoint
 app.get('/api/admin/database/status', async (req, res) => {
@@ -1903,423 +1717,6 @@ app.get('/api/admin/database/status', async (req, res) => {
   }
 });
 
-// Session Analysis API endpoints
-app.get('/api/sessions/:sessionId/analysis', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    
-    // Verify session exists
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const analyses = await sessionAnalysis.findBySessionId(sessionId);
-    
-    res.json(analyses);
-  } catch (error) {
-    console.error('Error fetching session analyses:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/sessions/:sessionId/analysis/:type', async (req, res) => {
-  try {
-    const { sessionId, type } = req.params;
-    
-    // Verify session exists
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const analysis = await sessionAnalysis.findBySessionAndType(sessionId, type);
-    
-    if (!analysis) {
-      return res.status(404).json({ error: 'Analysis not found' });
-    }
-    
-    res.json(analysis);
-  } catch (error) {
-    console.error('Error fetching session analysis:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/sessions/:sessionId/analysis/generate', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const { types } = req.body; // Array of analysis types to generate
-    
-    // Verify session exists
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    // Check if LLM service is available
-    if (!llmAnalysisService) {
-      return res.status(503).json({ error: 'AI Analysis service not available' });
-    }
-    
-    // Get all transcriptions for the session
-    const transcriptions = await Transcription.findBySessionId(sessionId);
-    if (transcriptions.length === 0) {
-      return res.status(400).json({ error: 'No transcriptions found for analysis' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const results = {};
-    
-    // Use the existing comprehensive analysis method
-    try {
-      // Adapt transcriptions format for LLM service
-      const adaptedTranscriptions = transcriptions.map(t => ({
-        ...t,
-        transcript: t.transcript_text || t.transcript || '', // Map transcript_text to transcript
-        tableId: t.table_id,
-        speakers: t.speaker_segments ? 
-          (typeof t.speaker_segments === 'string' ? 
-            JSON.parse(t.speaker_segments) : 
-            t.speaker_segments) : []
-      }));
-      
-      
-      // Create a session object with transcriptions for analysis
-      const sessionForAnalysis = {
-        id: sessionId,
-        title: session.title,
-        transcriptions: adaptedTranscriptions
-      };
-      
-      // Generate comprehensive analysis using existing method
-      const comprehensiveAnalysis = await llmAnalysisService.analyzeSession(sessionForAnalysis);
-      
-      // Save each analysis type separately to database
-      const analysisTypes = ['summary', 'themes', 'sentiment', 'conflicts', 'agreements'];
-      
-      for (const analysisType of analysisTypes) {
-        try {
-          let analysisData;
-          
-          switch (analysisType) {
-            case 'summary':
-              // Create a comprehensive summary from all the analysis
-              analysisData = {
-                summary: `This World Café session "${session.title}" involved ${transcriptions.length} transcriptions across multiple tables.`,
-                key_insights: [
-                  `Found ${comprehensiveAnalysis.themes?.length || 0} main themes`,
-                  `Overall sentiment: ${comprehensiveAnalysis.sentiment?.interpretation || 'Mixed'}`,
-                  `Identified ${comprehensiveAnalysis.conflicts?.length || 0} areas of disagreement`,
-                  `Found ${comprehensiveAnalysis.agreements?.length || 0} points of consensus`
-                ],
-                participation_stats: comprehensiveAnalysis.participationStats,
-                llm_powered: true
-              };
-              break;
-            case 'themes':
-              analysisData = {
-                themes: comprehensiveAnalysis.themes || [],
-                theme_count: comprehensiveAnalysis.themes?.length || 0,
-                analysis_method: 'LLM-powered theme extraction'
-              };
-              break;
-            case 'sentiment':
-              analysisData = comprehensiveAnalysis.sentiment || {
-                overall: 0,
-                interpretation: 'No sentiment data available'
-              };
-              break;
-            case 'conflicts':
-              analysisData = {
-                conflicts: comprehensiveAnalysis.conflicts || [],
-                conflict_count: comprehensiveAnalysis.conflicts?.length || 0,
-                analysis_method: 'LLM-powered conflict detection'
-              };
-              break;
-            case 'agreements':
-              analysisData = {
-                agreements: comprehensiveAnalysis.agreements || [],
-                agreement_count: comprehensiveAnalysis.agreements?.length || 0,
-                analysis_method: 'LLM-powered agreement detection'
-              };
-              break;
-            default:
-              continue;
-          }
-          
-          // Save analysis to database and return the data
-          await sessionAnalysis.create(
-            sessionId, 
-            analysisType, 
-            analysisData, 
-            {
-              transcription_count: transcriptions.length,
-              generated_at: new Date().toISOString(),
-              session_title: session.title,
-              analysis_version: '1.0'
-            }
-          );
-          
-          // Return the analysis data directly
-          results[analysisType] = {
-            analysis_type: analysisType,
-            analysis_data: analysisData,
-            created_at: new Date().toISOString(),
-            session_id: sessionId
-          };
-          
-        } catch (error) {
-          console.error(`Error saving ${analysisType} analysis:`, error);
-          results[analysisType] = { error: error.message };
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error in comprehensive analysis:', error);
-      // If comprehensive analysis fails, still try to save basic analysis
-      const basicAnalysisData = {
-        error: 'Comprehensive analysis failed',
-        message: error.message,
-        transcription_count: transcriptions.length
-      };
-      
-      results.summary = await sessionAnalysis.create(sessionId, 'summary', basicAnalysisData);
-    }
-    
-    res.json({
-      session_id: sessionId,
-      session_title: session.title,
-      analyses: results
-    });
-    
-  } catch (error) {
-    console.error('Error generating session analysis:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Table-level analysis endpoints
-app.get('/api/tables/:tableId/analysis', async (req, res) => {
-  try {
-    const { tableId } = req.params;
-    
-    // Verify table exists
-    const table = await Table.findById(tableId);
-    if (!table) {
-      return res.status(404).json({ error: 'Table not found' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const analyses = await sessionAnalysis.findByTableId(tableId);
-    
-    res.json(analyses);
-  } catch (error) {
-    console.error('Error fetching table analyses:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/tables/:tableId/analysis/generate', async (req, res) => {
-  try {
-    const { tableId } = req.params;
-    const { types } = req.body; // Array of analysis types to generate
-    
-    // Verify table exists and get session info
-    const table = await Table.findById(tableId);
-    if (!table) {
-      return res.status(404).json({ error: 'Table not found' });
-    }
-
-    const session = await Session.findById(table.session_id);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    // Check if LLM service is available
-    if (!llmAnalysisService) {
-      return res.status(503).json({ error: 'AI Analysis service not available' });
-    }
-    
-    // Get all transcriptions for this specific table
-    const allTranscriptions = await Transcription.findBySessionId(table.session_id);
-    const tableTranscriptions = allTranscriptions.filter(t => t.table_id === parseInt(tableId));
-    
-    if (tableTranscriptions.length === 0) {
-      return res.status(400).json({ error: 'No transcriptions found for this table' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const results = {};
-    
-    try {
-      // Adapt transcriptions format for LLM service
-      const adaptedTranscriptions = tableTranscriptions.map(t => ({
-        ...t,
-        transcript: t.transcript_text || t.transcript || '',
-        tableId: t.table_id,
-        speakers: t.speaker_segments ? 
-          (typeof t.speaker_segments === 'string' ? 
-            JSON.parse(t.speaker_segments) : 
-            t.speaker_segments) : []
-      }));
-      
-      console.log(`Generating table-level analysis for table ${tableId} with ${adaptedTranscriptions.length} transcriptions`);
-      
-      // Generate table-specific analysis
-      const tableAnalysis = await llmAnalysisService.analyzeTable(parseInt(tableId), adaptedTranscriptions);
-      
-      // Save each analysis type separately to database
-      const analysisTypes = types || ['summary', 'themes', 'sentiment', 'conflicts', 'agreements'];
-      
-      for (const analysisType of analysisTypes) {
-        try {
-          let analysisData;
-          
-          switch (analysisType) {
-            case 'summary':
-              analysisData = {
-                summary: `Table ${tableId} analysis: ${tableTranscriptions.length} recordings from this table were analyzed.`,
-                key_insights: [
-                  `Found ${tableAnalysis.themes?.length || 0} main themes in this table`,
-                  `Table sentiment: ${tableAnalysis.sentiment?.interpretation || 'Mixed'}`,
-                  `Identified ${tableAnalysis.conflicts?.length || 0} areas of disagreement`,
-                  `Found ${tableAnalysis.agreements?.length || 0} points of consensus`
-                ],
-                recording_stats: {
-                  total_recordings: tableAnalysis.recordingCount,
-                  table_id: tableId,
-                  analysis_scope: 'table'
-                },
-                llm_powered: true
-              };
-              break;
-            case 'themes':
-              analysisData = {
-                themes: tableAnalysis.themes || [],
-                theme_count: tableAnalysis.themes?.length || 0,
-                analysis_method: 'LLM-powered table-level theme extraction',
-                table_id: tableId
-              };
-              break;
-            case 'sentiment':
-              analysisData = {
-                ...tableAnalysis.sentiment,
-                table_id: tableId,
-                analysis_scope: 'table'
-              };
-              break;
-            case 'conflicts':
-              analysisData = {
-                conflicts: tableAnalysis.conflicts || [],
-                conflict_count: tableAnalysis.conflicts?.length || 0,
-                analysis_method: 'LLM-powered table-level conflict detection',
-                table_id: tableId
-              };
-              break;
-            case 'agreements':
-              analysisData = {
-                agreements: tableAnalysis.agreements || [],
-                agreement_count: tableAnalysis.agreements?.length || 0,
-                analysis_method: 'LLM-powered table-level agreement detection',
-                table_id: tableId
-              };
-              break;
-            default:
-              continue;
-          }
-          
-          // Save analysis to database with table scope
-          await sessionAnalysis.create(
-            table.session_id, 
-            analysisType, 
-            analysisData, 
-            {
-              transcription_count: tableTranscriptions.length,
-              recording_count: tableAnalysis.recordingCount,
-              generated_at: new Date().toISOString(),
-              session_title: session.title,
-              table_number: table.table_number,
-              analysis_version: '1.0'
-            },
-            parseInt(tableId), // tableId
-            'table' // analysisScope
-          );
-          
-          // Return the analysis data directly
-          results[analysisType] = {
-            analysis_type: analysisType,
-            analysis_scope: 'table',
-            analysis_data: analysisData,
-            created_at: new Date().toISOString(),
-            session_id: table.session_id,
-            table_id: tableId
-          };
-          
-        } catch (error) {
-          console.error(`Error saving ${analysisType} table analysis:`, error);
-          results[analysisType] = { error: error.message };
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error in table analysis:', error);
-      const basicAnalysisData = {
-        error: 'Table analysis failed',
-        message: error.message,
-        transcription_count: tableTranscriptions.length,
-        table_id: tableId
-      };
-      
-      results.summary = await sessionAnalysis.create(
-        table.session_id, 
-        'summary', 
-        basicAnalysisData, 
-        null,
-        parseInt(tableId), 
-        'table'
-      );
-    }
-    
-    res.json({
-      session_id: table.session_id,
-      table_id: tableId,
-      table_number: table.table_number,
-      analyses: results
-    });
-    
-  } catch (error) {
-    console.error('Error generating table analysis:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Enhanced session analysis endpoint to support scope filtering
-app.get('/api/sessions/:sessionId/analysis/scope/:scope', async (req, res) => {
-  try {
-    const { sessionId, scope } = req.params;
-    
-    // Verify session exists
-    const session = await Session.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    if (!['session', 'table'].includes(scope)) {
-      return res.status(400).json({ error: 'Invalid scope. Must be "session" or "table"' });
-    }
-    
-    const sessionAnalysis = new SessionAnalysis(db);
-    const analyses = await sessionAnalysis.findBySessionScope(sessionId, scope);
-    
-    res.json(analyses);
-  } catch (error) {
-    console.error('Error fetching scoped analyses:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Session Chat API endpoints
 app.post('/api/sessions/:sessionId/chat', async (req, res) => {
@@ -2441,7 +1838,7 @@ async function startServer() {
     console.log(`LAN Access: http://192.168.1.140:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Database: ${dbConnected ? 'Connected' : 'Disconnected'}`);
-    console.log(`LLM Analysis: ${llmAnalysisService ? 'Enabled' : 'Disabled'}`);
+    console.log(`AI Analysis: Disabled`);
   });
 }
 

@@ -559,6 +559,7 @@ function setupEventListeners() {
     safeSetEventListener('stopRecordingBtn', 'onclick', stopRecording);
     safeSetEventListener('uploadMediaBtn', 'onclick', openMediaUpload);
     safeSetEventListener('mediaFileInput', 'onchange', handleMediaFileUpload);
+    safeSetEventListener('generateReportBtn', 'onclick', generateAnalysis);
     
     // QR Code functionality
     safeSetEventListener('showQRCodesBtn', 'onclick', showQRCodes);
@@ -675,6 +676,7 @@ function showScreen(screenId) {
         'tableInterface': 'Table Interface',
         'sessionListScreen': 'Active Sessions',
         'adminDashboard': 'Admin Dashboard',
+        'analysisReport': 'Analysis Report'
     };
     
     document.title = titles[screenId] || 'World Café Platform';
@@ -2619,6 +2621,9 @@ function displayAwesomeTranscriptions(transcriptions, session) {
         console.log('Rendering transcriptions...');
         renderAwesomeTranscriptions(transcriptions);
         
+        // Load existing AI analysis
+        console.log('Loading existing AI analysis...');
+        loadExistingAIAnalysis(session.id);
         
         console.log('displayAwesomeTranscriptions completed successfully');
     } catch (error) {
@@ -4773,24 +4778,831 @@ function downloadRecording(filename) {
 
 
 
+function displaySessionAnalysisReport(analysisResult) {
+    // Helper function to get proper table number from table ID
+    function getTableNumber(tableId) {
+        // Convert to number if it's a string
+        const numericTableId = typeof tableId === 'string' ? parseInt(tableId) : tableId;
+        
+        // Always try to find the table in currentSession first to get the correct table_number
+        if (currentSession && currentSession.tables && currentSession.tables.length > 0) {
+            const table = currentSession.tables.find(t => {
+                // Match by database ID (t.id) which maps to the large numbers like 384, 385
+                return t.id == numericTableId;
+            });
+            
+            if (table && table.table_number) {
+                return table.table_number;
+            }
+            
+            // If no match by ID, check if the input is already a table_number
+            const tableByNumber = currentSession.tables.find(t => t.table_number == numericTableId);
+            if (tableByNumber) {
+                return tableByNumber.table_number;
+            }
+        }
+        
+        // If it's a small number (1-20), it might already be a table number
+        if (typeof numericTableId === 'number' && numericTableId >= 1 && numericTableId <= 20) {
+            return numericTableId;
+        }
+        
+        // Return original value as fallback
+        return tableId;
+    }
+    
+    const reportContent = document.getElementById('reportContent');
+    const reportTitle = document.getElementById('reportTitle');
+    const reportSubtitle = document.getElementById('reportSubtitle');
+    const reportMeta = document.getElementById('reportMeta');
+    
+    const { analyses, session_title } = analysisResult;
+    
+    // Extract analysis data from the response structure
+    const summary = analyses.summary?.analysis_data || {};
+    const themes = analyses.themes?.analysis_data?.themes || [];
+    const conflicts = analyses.conflicts?.analysis_data?.conflicts || [];
+    const agreements = analyses.agreements?.analysis_data?.agreements || [];
+    const sentiment = analyses.sentiment?.analysis_data || {};
+    
+    // Update header
+    reportTitle.textContent = `${session_title} - Analysis Report`;
+    reportSubtitle.textContent = `Comprehensive insights from your World Café session`;
+    
+    reportMeta.innerHTML = `
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">📊</span>
+            Generated: ${new Date().toLocaleString()}
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🤖</span>
+            AI-Powered Analysis
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🌐</span>
+            Session-Wide Scope
+        </span>
+    `;
+    
+    reportContent.innerHTML = `
+        <!-- Key Metrics Overview -->
+        <div style="
+            background: linear-gradient(135deg, #f8f9fa, #fff);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid #e0e0e0;
+        ">
+            <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 28px;">📈</span>
+                Key Metrics Overview
+            </h3>
+            <div style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 24px;
+            ">
+                <div style="
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${themes.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Main Themes</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #f093fb, #f5576c);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${agreements.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Agreements Found</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #4facfe, #00f2fe);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${conflicts.length || 0}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Conflicts Identified</div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #fa709a, #fee140);
+                    color: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(250, 112, 154, 0.3);
+                ">
+                    <div style="font-size: 36px; font-weight: 700; margin-bottom: 8px;">${Object.keys(sentiment.byTable || {}).length}</div>
+                    <div style="font-size: 14px; opacity: 0.9;">Tables Analyzed</div>
+                </div>
+            </div>
+        </div>
 
+        ${summary.key_insights ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">💡</span>
+                    Key Session Insights
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    ${summary.key_insights.map(insight => `
+                        <div style="
+                            background: #f8f9fa;
+                            padding: 20px;
+                            border-radius: 12px;
+                            border-left: 4px solid #667eea;
+                            font-size: 16px;
+                            line-height: 1.6;
+                        ">${insight}</div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
 
+        ${sentiment.overall !== undefined ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">${sentiment.overall > 0.1 ? '😊' : sentiment.overall < -0.1 ? '😔' : '😐'}</span>
+                    Session Sentiment Analysis
+                </h3>
+                <div style="margin-bottom: 24px; text-align: center;">
+                    <div style="
+                        display: inline-block;
+                        padding: 16px 32px;
+                        border-radius: 50px;
+                        background: linear-gradient(135deg, ${sentiment.overall > 0.1 ? '#28a745, #20c997' : sentiment.overall < -0.1 ? '#dc3545, #fd7e14' : '#6c757d, #adb5bd'});
+                        color: white;
+                        font-size: 24px;
+                        font-weight: 700;
+                        margin-bottom: 8px;
+                    ">
+                        ${sentiment.overall > 0 ? '+' : ''}${(sentiment.overall * 100).toFixed(0)}%
+                    </div>
+                    <div style="font-size: 18px; color: #666; font-weight: 500;">
+                        ${sentiment.interpretation || 'Mixed Sentiment'}
+                    </div>
+                </div>
+                ${sentiment.byTable ? `
+                    <h4 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #333;">Sentiment by Table:</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        ${Object.entries(sentiment.byTable).map(([tableId, score]) => `
+                            <div style="
+                                background: #f8f9fa;
+                                padding: 20px;
+                                border-radius: 12px;
+                                text-align: center;
+                                border: 2px solid ${score > 0.1 ? '#28a745' : score < -0.1 ? '#dc3545' : '#6c757d'};
+                            ">
+                                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333;">
+                                    Table ${getTableNumber(tableId)}
+                                </div>
+                                <div style="
+                                    font-size: 20px; 
+                                    font-weight: 700; 
+                                    color: ${score > 0.1 ? '#28a745' : score < -0.1 ? '#dc3545' : '#6c757d'};
+                                ">
+                                    ${score > 0 ? '+' : ''}${(score * 100).toFixed(0)}%
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        ` : ''}
+
+        ${themes.length > 0 ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">🎨</span>
+                    Cross-Table Themes
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                    ${themes.map(theme => `
+                        <div style="
+                            background: linear-gradient(135deg, #f8f9fa, #fff);
+                            border: 1px solid #e0e0e0;
+                            border-radius: 12px;
+                            padding: 24px;
+                            transition: all 0.2s ease;
+                        " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                            <h4 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #333;">${theme.theme}</h4>
+                            <p style="margin: 0 0 16px 0; color: #666; line-height: 1.6; font-size: 14px;">${theme.description || 'No description available'}</p>
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                                <div style="display: flex; gap: 16px; font-size: 12px; color: #888;">
+                                    <span>🔄 ${theme.frequency || 0}x mentioned</span>
+                                    ${theme.tables ? `<span>📍 Tables: ${Object.keys(theme.tables).map(getTableNumber).join(', ')}</span>` : ''}
+                                </div>
+                                ${theme.sentiment ? `<span style="font-size: 20px;">${theme.sentiment > 0 ? '😊' : theme.sentiment < 0 ? '😔' : '😐'}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+
+        ${agreements.length > 0 ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">🤝</span>
+                    Session-Wide Agreements
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    ${agreements.map(agreement => `
+                        <div style="
+                            background: linear-gradient(135deg, #e8f5e8, #f0fdf0);
+                            border: 1px solid #28a745;
+                            border-left: 6px solid #28a745;
+                            border-radius: 12px;
+                            padding: 24px;
+                        ">
+                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px; gap: 16px;">
+                                <span style="
+                                    background: #28a745;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    Strength: ${((agreement.strength || 0) * 100).toFixed(0)}%
+                                </span>
+                                ${agreement.tableId ? `<span style="
+                                    background: #17a2b8;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">Table ${getTableNumber(agreement.tableId)}</span>` : ''}
+                            </div>
+                            <blockquote style="
+                                margin: 0 0 16px 0;
+                                font-size: 16px;
+                                font-style: italic;
+                                color: #2d5a2d;
+                                border-left: 3px solid #28a745;
+                                padding-left: 16px;
+                            ">"${agreement.text || 'No text available'}"</blockquote>
+                            <p style="margin: 0 0 8px 0; color: #495057; font-size: 15px; line-height: 1.5;">${agreement.description || 'No description available'}</p>
+                            ${agreement.context ? `<small style="color: #6c757d; font-style: italic;">Context: ${agreement.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+
+        ${conflicts.length > 0 ? `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 30px;
+                border: 1px solid #e0e0e0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <h3 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 700; color: #333; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 28px;">⚡</span>
+                    Session-Wide Conflicts
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    ${conflicts.map(conflict => `
+                        <div style="
+                            background: linear-gradient(135deg, #ffeaa7, #fab1a0);
+                            border: 1px solid #e17055;
+                            border-left: 6px solid #e17055;
+                            border-radius: 12px;
+                            padding: 24px;
+                        ">
+                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px; gap: 16px;">
+                                <span style="
+                                    background: #e17055;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">
+                                    Severity: ${((conflict.severity || 0) * 100).toFixed(0)}%
+                                </span>
+                                ${conflict.tableId ? `<span style="
+                                    background: #6c757d;
+                                    color: white;
+                                    padding: 6px 12px;
+                                    border-radius: 20px;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                ">Table ${getTableNumber(conflict.tableId)}</span>` : ''}
+                            </div>
+                            <blockquote style="
+                                margin: 0 0 16px 0;
+                                font-size: 16px;
+                                font-style: italic;
+                                color: #8b4513;
+                                border-left: 3px solid #e17055;
+                                padding-left: 16px;
+                            ">"${conflict.text || 'No text available'}"</blockquote>
+                            <p style="margin: 0 0 8px 0; color: #495057; font-size: 15px; line-height: 1.5;">${conflict.description || 'No description available'}</p>
+                            ${conflict.context ? `<small style="color: #6c757d; font-style: italic;">Context: ${conflict.context}</small>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+    `;
+}
+
+async function viewSessionAnalysis() {
+    if (!currentSession) return;
+    
+    showLoading('Loading session analysis...');
+    try {
+        await generateSessionAnalysis();
+    } catch (error) {
+        console.error('Error loading session analysis:', error);
+    }
+}
+
+async function viewTableAnalyses() {
+    // This would show a list of all table analyses for the session
+    alert('Table analyses view - to be implemented');
+}
 
 async function compareWithOtherTables() {
     // This would show a comparison view between different tables
     alert('Table comparison view - to be implemented');
 }
 
+async function exportAnalysisData() {
+    // This would export the analysis data
+    alert('Export functionality - to be implemented');
+}
+
+// Session Dashboard AI Analysis Functions
+async function generateSessionAnalysisFromDashboard() {
+    if (!currentSession) {
+        alert('No session selected');
+        return;
+    }
+    
+    const analysisBtn = document.getElementById('sessionAIAnalysisBtn');
+    const sessionAIAnalysisSection = document.getElementById('sessionAIAnalysisSection');
+    const sessionAIAnalysisResults = document.getElementById('sessionAIAnalysisResults');
+    
+    // Disable button and show loading
+    analysisBtn.disabled = true;
+    analysisBtn.textContent = '🤖 Generating...';
+    
+    // Show analysis section with loading
+    sessionAIAnalysisSection.style.display = 'block';
+    sessionAIAnalysisResults.innerHTML = `
+        <div class="analysis-loading">
+            <div class="spinner"></div>
+            <p>AI is analyzing all session transcriptions...</p>
+            <small>This may take a few minutes depending on the amount of content.</small>
+        </div>
+    `;
+    
+    try {
+        const analysisResult = await generateSessionAnalysis();
+        
+        // Display the result in the session dashboard section
+        displaySessionAnalysisInDashboard(analysisResult);
+        
+        // Add success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'analysis-success';
+        successDiv.innerHTML = '✅ Session AI analysis completed successfully!';
+        sessionAIAnalysisResults.insertBefore(successDiv, sessionAIAnalysisResults.firstChild);
+        
+        // Remove success message after 3 seconds
+        setTimeout(() => {
+            if (successDiv.parentNode) {
+                successDiv.parentNode.removeChild(successDiv);
+            }
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Error generating session AI analysis:', error);
+        sessionAIAnalysisResults.innerHTML = `
+            <div class="analysis-error">
+                <h3>❌ Session Analysis Failed</h3>
+                <p>${error.message || 'An error occurred while generating the analysis.'}</p>
+                <small>Please try again or check if the AI service is available.</small>
+            </div>
+        `;
+    } finally {
+        // Re-enable button
+        analysisBtn.disabled = false;
+        analysisBtn.textContent = '🤖 AI Analysis';
+    }
+}
+
+function displaySessionAnalysisInDashboard(analysisResult) {
+    const sessionAIAnalysisResults = document.getElementById('sessionAIAnalysisResults');
+    
+    // Check if analysisResult is valid
+    if (!analysisResult) {
+        sessionAIAnalysisResults.innerHTML = `
+            <div class="analysis-error">
+                <h3>❌ Session Analysis Failed</h3>
+                <p>analysisResult is undefined</p>
+                <small>Please try again or check if the AI service is available.</small>
+            </div>
+        `;
+        return;
+    }
+    
+    const { analyses, session_title } = analysisResult;
+    
+    // Extract analysis data from the response structure
+    const summary = analyses.summary?.analysis_data || {};
+    const themes = analyses.themes?.analysis_data?.themes || [];
+    const conflicts = analyses.conflicts?.analysis_data?.conflicts || [];
+    const agreements = analyses.agreements?.analysis_data?.agreements || [];
+    const sentiment = analyses.sentiment?.analysis_data || {};
+    
+    sessionAIAnalysisResults.innerHTML = `
+        <div class="analysis-summary-dashboard">
+            <h3>📊 Session Analysis Summary</h3>
+            <div class="summary-stats-grid">
+                <div class="stat-card-mini">
+                    <span class="stat-value">${themes.length || 0}</span>
+                    <span class="stat-label">Main Themes</span>
+                </div>
+                <div class="stat-card-mini">
+                    <span class="stat-value">${conflicts.length || 0}</span>
+                    <span class="stat-label">Conflicts</span>
+                </div>
+                <div class="stat-card-mini">
+                    <span class="stat-value">${agreements.length || 0}</span>
+                    <span class="stat-label">Agreements</span>
+                </div>
+                <div class="stat-card-mini ${sentiment.overall > 0.1 ? 'positive' : sentiment.overall < -0.1 ? 'negative' : 'neutral'}">
+                    <span class="stat-value">${sentiment.overall ? (sentiment.overall * 100).toFixed(0) + '%' : 'N/A'}</span>
+                    <span class="stat-label">Sentiment</span>
+                </div>
+            </div>
+        </div>
+        
+        ${themes.length > 0 ? `
+            <div class="analysis-section-compact">
+                <h4>🎨 Top Session Themes</h4>
+                <div class="themes-compact">
+                    ${themes.slice(0, 3).map(theme => `
+                        <div class="theme-tag">
+                            <span class="theme-name">${theme.theme}</span>
+                            <span class="theme-frequency">${theme.frequency || 0}×</span>
+                        </div>
+                    `).join('')}
+                    ${themes.length > 3 ? `<div class="theme-tag more">+${themes.length - 3} more</div>` : ''}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${sentiment.byTable ? `
+            <div class="analysis-section-compact">
+                <h4>😊 Table Sentiments</h4>
+                <div class="table-sentiments-compact">
+                    ${Object.entries(sentiment.byTable).slice(0, 6).map(([tableId, score]) => `
+                        <div class="table-sentiment-compact">
+                            <span class="table-label">Table ${tableId}</span>
+                            <span class="sentiment-indicator ${score > 0.1 ? 'positive' : score < -0.1 ? 'negative' : 'neutral'}">
+                                ${score > 0.1 ? '😊' : score < -0.1 ? '😔' : '😐'}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div class="analysis-actions-dashboard">
+            <button onclick="viewFullSessionAnalysisReport()" class="btn btn-primary">📋 View Full Report</button>
+            <button onclick="viewTableAnalyses()" class="btn btn-secondary">📢 Table Breakdown</button>
+        </div>
+    `;
+}
+
+async function viewFullSessionAnalysisReport() {
+    // Navigate to the full analysis report
+    await generateSessionAnalysis();
+}
+
+function toggleSessionAIAnalysis() {
+    const sessionAIAnalysisSection = document.getElementById('sessionAIAnalysisSection');
+    sessionAIAnalysisSection.style.display = sessionAIAnalysisSection.style.display === 'none' ? 'block' : 'none';
+}
+
+// Make sure the session dashboard analysis button calls the right function
+if (typeof window !== 'undefined') {
+    // Override the inline onclick for the session dashboard button
+    document.addEventListener('DOMContentLoaded', function() {
+        const sessionAnalysisBtn = document.getElementById('sessionAIAnalysisBtn');
+        if (sessionAnalysisBtn) {
+            sessionAnalysisBtn.onclick = generateSessionAnalysisFromDashboard;
+        }
+    });
+}
+
+// Simple Session Chat Functions
+let simpleChatAvailable = false;
+
+function initializeSimpleChat() {
+    if (currentSession) {
+        checkSimpleChatStatus();
+        
+        // Add Enter key handler
+        const input = document.getElementById('simpleChatInput');
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendSimpleChatMessage();
+                }
+            });
+        }
+    }
+}
+
+async function checkSimpleChatStatus() {
+    if (!currentSession) {
+        updateSimpleChatStatus('No session selected', false);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/chat/status`);
+        const status = await response.json();
+        
+        if (response.ok) {
+            simpleChatAvailable = status.available && status.hasTranscriptions;
+            
+            if (!status.available) {
+                updateSimpleChatStatus('Service unavailable', false);
+            } else if (!status.hasTranscriptions) {
+                updateSimpleChatStatus('No transcriptions yet', false);
+                updateSimpleTranscriptCount(0);
+            } else {
+                updateSimpleChatStatus('Ready to chat!', true);
+                updateSimpleTranscriptCount(status.transcriptionCount);
+            }
+        } else {
+            updateSimpleChatStatus('Connection error', false);
+        }
+    } catch (error) {
+        console.error('Error checking simple chat status:', error);
+        updateSimpleChatStatus('Connection error', false);
+    }
+}
+
+function updateSimpleChatStatus(message, available) {
+    // Update chatbot elements
+    const statusText = document.getElementById('simpleChatStatus');
+    const chatInput = document.getElementById('simpleChatInput');
+    const sendBtn = document.getElementById('simpleSendBtn');
+    
+    if (statusText) statusText.textContent = message;
+    if (chatInput) {
+        chatInput.disabled = !available;
+        // Update placeholder based on availability
+        if (available) {
+            chatInput.placeholder = "Ask about the discussions, insights, themes...";
+        } else {
+            chatInput.placeholder = "Chat unavailable - " + message.toLowerCase();
+        }
+    }
+    if (sendBtn) {
+        sendBtn.disabled = !available;
+        sendBtn.textContent = available ? 'Send' : 'Unavailable';
+    }
+    
+    simpleChatAvailable = available;
+}
+
+function updateSimpleTranscriptCount(count) {
+    const countSpan = document.getElementById('simpleTranscriptCount');
+    if (countSpan) {
+        countSpan.textContent = `${count} transcription${count !== 1 ? 's' : ''}`;
+    }
+}
+
+async function sendSimpleChatMessage() {
+    const chatInput = document.getElementById('simpleChatInput');
+    const sendBtn = document.getElementById('simpleSendBtn');
+    const message = chatInput.value.trim();
+    
+    if (!message || !simpleChatAvailable || !currentSession) {
+        return;
+    }
+    
+    // Add user message
+    addSimpleMessage('user', message);
+    
+    // Clear input and disable controls
+    chatInput.value = '';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Thinking...';
+    
+    // Add loading message
+    const loadingId = addSimpleMessage('ai', '🤔 Analyzing...');
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message })
+        });
+        
+        const result = await response.json();
+        
+        // Remove loading message
+        removeSimpleMessage(loadingId);
+        
+        if (response.ok && result.success) {
+            addSimpleMessage('ai', result.response);
+        } else {
+            // Handle new structured error format
+            if (result.message && result.suggestions) {
+                let errorMsg = result.message;
+                if (result.details) {
+                    errorMsg += '\n\n' + result.details;
+                }
+                
+                if (result.suggestions && result.suggestions.length > 0) {
+                    errorMsg += '\n\n💡 Suggestions:';
+                    result.suggestions.forEach(suggestion => {
+                        errorMsg += '\n• ' + suggestion;
+                    });
+                }
+                
+                // Add technical info for debugging if available
+                if (result.technicalInfo && result.technicalInfo.estimated) {
+                    errorMsg += '\n\n🔧 Technical: ' + result.technicalInfo.estimated.toLocaleString() + ' tokens (limit: ' + result.technicalInfo.limit.toLocaleString() + ')';
+                }
+                
+                addSimpleMessage('error', errorMsg);
+            } else {
+                // Fallback for old format
+                let errorMsg = result.error || result.message || 'Failed to get response';
+                if (result.suggestion) {
+                    errorMsg += '\n\n💡 ' + result.suggestion;
+                }
+                addSimpleMessage('error', errorMsg);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Chat error:', error);
+        removeSimpleMessage(loadingId);
+        addSimpleMessage('error', 'Network error - please try again');
+    } finally {
+        // Re-enable controls
+        chatInput.disabled = !simpleChatAvailable;
+        sendBtn.disabled = !simpleChatAvailable;
+        sendBtn.textContent = 'Send';
+        if (simpleChatAvailable) {
+            chatInput.focus();
+        }
+    }
+}
 
 
+function addSimpleMessage(type, content) {
+    const messagesDiv = document.getElementById('simpleChatMessages');
+    const messageId = 'simple-msg-' + Date.now();
+    
+    // Clear welcome message if this is the first real message
+    const welcomeMsg = messagesDiv.querySelector('[style*="text-align: center"]');
+    if (welcomeMsg && (type === 'user' || type === 'ai')) {
+        welcomeMsg.remove();
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.id = messageId;
+    messageDiv.style.cssText = `
+        margin-bottom: 16px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        animation: fadeIn 0.3s ease;
+        max-width: 100%;
+        word-wrap: break-word;
+        line-height: 1.5;
+    `;
+    
+    // Style based on message type
+    if (type === 'user') {
+        messageDiv.style.cssText += `
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            margin-left: 20%;
+            border-bottom-right-radius: 4px;
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; color: #666; font-size: 12px;">You</div>${content.replace(/\n/g, '<br>')}`;
+    } else if (type === 'ai') {
+        messageDiv.style.cssText += `
+            background: rgba(255,255,255,0.2);
+            color: white;
+            margin-right: 20%;
+            border-bottom-left-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.3);
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; color: rgba(255,255,255,0.8); font-size: 12px; display: flex; align-items: center; gap: 6px;"><span>🤖</span> AI Assistant</div>${content.replace(/\n/g, '<br>')}`;
+    } else if (type === 'error') {
+        messageDiv.style.cssText += `
+            background: rgba(220, 53, 69, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        `;
+        messageDiv.innerHTML = `<div style="font-weight: 500; margin-bottom: 4px; font-size: 12px;">❌ Error</div>${content.replace(/\n/g, '<br>')}`;
+    }
+    
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    return messageId;
+}
 
+function removeSimpleMessage(messageId) {
+    const message = document.getElementById(messageId);
+    if (message) {
+        message.remove();
+    }
+}
 
+function addMessageToChat(type, content, isLoading = false) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageId = 'msg-' + Date.now();
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    messageDiv.id = messageId;
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    if (type === 'error') {
+        contentDiv.innerHTML = `<div class="error-message">❌ ${content.replace(/\n/g, '<br>')}</div>`;
+    } else if (isLoading) {
+        contentDiv.innerHTML = `<div class="loading-message">${content}</div>`;
+    } else {
+        // Format the content with basic markdown-like formatting
+        const formattedContent = content
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        contentDiv.innerHTML = formattedContent;
+    }
+    
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return messageId;
+}
 
-
-
-
-
-
+function removeMessageFromChat(messageId) {
+    const message = document.getElementById(messageId);
+    if (message) {
+        message.remove();
+    }
+}
 
 // Handle Enter key in chat input
 document.addEventListener('DOMContentLoaded', function() {
@@ -5632,9 +6444,10 @@ function toggleApiKeyVisibility(inputId) {
 
 async function updateApiKeys() {
     const deepgramKey = document.getElementById('deepgramApiKey').value;
+    const groqKey = document.getElementById('groqApiKey').value;
     
-    if (!deepgramKey) {
-        alert('Please enter the Deepgram API key.');
+    if (!deepgramKey && !groqKey) {
+        alert('Please enter at least one API key.');
         return;
     }
     
@@ -5647,7 +6460,8 @@ async function updateApiKeys() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                deepgram_api_key: deepgramKey || null
+                deepgram_api_key: deepgramKey || null,
+                groq_api_key: groqKey || null
             })
         });
         
@@ -5660,6 +6474,7 @@ async function updateApiKeys() {
             
             // Clear form
             document.getElementById('deepgramApiKey').value = '';
+            document.getElementById('groqApiKey').value = '';
             
         } else {
             const error = await response.json();
@@ -5689,6 +6504,12 @@ async function testApiKeys() {
             }
         }
         
+        if (result.groq) {
+            message += `Groq: ${result.groq.status === 'success' ? '✅ Connected' : '❌ Failed'}\n`;
+            if (result.groq.error) {
+                message += `  Error: ${result.groq.error}\n`;
+            }
+        }
         
         alert(message);
         
@@ -5862,11 +6683,13 @@ async function loadSettingsData() {
 }
 
 function updateConfigurationStatus() {
-    // Check if API keys are configured
+    // This would typically check if API keys are configured
+    // For now, we'll check if the services are working
     fetch('/api/admin/settings/status')
         .then(response => response.json())
         .then(status => {
             const deepgramStatus = document.getElementById('deepgramConfigStatus');
+            const groqStatus = document.getElementById('groqConfigStatus');
             
             if (status.apis && status.apis.deepgram && status.apis.deepgram.configured) {
                 deepgramStatus.textContent = 'Configured';
@@ -5874,6 +6697,14 @@ function updateConfigurationStatus() {
             } else {
                 deepgramStatus.textContent = 'Not Configured';
                 deepgramStatus.className = 'config-status-badge';
+            }
+            
+            if (status.apis && status.apis.groq && status.apis.groq.configured) {
+                groqStatus.textContent = 'Configured';
+                groqStatus.className = 'config-status-badge configured';
+            } else {
+                groqStatus.textContent = 'Not Configured';
+                groqStatus.className = 'config-status-badge';
             }
         })
         .catch(error => {
@@ -5883,6 +6714,7 @@ function updateConfigurationStatus() {
 
 function updateSystemHealthStatus(status) {
     const deepgramHealth = document.getElementById('deepgramStatus');
+    const groqHealth = document.getElementById('groqStatus');
     
     if (status.deepgram) {
         if (status.deepgram.status === 'success') {
@@ -5891,6 +6723,16 @@ function updateSystemHealthStatus(status) {
         } else {
             deepgramHealth.textContent = '✗ Unavailable';
             deepgramHealth.className = 'health-status error';
+        }
+    }
+    
+    if (status.groq) {
+        if (status.groq.status === 'success') {
+            groqHealth.textContent = '✓ Available';
+            groqHealth.className = 'health-status connected';
+        } else {
+            groqHealth.textContent = '✗ Unavailable';
+            groqHealth.className = 'health-status error';
         }
     }
 }

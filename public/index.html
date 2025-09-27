@@ -293,35 +293,7 @@
             margin-bottom: 20px !important;
         }
         
-        .session-chat-mobile {
-            padding: 16px !important;
-            margin-bottom: 20px !important;
-            border-radius: 10px !important;
-        }
         
-        .session-chat-mobile h3 {
-            font-size: 18px !important;
-        }
-        
-        .session-chat-mobile p {
-            font-size: 13px !important;
-        }
-        
-        #simpleChatMessages {
-            min-height: 100px !important;
-            max-height: 200px !important;
-            padding: 12px !important;
-        }
-        
-        #simpleChatInput {
-            padding: 12px 16px !important;
-            font-size: 15px !important;
-        }
-        
-        #simpleSendBtn {
-            padding: 12px 18px !important;
-            font-size: 14px !important;
-        }
         
         .session-main-content-mobile {
             grid-template-columns: 1fr !important;
@@ -1188,24 +1160,6 @@
                             flex-wrap: wrap;
                             justify-content: center;
                         ">
-                            <button onclick="generateSessionAnalysisFromDashboard()" id="sessionAIAnalysisBtn" style="
-                                padding: 12px 24px;
-                                background: linear-gradient(135deg, #667eea, #764ba2);
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 14px;
-                                font-weight: 500;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s ease;
-                            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-                                <span style="font-size: 16px;">🤖</span>
-                                AI Analysis
-                            </button>
-                            
                             <button onclick="viewAllTranscriptions(currentSession.id)" style="
                                 padding: 12px 24px;
                                 background: #28a745;
@@ -1243,120 +1197,6 @@
                             </button>
                         </div>
 
-                        <!-- Chat with Session - Compact Interface -->
-                        <div id="sessionChatSection" style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            border-radius: 12px;
-                            padding: 20px;
-                            margin-bottom: 30px;
-                            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.3);
-                        " class="session-chat-mobile">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <div>
-                                    <h3 style="margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
-                                        <span style="font-size: 24px;">💬</span>
-                                        Chat with Session
-                                    </h3>
-                                    <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
-                                        Ask questions about your World Café discussions and insights
-                                    </p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <span id="simpleChatStatus" style="
-                                        background: rgba(255,255,255,0.2);
-                                        padding: 8px 16px;
-                                        border-radius: 20px;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        display: inline-block;
-                                    ">Checking...</span>
-                                    <div style="
-                                        margin-top: 8px;
-                                        font-size: 13px;
-                                        color: rgba(255,255,255,0.8);
-                                    ">
-                                        <span id="simpleTranscriptCount">0 transcriptions</span> available
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Chat Messages Area -->
-                            <div id="simpleChatMessages" style="
-                                background: rgba(255,255,255,0.1);
-                                border-radius: 12px;
-                                padding: 16px;
-                                margin-bottom: 16px;
-                                min-height: 120px;
-                                max-height: 250px;
-                                overflow-y: auto;
-                                border: 1px solid rgba(255,255,255,0.2);
-                            ">
-                                <div style="
-                                    opacity: 0.9;
-                                    font-size: 14px;
-                                    text-align: center;
-                                    color: rgba(255,255,255,0.8);
-                                    padding: 20px 16px;
-                                ">
-                                    <div style="font-size: 32px; margin-bottom: 12px;">💬</div>
-                                    <h4 style="margin: 0 0 6px 0; font-size: 16px; font-weight: 600;">Ready to explore your session!</h4>
-                                    <p style="margin: 0; font-size: 13px; line-height: 1.4;">
-                                        Ask about discussions, themes, insights, or anything from your World Café session.
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <!-- Chat Input Area -->
-                            <div style="
-                                display: flex;
-                                gap: 12px;
-                                align-items: stretch;
-                            ">
-                                <div style="flex: 1; position: relative;">
-                                    <input type="text" id="simpleChatInput" placeholder="Ask about the discussions, insights, themes..." disabled style="
-                                        width: 100%;
-                                        padding: 16px 20px;
-                                        border: none;
-                                        border-radius: 12px;
-                                        font-size: 16px;
-                                        background: rgba(255,255,255,0.9);
-                                        color: #333;
-                                        box-sizing: border-box;
-                                        outline: none;
-                                        transition: all 0.2s ease;
-                                    ">
-                                    <div style="
-                                        position: absolute;
-                                        bottom: -20px;
-                                        left: 0;
-                                        font-size: 12px;
-                                        color: rgba(255,255,255,0.7);
-                                    ">
-                                        Press Enter to send or use the Send button
-                                    </div>
-                                </div>
-                                <button id="simpleSendBtn" onclick="sendSimpleChatMessage()" disabled style="
-                                    padding: 16px 24px;
-                                    background: rgba(255,255,255,0.2);
-                                    color: white;
-                                    border: 2px solid rgba(255,255,255,0.3);
-                                    border-radius: 12px;
-                                    cursor: pointer;
-                                    font-weight: 600;
-                                    font-size: 16px;
-                                    transition: all 0.2s ease;
-                                    min-width: 80px;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.3)'">
-                                    Send
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- QR Codes Section -->
                         <div id="qrCodesSection" style="
@@ -1420,34 +1260,6 @@
                             </div>
                         </div>
 
-                        <!-- Session AI Analysis Section -->
-                        <div id="sessionAIAnalysisSection" style="
-                            display: none;
-                            background: #f8f9fa;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 12px;
-                            padding: 24px;
-                            margin-bottom: 30px;
-                        ">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: 600;">🤖 Session AI Analysis Results</h3>
-                                <button onclick="toggleSessionAIAnalysis()" style="
-                                    background: none;
-                                    border: none;
-                                    font-size: 18px;
-                                    cursor: pointer;
-                                    color: #666;
-                                ">✕</button>
-                            </div>
-                            <div id="sessionAIAnalysisResults">
-                                <!-- Session analysis results will be loaded here -->
-                            </div>
-                        </div>
 
                         <!-- Main Content Grid -->
                         <div style="
@@ -2404,17 +2216,6 @@
                             </div>
                             
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button onclick="generateAIAnalysis()" id="aiAnalysisBtn" style="
-                                    padding: 10px 16px;
-                                    background: linear-gradient(135deg, #667eea, #764ba2);
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                ">🤖 AI Analysis</button>
-                                
                                 <button onclick="exportAllTranscriptions()" style="
                                     padding: 10px 16px;
                                     background: #007bff;
@@ -2452,34 +2253,6 @@
                             </div>
                         </div>
 
-                        <!-- AI Analysis Section -->
-                        <div id="aiAnalysisSection" style="
-                            display: none;
-                            background: #f8f9fa;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 8px;
-                            padding: 20px;
-                            margin-bottom: 30px;
-                        ">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">🤖 AI Analysis Results</h3>
-                                <button onclick="toggleAIAnalysis()" style="
-                                    background: none;
-                                    border: none;
-                                    font-size: 18px;
-                                    cursor: pointer;
-                                    color: #666;
-                                ">✕</button>
-                            </div>
-                            <div id="aiAnalysisResults">
-                                <!-- AI analysis results will be loaded here -->
-                            </div>
-                        </div>
 
                         <!-- Transcriptions List -->
                         <div id="allTranscriptionsList" style="
@@ -3112,10 +2885,6 @@
                                             <span class="health-label">Deepgram API</span>
                                             <span class="health-status connected" id="deepgramStatus">✓ Available</span>
                                         </div>
-                                        <div class="health-item">
-                                            <span class="health-label">Groq API</span>
-                                            <span class="health-status connected" id="groqStatus">✓ Available</span>
-                                        </div>
                                     </div>
                                 </div>
                                 
@@ -3166,16 +2935,6 @@
                                             </div>
                                         </div>
                                         
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label for="groqApiKey">Groq API Key</label>
-                                                <div class="api-key-input">
-                                                    <input type="password" id="groqApiKey" class="modern-input" placeholder="Enter Groq API key">
-                                                    <button type="button" class="toggle-visibility" onclick="toggleApiKeyVisibility('groqApiKey')">👁️</button>
-                                                </div>
-                                                <small class="form-hint">Used for AI analysis and content generation</small>
-                                            </div>
-                                        </div>
                                         
                                         <div class="form-actions">
                                             <button onclick="updateApiKeys()" class="modern-btn modern-btn-primary">💾 Save API Keys</button>
@@ -3264,10 +3023,6 @@
                                         <div class="config-item">
                                             <span class="config-label">Deepgram API</span>
                                             <span class="config-status-badge" id="deepgramConfigStatus">Not Configured</span>
-                                        </div>
-                                        <div class="config-item">
-                                            <span class="config-label">Groq API</span>
-                                            <span class="config-status-badge" id="groqConfigStatus">Not Configured</span>
                                         </div>
                                         <div class="config-item">
                                             <span class="config-label">Database</span>
