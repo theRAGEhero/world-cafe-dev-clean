@@ -110,17 +110,18 @@ class DeepgramSTT {
     async startLiveTranscription(options = {}) {
         try {
             const defaultOptions = {
-                model: 'nova-2',
+                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
-                diarize: true,
                 interim_results: true,
+                diarize: true,
                 utterance_end_ms: 1000,
-                utt_split: 0.8,
                 ...options
             };
 
+            console.log(`🚀 Starting live transcription with options:`, JSON.stringify(defaultOptions, null, 2));
+            
             const connection = this.deepgram.listen.live(defaultOptions);
             
             return connection;

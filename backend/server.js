@@ -12,7 +12,7 @@ require('dotenv').config();
 
 // Database
 const db = require('./database/connection');
-const { Session, Table, Participant, Recording, Transcription, QRCode, Settings } = require('./database/models');
+const { Session, Table, Recording, Transcription, QRCode, Settings } = require('./database/models');
 
 // Services
 const TranscriptionService = require('./transcription');
@@ -165,25 +165,29 @@ async function initializeDatabase() {
       logger.initialize(db);
       logger.info('Server starting up', { timestamp: new Date() });
       
-      // Run database migrations/checks
-      try {
-        await checkTableStructure();
-        console.log('Database schema verified');
-        logger.info('Database schema verified');
-      } catch (migrationError) {
-        console.error('Database migration failed:', migrationError.message);
-        console.warn('Some database features may not work properly');
-        logger.error('Database migration failed', { error: migrationError.message });
-      }
-      
-      // Run pending migrations
-      try {
-        const { runMigrations } = require('./migrate');
-        await runMigrations();
-        console.log('Database migrations completed');
-      } catch (migrationError) {
-        console.error('Migration execution failed:', migrationError.message);
-        console.warn('Some database features may not work properly');
+      // Run database migrations/checks (can be disabled with SKIP_DB_CHECKS=true)
+      if (process.env.SKIP_DB_CHECKS !== 'true') {
+        try {
+          await checkTableStructure();
+          console.log('Database schema verified');
+          logger.info('Database schema verified');
+        } catch (migrationError) {
+          console.error('Database migration failed:', migrationError.message);
+          console.warn('Some database features may not work properly');
+          logger.error('Database migration failed', { error: migrationError.message });
+        }
+        
+        // Run pending migrations
+        try {
+          const { runMigrations } = require('./migrate');
+          await runMigrations();
+          console.log('Database migrations completed');
+        } catch (migrationError) {
+          console.error('Migration execution failed:', migrationError.message);
+          console.warn('Some database features may not work properly');
+        }
+      } else {
+        console.log('⏭️  Skipping database checks (SKIP_DB_CHECKS=true)');
       }
       
       // Initialize and load global settings
@@ -207,13 +211,94 @@ async function initializeDatabase() {
   }
 }
 
+// Client and recording tracking for real-time table status
+const tableClients = new Map(); // tableId -> Set of {socketId, sessionId}
+const clientToTable = new Map(); // socketId -> {tableId, sessionId}
+const tableRecordingStatus = new Map(); // tableId -> {isRecording, isStreaming, status, startTime}
+
+// Helper function to get connected clients in a session
+function getConnectedClientsInSession(sessionId) {
+  const clients = [];
+  const room = io.sockets.adapter.rooms.get(sessionId);
+  if (room) {
+    for (const socketId of room) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        clients.push(socket);
+      }
+    }
+  }
+  return clients;
+}
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   
+  // Add a heartbeat to help detect dead connections
+  socket.on('ping', () => {
+    socket.emit('pong');
+  });
+  
   socket.on('join-session', (sessionId) => {
     socket.join(sessionId);
     console.log(`Client ${socket.id} joined session ${sessionId}`);
+  });
+  
+  socket.on('join-table', (data) => {
+    // Handle both formats: join-table(tableId) and join-table({tableId, sessionId})
+    let tableId, sessionId;
+    
+    if (typeof data === 'object' && data.tableId) {
+      // New format: {tableId, sessionId}
+      tableId = data.tableId;
+      sessionId = data.sessionId;
+    } else {
+      // Legacy format: just tableId
+      tableId = data;
+      // We'll skip session-specific tracking for legacy calls
+      console.log(`Client ${socket.id} joined table ${tableId} (legacy format)`);
+      return;
+    }
+    
+    // Clean up any existing mapping for this socket to prevent duplicates
+    const existingMapping = clientToTable.get(socket.id);
+    if (existingMapping) {
+      const oldTableId = existingMapping.tableId;
+      if (tableClients.has(oldTableId)) {
+        tableClients.get(oldTableId).delete(socket.id);
+        
+        // Update old table's client count
+        const oldSessionId = existingMapping.sessionId;
+        if (oldSessionId && tableClients.get(oldTableId).size >= 0) {
+          io.to(oldSessionId).emit('table-client-update', {
+            tableId: oldTableId,
+            clientCount: tableClients.get(oldTableId).size,
+            hasClients: tableClients.get(oldTableId).size > 0,
+            timestamp: new Date()
+          });
+        }
+      }
+    }
+    
+    // Track client for this table
+    if (!tableClients.has(tableId)) {
+      tableClients.set(tableId, new Set());
+    }
+    tableClients.get(tableId).add(socket.id);
+    clientToTable.set(socket.id, { tableId, sessionId });
+    
+    console.log(`Client ${socket.id} joined table ${tableId} in session ${sessionId} (${tableClients.get(tableId).size} total clients)`);
+    
+    // Broadcast updated client count to session
+    if (sessionId) {
+      io.to(sessionId).emit('table-client-update', {
+        tableId,
+        clientCount: tableClients.get(tableId).size,
+        hasClients: true,
+        timestamp: new Date()
+      });
+    }
   });
   
   socket.on('table-status-update', (data) => {
@@ -221,23 +306,218 @@ io.on('connection', (socket) => {
   });
   
   socket.on('recording-started', (data) => {
+    // Track recording status
+    tableRecordingStatus.set(data.tableId, {
+      isRecording: true,
+      isStreaming: false,
+      status: 'recording',
+      startTime: new Date()
+    });
+    
+    // Broadcast recording status to session and table clients
     socket.to(data.sessionId).emit('recording-status', { 
       tableId: data.tableId, 
+      status: 'recording',
+      timestamp: new Date()
+    });
+    
+    // Broadcast to session dashboard for real-time indicators
+    io.to(data.sessionId).emit('table-recording-update', {
+      tableId: data.tableId,
       status: 'recording',
       timestamp: new Date()
     });
   });
   
   socket.on('recording-stopped', (data) => {
+    // Update recording status
+    if (tableRecordingStatus.has(data.tableId)) {
+      const currentStatus = tableRecordingStatus.get(data.tableId);
+      tableRecordingStatus.set(data.tableId, {
+        ...currentStatus,
+        isRecording: false,
+        status: 'stopped'
+      });
+    }
+    
+    // Broadcast recording status to session and table clients
     socket.to(data.sessionId).emit('recording-status', { 
       tableId: data.tableId, 
       status: 'stopped',
       timestamp: new Date()
     });
+    
+    // Broadcast to session dashboard for real-time indicators
+    io.to(data.sessionId).emit('table-recording-update', {
+      tableId: data.tableId,
+      status: 'idle',
+      timestamp: new Date()
+    });
   });
   
+  // Live transcription WebSocket handlers
+  socket.on('start-live-transcription', async (data) => {
+    try {
+      console.log(`🎤 Starting live transcription for table ${data.tableId} in session ${data.sessionId}`);
+      console.log(`🔑 Deepgram API Key configured: ${!!process.env.DEEPGRAM_API_KEY}`);
+      console.log(`🔑 API Key starts with: ${process.env.DEEPGRAM_API_KEY ? process.env.DEEPGRAM_API_KEY.substring(0, 10) + '...' : 'NOT SET'}`);
+      
+      const DeepgramSTT = require('./transcription');
+      const deepgram = new DeepgramSTT();
+      
+      // Start Deepgram live transcription
+      console.log(`🚀 Creating Deepgram live connection with options:`, {
+        language: data.language || 'en-US'
+      });
+      
+      const connection = await deepgram.startLiveTranscription({
+        language: data.language || 'en-US'
+      });
+      
+      console.log(`🔗 Deepgram connection created:`, !!connection);
+      console.log(`🔗 Connection type:`, typeof connection);
+      
+      // Store connection for this socket
+      socket.deepgramConnection = connection;
+      
+      // Handle Deepgram results (note: lowercase 'results' for live API)
+      connection.on('results', (data) => {
+        try {
+          console.log('🔍 Raw Deepgram response length:', data.length);
+          const result = JSON.parse(data);
+          console.log('🔍 Parsed Deepgram result type:', result.type || 'unknown');
+          
+          let transcript = '';
+          let isFinal = false;
+          
+          // Try multiple possible Deepgram response formats for live streaming
+          if (result && result.channel && result.channel.alternatives && result.channel.alternatives[0]) {
+            // Format 1: result.channel.alternatives[0].transcript (Deepgram Live API)
+            transcript = result.channel.alternatives[0].transcript;
+            isFinal = result.is_final || false;
+            console.log('📝 Using format 1: channel.alternatives[0]');
+          } else if (result && result.results && result.results.channels && result.results.channels[0] && result.results.channels[0].alternatives && result.results.channels[0].alternatives[0]) {
+            // Format 2: result.results.channels[0].alternatives[0].transcript (Deepgram File API format)
+            transcript = result.results.channels[0].alternatives[0].transcript;
+            isFinal = result.results.is_final || result.is_final || false;
+            console.log('📝 Using format 2: results.channels[0].alternatives[0]');
+          } else if (result && result.alternatives && result.alternatives[0]) {
+            // Format 3: result.alternatives[0].transcript (Alternative format)
+            transcript = result.alternatives[0].transcript;
+            isFinal = result.is_final || false;
+            console.log('📝 Using format 3: alternatives[0]');
+          }
+          
+          console.log(`📝 Extracted transcript: "${transcript}", isFinal: ${isFinal}`);
+          
+          if (transcript && transcript.trim()) {
+            // Send real-time transcription to client
+            console.log(`📤 Sending to client: "${transcript}" (${isFinal ? 'final' : 'interim'})`);
+            socket.emit('live-transcription-result', {
+              transcript: transcript,
+              is_final: isFinal,
+              timestamp: new Date()
+            });
+          } else if (transcript === '') {
+            console.log('📝 Empty transcript - likely silence or processing');
+          } else {
+            console.log('⚠️ Unexpected Deepgram response format:', JSON.stringify(result, null, 2));
+          }
+        } catch (error) {
+          console.error('❌ Error processing Deepgram response:', error);
+          console.error('❌ Raw data:', data);
+        }
+      });
+      
+      connection.on('error', (error) => {
+        console.error('❌ Deepgram live transcription error:', error);
+        socket.emit('live-transcription-error', { error: error.message || error });
+      });
+      
+      connection.on('close', (event) => {
+        console.log('🔌 Deepgram live transcription connection closed');
+        console.log('🔌 Close event details:', event);
+        socket.emit('live-transcription-ended');
+      });
+      
+      connection.on('open', () => {
+        console.log('✅ Deepgram live transcription connection opened successfully');
+        socket.emit('live-transcription-started');
+      });
+      
+      // Add metadata event listener for connection status
+      connection.on('metadata', (data) => {
+        console.log('📊 Deepgram metadata:', data);
+      });
+      
+      // Add warning event listener
+      connection.on('warning', (warning) => {
+        console.warn('⚠️ Deepgram warning:', warning);
+      });
+      
+      socket.emit('live-transcription-started');
+      
+    } catch (error) {
+      console.error('❌ Error starting live transcription:', error);
+      socket.emit('live-transcription-error', { error: error.message });
+    }
+  });
+  
+  socket.on('live-audio-chunk', (audioData) => {
+    // Forward audio chunk to Deepgram
+    if (socket.deepgramConnection) {
+      console.log(`🎵 Forwarding audio chunk to Deepgram: ${audioData.byteLength} bytes`);
+      socket.deepgramConnection.send(audioData);
+    } else {
+      console.log('⚠️ No Deepgram connection available for audio chunk');
+    }
+  });
+  
+  socket.on('stop-live-transcription', () => {
+    console.log(`🛑 Stopping live transcription for socket ${socket.id}`);
+    
+    if (socket.deepgramConnection) {
+      socket.deepgramConnection.finish();
+      socket.deepgramConnection = null;
+    }
+    
+    socket.emit('live-transcription-stopped');
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+    
+    // Clean up live transcription connection
+    if (socket.deepgramConnection) {
+      socket.deepgramConnection.finish();
+      socket.deepgramConnection = null;
+    }
+    
+    // Remove from table tracking
+    const clientInfo = clientToTable.get(socket.id);
+    if (clientInfo) {
+      const { tableId, sessionId } = clientInfo;
+      
+      if (tableClients.has(tableId)) {
+        tableClients.get(tableId).delete(socket.id);
+        
+        // Broadcast updated client count
+        const remainingClients = tableClients.get(tableId).size;
+        io.to(sessionId).emit('table-client-update', {
+          tableId,
+          clientCount: remainingClients,
+          hasClients: remainingClients > 0,
+          timestamp: new Date()
+        });
+        
+        // Clean up empty sets
+        if (remainingClients === 0) {
+          tableClients.delete(tableId);
+        }
+      }
+      
+      clientToTable.delete(socket.id);
+    }
   });
 });
 
@@ -441,29 +721,7 @@ app.post('/api/sessions/import', async (req, res) => {
       // Create tables for the session
       await Table.createTablesForSession(newSession.id, sessionData.tableCount);
       
-      // Import participants if any
-      if (originalSession.tables) {
-        for (const table of originalSession.tables) {
-          if (table.participants && Array.isArray(table.participants)) {
-            for (const participant of table.participants) {
-              if (participant && participant.id && participant.name) {
-                try {
-                  await Participant.create({
-                    id: uuidv4(), // Generate new participant ID
-                    session_id: newSession.id,
-                    table_id: table.id,
-                    name: participant.name,
-                    is_facilitator: participant.is_facilitator || 0,
-                    joined_at: new Date()
-                  });
-                } catch (participantError) {
-                  console.warn('Failed to import participant:', participantError.message);
-                }
-              }
-            }
-          }
-        }
-      }
+      // Participant import removed (participants functionality disabled)
       
       // Import transcriptions
       const Transcription = require('./database/models/Transcription');
@@ -586,8 +844,8 @@ app.get('/api/sessions/:id', async (req, res) => {
         return res.status(404).json({ error: 'Session not found' });
       }
       
-      // Get tables with participants
-      const tables = await Table.findSessionTablesWithStats(session.id);
+      // Get tables (without participants)
+      const tables = await Table.findBySessionId(session.id);
       session.tables = tables;
       
       res.json(session);
@@ -725,7 +983,7 @@ app.get('/api/admin/dashboard/stats', async (req, res) => {
 app.post('/api/sessions/:sessionId/tables/:tableNumber/join', async (req, res) => {
   try {
     const { sessionId, tableNumber } = req.params;
-    const { participantName, email, phone } = req.body;
+    const { participantName } = req.body;
     
     // Find the table
     const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
@@ -733,26 +991,14 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/join', async (req, res) =
       return res.status(404).json({ error: 'Table not found' });
     }
     
-    // Join the table
-    const participant = await Participant.joinTable(
-      sessionId, 
-      table.id, 
-      participantName, 
-      email, 
-      phone
-    );
+    // Simple join - no participant records created, just return table info
+    await Table.updateStatus(table.id, 'active');
     
-    // Update table status if this is the first participant
-    const participantCount = await Participant.getTableParticipantCount(table.id);
-    if (participantCount === 1) {
-      await Table.updateStatus(table.id, 'waiting');
-    }
-    
-    // Get updated table info
-    const updatedTable = await Table.findWithParticipants(table.id);
+    // Get updated table info without participants
+    const updatedTable = await Table.findById(table.id);
     
     io.to(sessionId).emit('table-updated', { tableId: table.id, table: updatedTable });
-    res.json({ participant, table: updatedTable });
+    res.json({ table: updatedTable, participantName });
     
   } catch (error) {
     console.error('Error joining table:', error);
@@ -1146,15 +1392,20 @@ app.post('/api/transcriptions', async (req, res) => {
   try {
     const { recordingId, sessionId, tableId, transcriptText, speakerSegments, confidenceScore, source } = req.body;
     
-    if (!recordingId || !sessionId || !tableId || !transcriptText) {
+    if (!sessionId || !tableId || !transcriptText) {
       return res.status(400).json({ error: 'Missing required transcription parameters' });
+    }
+    
+    // For live transcriptions, recordingId might be null/undefined
+    if (!recordingId && source !== 'live-transcription') {
+      return res.status(400).json({ error: 'Recording ID is required for non-live transcriptions' });
     }
     
     console.log(`📝 Creating transcription record for recording ${recordingId}, ${transcriptText.length} chars, ${speakerSegments?.length || 0} segments`);
     
     // Create transcription record
     const transcription = await Transcription.create({
-      recordingId: recordingId,
+      recordingId: recordingId || null, // Allow null for live transcriptions
       sessionId: sessionId,
       tableId: tableId,
       transcriptText: transcriptText,
@@ -1206,9 +1457,21 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
     }
     
     console.log(`🔄 Reprocessing audio for recording ${recordingId}: ${recording.filename}`);
+    console.log(`📂 File path: ${recording.file_path}`);
+    console.log(`🎯 Session language: ${session.language || 'en-US'}`);
     
     // Mark as processing
-    await recordingModel.markProcessing(recordingId);
+    await Recording.markProcessing(recordingId);
+    
+    // Emit status update to connected clients
+    const connectedClients = getConnectedClientsInSession(recording.session_id);
+    connectedClients.forEach(client => {
+      client.emit('reprocess-status', {
+        recordingId: recordingId,
+        status: 'processing',
+        message: 'Starting reprocessing...'
+      });
+    });
     
     try {
       // Reprocess transcription
@@ -1218,16 +1481,16 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
       // Extract duration if available
       const duration = transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.words?.slice(-1)?.[0]?.end || 0;
       if (duration > 0) {
-        await recordingModel.updateDuration(recordingId, duration);
+        await Recording.updateDuration(recordingId, duration);
       }
       
       // Create new transcription record (if none exists) or update existing
-      const transcriptionModel = new Transcription();
+      // Use static methods instead of constructor
       let transcription;
       
       if (recording.transcription_id) {
         // Update existing transcription
-        transcription = await transcriptionModel.update(recording.transcription_id, {
+        transcription = await Transcription.update(recording.transcription_id, {
           transcript_text: transcriptionService.extractTranscript(transcriptionResult),
           speaker_segments: JSON.stringify(transcriptionService.extractSpeakerSegments(transcriptionResult)),
           confidence_score: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0,
@@ -1235,20 +1498,44 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
         });
       } else {
         // Create new transcription
-        transcription = await transcriptionModel.create({
+        transcription = await Transcription.create({
           recordingId: recordingId,
           sessionId: recording.session_id,
           tableId: recording.table_id,
           transcriptText: transcriptionService.extractTranscript(transcriptionResult),
           speakerSegments: transcriptionService.extractSpeakerSegments(transcriptionResult),
-          confidenceScore: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0
+          confidenceScore: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0,
+          source: 'reprocess'
         });
       }
       
       // Mark recording as completed
-      await recordingModel.markCompleted(recordingId);
+      await Recording.markCompleted(recordingId);
       
       console.log(`🔄 Reprocessing completed for recording ${recordingId}`);
+      
+      // Emit completion status to connected clients
+      connectedClients.forEach(client => {
+        client.emit('reprocess-status', {
+          recordingId: recordingId,
+          status: 'completed',
+          message: 'Reprocessing completed successfully!',
+          transcriptionId: transcription.id
+        });
+        
+        // Also emit transcription-completed event for real-time display
+        client.emit('transcription-completed', {
+          transcription: {
+            id: transcription.id,
+            transcript: transcriptionService.extractTranscript(transcriptionResult),
+            confidence: transcriptionResult.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0.0,
+            speakers: transcriptionService.extractSpeakerSegments(transcriptionResult),
+            source: 'reprocess'
+          },
+          sessionId: recording.session_id,
+          tableId: recording.table_id
+        });
+      });
       
       res.json({
         success: true,
@@ -1259,7 +1546,19 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
       
     } catch (transcriptionError) {
       console.error('Transcription reprocessing failed:', transcriptionError);
-      await recordingModel.markFailed(recordingId);
+      await Recording.markFailed(recordingId);
+      
+      // Emit error status to connected clients
+      const connectedClients = getConnectedClientsInSession(recording.session_id);
+      connectedClients.forEach(client => {
+        client.emit('reprocess-status', {
+          recordingId: recordingId,
+          status: 'failed',
+          message: `Reprocessing failed: ${transcriptionError.message}`,
+          error: transcriptionError.message
+        });
+      });
+      
       throw transcriptionError;
     }
     
@@ -1267,6 +1566,90 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
     console.error('Error reprocessing recording:', error);
     res.status(500).json({ 
       error: 'Failed to reprocess recording',
+      details: error.message
+    });
+  }
+});
+
+// Delete recording media file only (keep transcription for reference)
+app.delete('/api/recordings/:recordingId/media', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    // Find the recording
+    const recording = await Recording.findById(recordingId);
+    if (!recording) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+    
+    // Delete the physical file if it exists
+    if (recording.file_path && fs.existsSync(recording.file_path)) {
+      fs.unlinkSync(recording.file_path);
+      console.log(`🗑️ Deleted media file: ${recording.file_path}`);
+    }
+    
+    // Update recording status to indicate file is deleted but keep record
+    await Recording.update(recordingId, {
+      status: 'file_deleted',
+      file_path: null,
+      file_size: null,
+      updated_at: new Date()
+    });
+    
+    console.log(`🗑️ Media file deleted for recording ${recordingId}, transcription preserved`);
+    
+    res.json({
+      success: true,
+      message: 'Media file deleted successfully, transcription preserved'
+    });
+    
+  } catch (error) {
+    console.error('Error deleting media file:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete media file',
+      details: error.message
+    });
+  }
+});
+
+// Delete recording and all associated transcriptions
+app.delete('/api/recordings/:recordingId', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    // Find the recording with transcription info
+    const recording = await Recording.findWithTranscription(recordingId);
+    if (!recording) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+    
+    // Delete the physical file if it exists
+    if (recording.file_path && fs.existsSync(recording.file_path)) {
+      fs.unlinkSync(recording.file_path);
+      console.log(`🗑️ Deleted media file: ${recording.file_path}`);
+    }
+    
+    // Delete all transcriptions associated with this recording
+    const transcriptions = await db.query('SELECT id FROM transcriptions WHERE recording_id = ?', [recordingId]);
+    for (const transcription of transcriptions) {
+      await Transcription.delete(transcription.id);
+      console.log(`🗑️ Deleted transcription: ${transcription.id}`);
+    }
+    
+    // Delete the recording record
+    await Recording.delete(recordingId);
+    
+    console.log(`🗑️ Completely deleted recording ${recordingId} and associated transcriptions`);
+    
+    res.json({
+      success: true,
+      message: 'Recording and transcriptions deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error deleting recording:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete recording',
       details: error.message
     });
   }
@@ -1280,7 +1663,7 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
     }
     
     const { sessionId, tableNumber } = req.params;
-    const { source } = req.body; // Extract source from request body
+    const { source, skipTranscription } = req.body; // Extract source and skipTranscription flag from request body
     
     // Find the table
     const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
@@ -1307,11 +1690,36 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
       mimeType: req.file.mimetype
     });
     
+    // If skipTranscription is true, just save the recording without processing
+    if (skipTranscription === 'true' || skipTranscription === true) {
+      console.log(`Skipping transcription for table ${tableNumber} (ID: ${table.id}), file: ${audioPath} - live transcription active`);
+      
+      // Mark recording as completed (no processing needed)
+      await Recording.markCompleted(recording.id);
+      
+      return res.json({
+        success: true,
+        recording: {
+          id: recording.id,
+          filename: req.file.filename,
+          status: 'completed'
+        },
+        message: 'Audio file saved without transcription processing'
+      });
+    }
+    
     // Update recording status to processing
     await Recording.markProcessing(recording.id);
     
     // Start transcription
     console.log(`Starting transcription for table ${tableNumber} (ID: ${table.id}), file: ${audioPath}, language: ${session.language || 'en-US'}`);
+    
+    // Broadcast processing status to session dashboard
+    io.to(sessionId).emit('table-recording-update', {
+      tableId: table.id,
+      status: 'processing',
+      timestamp: new Date()
+    });
     
     try {
       // Use session language for transcription
@@ -1373,6 +1781,13 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
           confidence: transcription.confidence_score
         },
         source: source || 'start-recording' // Use provided source or default to start-recording
+      });
+      
+      // Broadcast completion status to session dashboard
+      io.to(sessionId).emit('table-recording-update', {
+        tableId: table.id,
+        status: 'completed',
+        timestamp: new Date()
       });
       
       res.json({
@@ -1743,10 +2158,9 @@ app.post('/api/sessions/:sessionId/chat', async (req, res) => {
     }
     
     // Get all session data for context
-    const [transcriptions, tables, participants] = await Promise.all([
+    const [transcriptions, tables] = await Promise.all([
       Transcription.findBySessionId(sessionId),
-      Table.findBySessionId(sessionId),
-      Participant.findBySessionId(sessionId)
+      Table.findBySessionId(sessionId)
     ]);
     
     if (transcriptions.length === 0) {
@@ -1758,7 +2172,7 @@ app.post('/api/sessions/:sessionId/chat', async (req, res) => {
     }
     
     const sessionData = {
-      session: { ...session, participants },
+      session: session,
       transcriptions,
       tables
     };
