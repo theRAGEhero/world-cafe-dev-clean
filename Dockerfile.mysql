@@ -1,0 +1,18 @@
+FROM mysql:8.0
+
+# Set environment variables for MySQL
+ENV MYSQL_ROOT_PASSWORD=SO6mpssfLOrH5Nr^NuB%&SboZs
+ENV MYSQL_DATABASE=world_cafe_platform
+ENV MYSQL_USER=world_cafe_user
+ENV MYSQL_PASSWORD=WorldCafe2024!
+
+# Copy the database schema and initialization script
+COPY database_schema.sql /docker-entrypoint-initdb.d/01-schema.sql
+COPY mysql-init.sql /docker-entrypoint-initdb.d/02-init.sql
+
+# Expose MySQL port
+EXPOSE 3306
+
+# Use the default MySQL entrypoint
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["mysqld"]
