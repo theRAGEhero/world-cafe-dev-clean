@@ -42,7 +42,9 @@ INSERT INTO `migrations` (`filename`) VALUES
 ('008_add_table_level_analysis.sql'),
 ('009_add_session_table_passwords.sql'),
 ('010_create_activity_logs.sql'),
-('011_add_transcription_source_column.sql');
+('011_add_transcription_source_column.sql'),
+('012_add_file_deleted_status.sql'),
+('013_update_transcription_source_enum.sql');
 
 -- Table structure for table `sessions`
 CREATE TABLE `sessions` (
@@ -124,10 +126,10 @@ CREATE TABLE `recordings` (
   `duration_seconds` decimal(10,2) DEFAULT 0.00,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `participant_id` varchar(36) DEFAULT NULL,
-  `file_path` varchar(500) NOT NULL,
+  `file_path` varchar(500) DEFAULT NULL,
   `file_size` bigint(20) DEFAULT NULL,
   `mime_type` varchar(100) DEFAULT NULL,
-  `status` enum('uploaded','processing','completed','failed') DEFAULT 'uploaded',
+  `status` enum('uploaded','processing','completed','failed','file_deleted') DEFAULT 'uploaded',
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `processed_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -148,7 +150,7 @@ CREATE TABLE `transcriptions` (
   `confidence_score` decimal(5,4) DEFAULT 0.0000,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `recording_id` varchar(36) DEFAULT NULL,
-  `source` enum('start-recording','upload-media','live-transcription') DEFAULT 'start-recording',
+  `source` enum('start-recording','upload-media','live-transcription','live-audio','reprocess') DEFAULT 'start-recording',
   `language` varchar(10) DEFAULT 'en',
   `word_count` int(11) DEFAULT 0,
   `speaker_segments` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`speaker_segments`)),

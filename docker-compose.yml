@@ -26,7 +26,7 @@ services:
 
   # World Café Platform Application
   app:
-    build: .
+    image: alexdoit/democracyroutes-cafe:latest
     container_name: world-cafe-app
     restart: unless-stopped
     ports:

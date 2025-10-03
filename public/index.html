@@ -101,6 +101,31 @@
         100% { transform: translateY(-4px) scale(1); }
     }
     
+    /* Wave animation for audio visualization */
+    @keyframes waveAnimation {
+        0%, 100% { height: 4px; }
+        50% { height: var(--wave-height, 20px); }
+    }
+    
+    .wave-bar {
+        width: 3px;
+        background: linear-gradient(to top, #28a745, #20c997);
+        border-radius: 2px;
+        animation: waveAnimation 0.6s ease-in-out infinite;
+        min-height: 4px;
+        transition: all 0.1s ease;
+    }
+    
+    .wave-bar:nth-child(1) { animation-delay: 0s; }
+    .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+    .wave-bar:nth-child(6) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(7) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(8) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(9) { animation-delay: 0s; }
+    
     /* Responsive Join Session Boxes */
     @media (max-width: 768px) {
         html body div#app main.main-content div#joinSessionScreen.screen .join-method-container {
@@ -181,11 +206,6 @@
             padding: 20px !important;
         }
         
-        /* Participants list mobile */
-        #participantsList {
-            max-height: 200px !important;
-            overflow-y: auto !important;
-        }
         
         /* Live transcription section mobile improvements */
         #liveTranscript {
@@ -261,10 +281,6 @@
             font-size: 15px !important;
         }
         
-        #participantEmailInput {
-            padding: 10px 14px !important;
-            font-size: 15px !important;
-        }
         
         /* Upload media modal mobile */
         #uploadMediaModal .upload-modal-content {
@@ -293,35 +309,7 @@
             margin-bottom: 20px !important;
         }
         
-        .session-chat-mobile {
-            padding: 16px !important;
-            margin-bottom: 20px !important;
-            border-radius: 10px !important;
-        }
         
-        .session-chat-mobile h3 {
-            font-size: 18px !important;
-        }
-        
-        .session-chat-mobile p {
-            font-size: 13px !important;
-        }
-        
-        #simpleChatMessages {
-            min-height: 100px !important;
-            max-height: 200px !important;
-            padding: 12px !important;
-        }
-        
-        #simpleChatInput {
-            padding: 12px 16px !important;
-            font-size: 15px !important;
-        }
-        
-        #simpleSendBtn {
-            padding: 12px 18px !important;
-            font-size: 14px !important;
-        }
         
         .session-main-content-mobile {
             grid-template-columns: 1fr !important;
@@ -382,10 +370,204 @@
         }
     }
     
+    /* Enhanced Table Interface Animations */
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+        }
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+        }
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
     /* Chat animations */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Enhanced Responsive Design for New Table Interface */
+    @media (max-width: 1200px) {
+        #tableInterface header div[style*="max-width: 1400px"] {
+            padding: 0 16px !important;
+        }
+        
+        #tableInterface main div[style*="max-width: 1400px"] {
+            padding: 0 !important;
+        }
+    }
+
+    @media (max-width: 992px) {
+        #tableInterface div[style*="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))"] {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 12px !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        /* Enhanced Mobile Header */
+        #tableInterface header {
+            padding: 12px 16px !important;
+        }
+        
+        #tableInterface header div[style*="grid-template-columns: auto 1fr auto"] {
+            grid-template-columns: auto 1fr !important;
+            gap: 12px !important;
+        }
+        
+        #tableInterface h1#tableTitle {
+            font-size: 18px !important;
+        }
+        
+        #tableInterface h3#sessionTitleHeader {
+            font-size: 12px !important;
+            max-width: 180px !important;
+        }
+        
+        #tableInterface div#tableCodeDisplay {
+            padding: 3px 8px !important;
+            font-size: 9px !important;
+        }
+        
+        #tableInterface span#tableStatus {
+            display: none !important;
+        }
+        
+        #tableInterface div[style*="animation: pulse 2s infinite"] {
+            display: none !important;
+        }
+        
+        /* Enhanced Mobile Main Content */
+        #tableInterface main {
+            padding: 16px !important;
+        }
+        
+        /* Enhanced Mobile Recording Interface */
+        #tableInterface div[style*="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))"] {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+        
+        #tableInterface div[id*="Card"] {
+            padding: 14px !important;
+            border-radius: 12px !important;
+        }
+        
+        #tableInterface div[id*="Card"] h4 {
+            font-size: 15px !important;
+        }
+        
+        #tableInterface div[id*="Card"] p {
+            font-size: 11px !important;
+            line-height: 1.3 !important;
+        }
+        
+        #tableInterface div[id*="Card"] span[style*="font-size: 28px"] {
+            font-size: 20px !important;
+        }
+        
+        /* Enhanced Mobile Controls */
+        #tableInterface div[id="recordingControls"] {
+            padding: 16px !important;
+            margin-bottom: 16px !important;
+            min-height: 80px !important;
+        }
+        
+        #tableInterface div[id*="Controls"] h4 {
+            font-size: 14px !important;
+            margin-bottom: 6px !important;
+        }
+        
+        #tableInterface div[id*="Controls"] p {
+            font-size: 11px !important;
+            margin-bottom: 12px !important;
+        }
+        
+        #tableInterface div[id*="Controls"] button {
+            padding: 10px 16px !important;
+            font-size: 13px !important;
+        }
+        
+        /* Enhanced Mobile Tabs */
+        #tableInterface div[style*="display: flex; background: white; border-bottom"] button {
+            padding: 8px 10px !important;
+            font-size: 10px !important;
+            flex-direction: column !important;
+            gap: 2px !important;
+        }
+        
+        #tableInterface span[class*="transcription-count"] {
+            font-size: 8px !important;
+            padding: 1px 4px !important;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        /* Extra Small Mobile */
+        #tableInterface h1#tableTitle {
+            font-size: 16px !important;
+        }
+        
+        #tableInterface div[style*="grid-template-columns: repeat(2, 1fr)"] {
+            grid-template-columns: 1fr !important;
+            gap: 6px !important;
+        }
+        
+        #tableInterface div[style*="padding: 10px 12px"] {
+            padding: 8px 10px !important;
+        }
+        
+        #tableInterface div[id*="Card"] {
+            padding: 12px !important;
+        }
+        
+        #tableInterface div[id*="Card"] h4 {
+            font-size: 13px !important;
+        }
+        
+        #tableInterface div[id*="Card"] p {
+            font-size: 10px !important;
+        }
+    }
+
+    /* Accessibility Enhancements */
+    @media (prefers-reduced-motion: reduce) {
+        #tableInterface * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+        
+        #tableInterface div[style*="animation: pulse"] {
+            animation: none !important;
+        }
+    }
+
+    @media (prefers-contrast: high) {
+        #tableInterface div[style*="box-shadow"] {
+            box-shadow: 0 0 0 2px #000 !important;
+        }
+        
+        #tableInterface button {
+            border: 2px solid #000 !important;
+        }
     }
     
     /* Desktop Logo Styling */
@@ -394,6 +576,34 @@
             width: 96px !important;
             height: 96px !important;
         }
+    }
+    
+    /* Live transcription speaker bubble styles */
+    .chat-bubble {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 10px;
+        max-width: 80%;
+        word-wrap: break-word;
+    }
+    .speaker-0 {
+        background-color: #e1f5fe;
+        margin-left: 10%;
+    }
+    .speaker-1 {
+        background-color: #fff3e0;
+        margin-left: 20%;
+    }
+    .speaker-2 {
+        background-color: #e8f5e9;
+        margin-left: 15%;
+    }
+    .speaker-label {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .bubble-text {
+        display: inline;
     }
     </style>
 </head>
@@ -463,7 +673,7 @@
                             <h1 class="hero-title">World Café Platform</h1>
                             
                             <!-- Subtitle -->
-                            <p class="hero-subtitle">Facilitate meaningful conversations with digital recording, live transcription, and AI-powered analysis</p>
+                            <p class="hero-subtitle">Facilitate meaningful conversations with digital recording and live transcription</p>
                         </div>
 
                         <!-- Action Cards Grid -->
@@ -1143,17 +1353,6 @@
                             gap: 16px;
                             margin-bottom: 30px;
                         " class="session-stats-mobile">
-                            <div style="
-                                background: linear-gradient(135deg, #667eea, #764ba2);
-                                color: white;
-                                padding: 20px;
-                                border-radius: 12px;
-                                text-align: center;
-                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-                            ">
-                                <div style="font-size: 28px; font-weight: 700; margin-bottom: 6px;" id="participantCount">0</div>
-                                <div style="font-size: 13px; opacity: 0.9;">👥 Participants</div>
-                            </div>
                             
                             <div style="
                                 background: linear-gradient(135deg, #f093fb, #f5576c);
@@ -1188,24 +1387,6 @@
                             flex-wrap: wrap;
                             justify-content: center;
                         ">
-                            <button onclick="generateSessionAnalysisFromDashboard()" id="sessionAIAnalysisBtn" style="
-                                padding: 12px 24px;
-                                background: linear-gradient(135deg, #667eea, #764ba2);
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 14px;
-                                font-weight: 500;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s ease;
-                            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-                                <span style="font-size: 16px;">🤖</span>
-                                AI Analysis
-                            </button>
-                            
                             <button onclick="viewAllTranscriptions(currentSession.id)" style="
                                 padding: 12px 24px;
                                 background: #28a745;
@@ -1243,120 +1424,6 @@
                             </button>
                         </div>
 
-                        <!-- Chat with Session - Compact Interface -->
-                        <div id="sessionChatSection" style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            border-radius: 12px;
-                            padding: 20px;
-                            margin-bottom: 30px;
-                            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.3);
-                        " class="session-chat-mobile">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <div>
-                                    <h3 style="margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
-                                        <span style="font-size: 24px;">💬</span>
-                                        Chat with Session
-                                    </h3>
-                                    <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
-                                        Ask questions about your World Café discussions and insights
-                                    </p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <span id="simpleChatStatus" style="
-                                        background: rgba(255,255,255,0.2);
-                                        padding: 8px 16px;
-                                        border-radius: 20px;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        display: inline-block;
-                                    ">Checking...</span>
-                                    <div style="
-                                        margin-top: 8px;
-                                        font-size: 13px;
-                                        color: rgba(255,255,255,0.8);
-                                    ">
-                                        <span id="simpleTranscriptCount">0 transcriptions</span> available
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Chat Messages Area -->
-                            <div id="simpleChatMessages" style="
-                                background: rgba(255,255,255,0.1);
-                                border-radius: 12px;
-                                padding: 16px;
-                                margin-bottom: 16px;
-                                min-height: 120px;
-                                max-height: 250px;
-                                overflow-y: auto;
-                                border: 1px solid rgba(255,255,255,0.2);
-                            ">
-                                <div style="
-                                    opacity: 0.9;
-                                    font-size: 14px;
-                                    text-align: center;
-                                    color: rgba(255,255,255,0.8);
-                                    padding: 20px 16px;
-                                ">
-                                    <div style="font-size: 32px; margin-bottom: 12px;">💬</div>
-                                    <h4 style="margin: 0 0 6px 0; font-size: 16px; font-weight: 600;">Ready to explore your session!</h4>
-                                    <p style="margin: 0; font-size: 13px; line-height: 1.4;">
-                                        Ask about discussions, themes, insights, or anything from your World Café session.
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <!-- Chat Input Area -->
-                            <div style="
-                                display: flex;
-                                gap: 12px;
-                                align-items: stretch;
-                            ">
-                                <div style="flex: 1; position: relative;">
-                                    <input type="text" id="simpleChatInput" placeholder="Ask about the discussions, insights, themes..." disabled style="
-                                        width: 100%;
-                                        padding: 16px 20px;
-                                        border: none;
-                                        border-radius: 12px;
-                                        font-size: 16px;
-                                        background: rgba(255,255,255,0.9);
-                                        color: #333;
-                                        box-sizing: border-box;
-                                        outline: none;
-                                        transition: all 0.2s ease;
-                                    ">
-                                    <div style="
-                                        position: absolute;
-                                        bottom: -20px;
-                                        left: 0;
-                                        font-size: 12px;
-                                        color: rgba(255,255,255,0.7);
-                                    ">
-                                        Press Enter to send or use the Send button
-                                    </div>
-                                </div>
-                                <button id="simpleSendBtn" onclick="sendSimpleChatMessage()" disabled style="
-                                    padding: 16px 24px;
-                                    background: rgba(255,255,255,0.2);
-                                    color: white;
-                                    border: 2px solid rgba(255,255,255,0.3);
-                                    border-radius: 12px;
-                                    cursor: pointer;
-                                    font-weight: 600;
-                                    font-size: 16px;
-                                    transition: all 0.2s ease;
-                                    min-width: 80px;
-                                " onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.3)'">
-                                    Send
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- QR Codes Section -->
                         <div id="qrCodesSection" style="
@@ -1420,34 +1487,6 @@
                             </div>
                         </div>
 
-                        <!-- Session AI Analysis Section -->
-                        <div id="sessionAIAnalysisSection" style="
-                            display: none;
-                            background: #f8f9fa;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 12px;
-                            padding: 24px;
-                            margin-bottom: 30px;
-                        ">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: 600;">🤖 Session AI Analysis Results</h3>
-                                <button onclick="toggleSessionAIAnalysis()" style="
-                                    background: none;
-                                    border: none;
-                                    font-size: 18px;
-                                    cursor: pointer;
-                                    color: #666;
-                                ">✕</button>
-                            </div>
-                            <div id="sessionAIAnalysisResults">
-                                <!-- Session analysis results will be loaded here -->
-                            </div>
-                        </div>
 
                         <!-- Main Content Grid -->
                         <div style="
@@ -1468,52 +1507,9 @@
                                 </div>
                             </div>
                             
-                            <!-- Right Column: Participants & Quick Info -->
+                            <!-- Right Column: Quick Info -->
                             <div>
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    margin-bottom: 20px;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                                ">
-                                    <h3 style="margin: 0 0 16px 0; font-size: 18px; color: #333; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-size: 20px;">👥</span>
-                                        Participants
-                                    </h3>
-                                    <div id="participantsList" style="
-                                        max-height: 200px;
-                                        overflow-y: auto;
-                                    ">
-                                        <!-- Participants will be dynamically populated -->
-                                        <div style="color: #666; font-size: 14px; text-align: center; padding: 20px;">
-                                            No participants yet
-                                        </div>
-                                    </div>
-                                </div>
                                 
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                                ">
-                                    <h3 style="margin: 0 0 16px 0; font-size: 18px; color: #333; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-size: 20px;">🎤</span>
-                                        Recent Recordings
-                                    </h3>
-                                    <div id="recentRecordingsList" style="
-                                        max-height: 180px;
-                                        overflow-y: auto;
-                                    ">
-                                        <!-- Recent recordings will be dynamically populated -->
-                                        <div style="color: #666; font-size: 14px; text-align: center; padding: 20px;">
-                                            No recordings yet
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -1522,207 +1518,129 @@
                 </div>
             </div>
 
-            <!-- Table Interface - NUCLEAR ISOLATED -->
+            <!-- Simplified Live Transcription Interface -->
             <div id="tableInterface" style="display: none;">
-                <!-- COMPLETELY ISOLATED TABLE INTERFACE SCREEN -->
                 <div style="
                     position: fixed;
                     top: 0;
                     left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
                     z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    box-sizing: border-box;
-                    padding: 20px;
-                    overflow-y: auto;
-                " class="table-outer-container-mobile">
-                    <div style="
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        background: white;
-                        border-radius: 20px;
-                        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                        overflow: hidden;
-                    " class="table-container-mobile">
-                        <!-- Modern Header -->
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                ">
+                    <!-- Navigation Header -->
+                    <header style="
+                        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                        color: white;
+                        padding: 16px 24px;
+                        box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
+                        position: relative;
+                        z-index: 1;
+                        flex-shrink: 0;
+                    ">
                         <div style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            padding: 30px;
-                            position: relative;
+                            max-width: 800px;
+                            margin: 0 auto;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
                         ">
-                            <div style="
+                            <!-- Back Button -->
+                            <button onclick="backToSession()" style="
+                                background: rgba(255,255,255,0.15);
+                                border: 1px solid rgba(255,255,255,0.2);
+                                color: white;
+                                border-radius: 12px;
+                                width: 48px;
+                                height: 48px;
+                                cursor: pointer;
+                                font-size: 18px;
                                 display: flex;
-                                justify-content: space-between;
-                                align-items: flex-start;
-                                margin-bottom: 20px;
-                            ">
-                                <button onclick="backToSession()" style="
-                                    background: rgba(255,255,255,0.2);
+                                align-items: center;
+                                justify-content: center;
+                                transition: all 0.2s ease;
+                                backdrop-filter: blur(10px);
+                            " onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                                ←
+                            </button>
+                            
+                            <!-- Title -->
+                            <div style="text-align: center;">
+                                <h1 id="tableTitle" style="
+                                    margin: 0;
+                                    font-size: 24px;
                                     color: white;
-                                    border: 1px solid rgba(255,255,255,0.3);
-                                    border-radius: 12px;
-                                    width: 50px;
-                                    height: 50px;
-                                    cursor: pointer;
-                                    font-size: 20px;
+                                    font-weight: 700;
                                     display: flex;
                                     align-items: center;
-                                    justify-content: center;
-                                    transition: all 0.2s ease;
-                                    backdrop-filter: blur(10px);
-                                " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">←</button>
-                                
-                                <div style="flex: 1; margin-left: 20px;">
-                                    <!-- Session Info -->
-                                    <div style="margin-bottom: 12px;">
-                                        <h3 id="sessionTitleHeader" style="
-                                            margin: 0;
-                                            font-size: 16px;
-                                            color: rgba(255,255,255,0.9);
-                                            font-weight: 500;
-                                        ">Session Name</h3>
-                                        <p id="sessionDescriptionHeader" style="
-                                            margin: 4px 0 0 0;
-                                            font-size: 14px;
-                                            color: rgba(255,255,255,0.7);
-                                            font-style: italic;
-                                            display: none;
-                                        ">Session Description</p>
-                                    </div>
-                                    
-                                    <!-- Table Title -->
-                                    <h1 id="tableTitle" style="
-                                        margin: 0 0 12px 0;
-                                        font-size: 32px;
-                                        color: white;
-                                        font-weight: 700;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                    ">
-                                        <span style="font-size: 36px;">📢</span>
-                                        Table 1
-                                    </h1>
-                                    
-                                    <!-- Table Code -->
-                                    <div id="tableCodeDisplay" style="
-                                        padding: 8px 16px;
-                                        background: rgba(255,255,255,0.15);
-                                        border: 1px solid rgba(255,255,255,0.2);
-                                        border-radius: 8px;
-                                        display: inline-block;
-                                        backdrop-filter: blur(10px);
-                                    ">
-                                        <span style="font-size: 12px; color: rgba(255,255,255,0.8); font-weight: 500;">Table Code: </span>
-                                        <span id="tableCodeValue" style="
-                                            font-family: 'Monaco', 'Menlo', monospace;
-                                            font-weight: 600;
-                                            color: white;
-                                            font-size: 12px;
-                                            letter-spacing: 0.5px;
-                                        ">-</span>
-                                    </div>
-                                </div>
-                                
-                                <!-- Table Status -->
-                                <div style="text-align: right;">
-                                    <span id="tableStatus" style="
-                                        background: rgba(255,255,255,0.2);
-                                        color: white;
-                                        padding: 8px 16px;
-                                        border-radius: 20px;
-                                        font-size: 12px;
-                                        font-weight: 600;
-                                        text-transform: uppercase;
-                                        letter-spacing: 0.5px;
-                                        backdrop-filter: blur(10px);
-                                        border: 1px solid rgba(255,255,255,0.3);
-                                    ">Waiting</span>
-                                </div>
+                                    gap: 8px;
+                                ">
+                                    <span style="font-size: 24px;">🎙️</span>
+                                    Live Transcription
+                                </h1>
+                                <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;" id="sessionTitleHeader">Session Name</p>
+                                <p style="margin: 2px 0 0 0; font-size: 12px; opacity: 0.7; font-family: monospace;" id="tableCodeDisplay">Table Code: <span id="tableCodeValue">-</span></p>
                             </div>
+                            
+                            <!-- Status -->
+                            <span id="tableStatus" style="
+                                background: rgba(255,255,255,0.15);
+                                color: white;
+                                padding: 6px 16px;
+                                border-radius: 20px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
+                                backdrop-filter: blur(10px);
+                                border: 1px solid rgba(255,255,255,0.2);
+                            ">Ready</span>
                         </div>
+                    </header>
 
-                        <!-- Content Area -->
-                        <div style="padding: 30px;" class="table-content-mobile">
+                    <!-- Main Content -->
+                    <main style="
+                        flex: 1;
+                        overflow-y: auto;
+                        padding: 24px;
+                        display: flex;
+                        flex-direction: column;
+                    ">
+                        <div style="
+                            max-width: 800px;
+                            margin: 0 auto;
+                            width: 100%;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 24px;
+                            flex: 1;
+                        ">
+                            
+                            <!-- Live Transcription Controls -->
                             <div style="
-                                display: grid;
-                                grid-template-columns: 1fr 1fr;
-                                gap: 30px;
-                                margin-bottom: 30px;
-                            " class="table-grid-mobile">
-                                <!-- Participants Card -->
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 16px;
-                                    padding: 20px;
-                                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 20px;
-                                        padding-bottom: 16px;
-                                        border-bottom: 1px solid #f0f0f0;
-                                    ">
-                                        <span style="font-size: 24px;">👥</span>
-                                        <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Participants</h3>
-                                    </div>
-                                    <ul id="participantsList" style="
-                                        margin: 0;
-                                        padding: 0;
-                                        list-style: none;
-                                    "></ul>
+                                background: white;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 16px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                                padding: 30px;
+                                text-align: center;
+                            ">
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 8px 0; color: #28a745; font-size: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        🔴 Live Transcription
+                                    </h3>
+                                    <p style="margin: 0; color: #6c757d; font-size: 14px;">Start recording to see real-time speech-to-text transcription</p>
                                 </div>
                                 
-                                <!-- Join Table Section -->
-                                <div id="joinTableSection" style="
-                                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 16px;
-                                    padding: 20px;
-                                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                                    display: none;
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 20px;
-                                        padding-bottom: 16px;
-                                        border-bottom: 1px solid #f0f0f0;
-                                    ">
-                                        <span style="font-size: 24px;">🎯</span>
-                                        <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Join Table</h3>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 20px;">
-                                        <label for="participantEmailInput" style="
-                                            display: block;
-                                            margin-bottom: 8px;
-                                            font-size: 14px;
-                                            font-weight: 500;
-                                            color: #333;
-                                        ">Email (optional)</label>
-                                        <input type="email" id="participantEmailInput" placeholder="Enter your email" style="
-                                            width: 100%;
-                                            padding: 12px 16px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                            box-sizing: border-box;
-                                            transition: all 0.2s ease;
-                                        " onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'" onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
-                                    </div>
-                                    
-                                    <button id="joinThisTableBtn" style="
-                                        width: 100%;
-                                        padding: 16px;
-                                        background: #007bff;
+                                <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+                                    <button id="liveTranscriptionBtn" onclick="startLiveTranscription()" style="
+                                        padding: 16px 32px;
+                                        background: linear-gradient(135deg, #28a745, #20c997);
                                         color: white;
                                         border: none;
                                         border-radius: 12px;
@@ -1732,384 +1650,281 @@
                                         transition: all 0.2s ease;
                                         display: flex;
                                         align-items: center;
-                                        justify-content: center;
                                         gap: 8px;
-                                    " onmouseover="this.style.background='#0056b3'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(0,123,255,0.3)'" onmouseout="this.style.background='#007bff'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-                                        <span style="font-size: 18px;">🎯</span>
-                                        Join This Table
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- Recording Section -->
-                            <div style="
-                                background: white;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 16px;
-                                padding: 20px;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                            ">
-                                <div style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 12px;
-                                    margin-bottom: 20px;
-                                    padding-bottom: 16px;
-                                    border-bottom: 1px solid #f0f0f0;
-                                ">
-                                    <span style="font-size: 24px;">🎤</span>
-                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Recording Controls</h3>
-                                </div>
-                                
-                                <div style="
-                                    display: flex;
-                                    gap: 16px;
-                                    justify-content: center;
-                                    flex-wrap: wrap;
-                                " class="recording-buttons-mobile">
-                                    <button id="startRecordingBtn" style="
-                                        padding: 20px 40px;
-                                        background: linear-gradient(135deg, #28a745, #20c997);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 16px;
-                                        font-size: 18px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
                                         box-shadow: 0 4px 12px rgba(40,167,69,0.3);
-                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(40,167,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(40,167,69,0.3)'">
-                                        <span style="font-size: 24px;">🎤</span>
-                                        Start Recording
+                                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                        <span>🎙️</span> Start Live Transcription
                                     </button>
-                                    
-                                    <button id="stopRecordingBtn" style="
-                                        padding: 20px 40px;
+                                    <button id="stopLiveTranscriptionBtn" onclick="stopLiveTranscription()" style="
+                                        padding: 16px 32px;
                                         background: linear-gradient(135deg, #dc3545, #c82333);
                                         color: white;
                                         border: none;
-                                        border-radius: 16px;
-                                        font-size: 18px;
+                                        border-radius: 12px;
+                                                    font-size: 16px;
                                         font-weight: 600;
                                         cursor: pointer;
                                         transition: all 0.2s ease;
                                         display: none;
                                         align-items: center;
-                                        gap: 12px;
+                                        gap: 8px;
                                         box-shadow: 0 4px 12px rgba(220,53,69,0.3);
-                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(220,53,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(220,53,69,0.3)'">
-                                        <span style="font-size: 24px;">⏹️</span>
-                                        Stop Recording
-                                    </button>
-                                    
-                                    <button id="uploadMediaBtn" style="
-                                        padding: 20px 40px;
-                                        background: linear-gradient(135deg, #6c757d, #5a6268);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 16px;
-                                        font-size: 18px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        box-shadow: 0 4px 12px rgba(108,117,125,0.3);
-                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(108,117,125,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(108,117,125,0.3)'">
-                                        <span style="font-size: 24px;">📁</span>
-                                        Upload Media
-                                    </button>
-                                    
-                                    <button id="liveTranscriptionBtn" style="
-                                        padding: 20px 40px;
-                                        background: linear-gradient(135deg, #17a2b8, #138496);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 16px;
-                                        font-size: 18px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        box-shadow: 0 4px 12px rgba(23,162,184,0.3);
-                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(23,162,184,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(23,162,184,0.3)'">
-                                        <span style="font-size: 24px;">🎙️</span>
-                                        Live Transcription
-                                    </button>
-                                    
-                                    <button id="stopTranscriptionBtn" style="
-                                        padding: 20px 40px;
-                                        background: linear-gradient(135deg, #dc3545, #c82333);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 16px;
-                                        font-size: 18px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: none;
-                                        align-items: center;
-                                        gap: 12px;
-                                        box-shadow: 0 4px 12px rgba(220,53,69,0.3);
-                                    " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(220,53,69,0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(220,53,69,0.3)'">
-                                        <span style="font-size: 24px;">⏹️</span>
-                                        Stop Transcription
+                                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                        <span>⏹️</span> Stop Transcription
                                     </button>
                                 </div>
                                 
-                                <!-- Recording Status -->
-                                <div id="recordingStatus" style="
-                                    margin-top: 20px;
-                                    padding: 16px;
-                                    background: #f8f9fa;
-                                    border-radius: 12px;
-                                    text-align: center;
-                                    color: #666;
-                                    font-size: 14px;
+                                <!-- Audio Wave Visualization -->
+                                <div id="audioWaveContainer" style="
                                     display: none;
-                                "></div>
-                                
-                                <!-- Audio Visualization -->
-                                <div id="audioVisualization" style="
-                                    margin-top: 20px;
+                                    margin: 20px 0;
                                     padding: 20px;
-                                    background: #f8f9fa;
+                                    background: rgba(40, 167, 69, 0.1);
                                     border-radius: 12px;
+                                    border: 2px solid rgba(40, 167, 69, 0.2);
                                     text-align: center;
-                                    display: none;
-                                "></div>
-                                
-                                <!-- Upload Progress -->
-                                <div id="uploadProgress" style="
-                                    margin-top: 20px;
-                                    padding: 20px;
-                                    background: #f8f9fa;
-                                    border-radius: 12px;
-                                    display: none;
                                 ">
-                                    <div style="
-                                        display: flex;
-                                        justify-content: space-between;
-                                        align-items: center;
-                                        margin-bottom: 12px;
-                                    ">
-                                        <span id="uploadFileName" style="
-                                            font-weight: 600;
-                                            color: #333;
-                                            font-size: 14px;
-                                        "></span>
-                                        <span id="uploadStatus" style="
-                                            color: #666;
-                                            font-size: 12px;
-                                        "></span>
+                                    <div style="margin-bottom: 12px; color: #28a745; font-size: 14px; font-weight: 500;">
+                                        🎙️ Listening...
                                     </div>
-                                    <div style="
-                                        width: 100%;
-                                        height: 8px;
-                                        background: #e0e0e0;
-                                        border-radius: 4px;
-                                        overflow: hidden;
+                                    <div id="audioWave" style="
+                                        display: flex;
+                                        justify-content: center;
+                                        align-items: end;
+                                        height: 40px;
+                                        gap: 2px;
                                     ">
-                                        <div id="uploadProgressBar" style="
-                                            height: 100%;
-                                            background: linear-gradient(135deg, #007bff, #0056b3);
-                                            width: 0%;
-                                            transition: width 0.3s ease;
-                                        "></div>
+                                        <!-- Wave bars will be generated here -->
+                                    </div>
+                                    <div style="margin-top: 8px; color: #6c757d; font-size: 12px;">
+                                        Audio level: <span id="audioLevel">0%</span>
                                     </div>
                                 </div>
+                                
+                                <!-- Marginal Options -->
+                                <!-- Removed Audio Recording and Upload Media buttons - moved to Table Recordings tab -->
                             </div>
                             
-                            <!-- Tabbed Transcription Section -->
+                            <!-- Live Transcription Display Area -->
                             <div style="
                                 background: white;
                                 border: 1px solid #e0e0e0;
                                 border-radius: 16px;
-                                padding: 20px;
-                                margin-top: 30px;
                                 box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                                overflow: hidden;
                             ">
                                 <div style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 12px;
-                                    margin-bottom: 20px;
-                                    padding-bottom: 16px;
-                                    border-bottom: 1px solid #f0f0f0;
+                                    background: #f8f9fa;
+                                    padding: 16px 20px;
+                                    border-bottom: 1px solid #e9ecef;
                                 ">
-                                    <span style="font-size: 24px;">📝</span>
-                                    <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">Transcriptions by Recording Method</h3>
+                                    <h4 style="margin: 0; color: #28a745; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                                        🔴 Transcription Results
+                                        <span id="liveTranscriptionCount" style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">0</span>
+                                    </h4>
                                 </div>
                                 
-                                <!-- Transcription Tabs -->
-                                <div style="
-                                    display: flex;
-                                    border-bottom: 1px solid #e0e0e0;
-                                    margin-bottom: 20px;
-                                    gap: 4px;
+                                <div id="liveTranscriptionContent" style="
+                                    min-height: 300px;
+                                    max-height: 500px;
+                                    padding: 20px;
+                                    background: white;
+                                    color: #333;
+                                    font-size: 14px;
+                                    line-height: 1.6;
+                                    overflow-y: auto;
                                 ">
-                                    <button id="startRecordingTab" onclick="switchTranscriptionTab('start-recording')" style="
-                                        flex: 1;
-                                        padding: 12px 16px;
-                                        border: none;
-                                        background: #f8f9fa;
-                                        border-radius: 8px 8px 0 0;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        cursor: pointer;
-                                        transition: all 0.2s;
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: center;
-                                        gap: 8px;
-                                    ">
-                                        🎙️ Start Recording
-                                        <span id="startRecordingCount" class="transcription-count">0</span>
-                                    </button>
-                                    
-                                    <button id="uploadMediaTab" onclick="switchTranscriptionTab('upload-media')" style="
-                                        flex: 1;
-                                        padding: 12px 16px;
-                                        border: none;
-                                        background: #f8f9fa;
-                                        border-radius: 8px 8px 0 0;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        cursor: pointer;
-                                        transition: all 0.2s;
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: center;
-                                        gap: 8px;
-                                    ">
-                                        📎 Upload Media
-                                        <span id="uploadMediaCount" class="transcription-count">0</span>
-                                    </button>
-                                    
-                                    <button id="liveTranscriptionTab" onclick="switchTranscriptionTab('live-transcription')" style="
-                                        flex: 1;
-                                        padding: 12px 16px;
-                                        border: none;
+                                    <div id="transcriptionDisplay" style="display: none;">
+                                        <!-- Real-time transcription will appear here -->
+                                    </div>
+                                    <div id="emptyTranscriptionState" style="text-align: center; margin-top: 80px; opacity: 0.7;">
+                                        <div style="font-size: 48px; margin-bottom: 16px;">🎙️</div>
+                                        <h5 style="margin: 0 0 8px 0; color: #28a745; font-size: 16px;">Ready for Live Transcription</h5>
+                                        <p style="margin: 0; font-size: 14px; color: #6c757d;">Start recording to see real-time speech-to-text transcription</p>
+                                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #999;">Results will appear here with timestamps and speaker identification</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Saved Audio Files Section -->
+                            <div style="
+                                background: white;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 16px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                                overflow: hidden;
+                                margin-top: 24px;
+                            ">
+                                <div style="
+                                    background: #f8f9fa;
+                                    padding: 16px 20px;
+                                    border-bottom: 1px solid #e9ecef;
+                                ">
+                                    <h4 style="margin: 0; color: #007bff; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                                        🎵 Table Recordings
+                                        <span id="recordingCountBadge" style="background: #007bff; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">0</span>
+                                    </h4>
+                                </div>
+                                
+                                <!-- Table Recordings Controls -->
+                                <div style="
+                                    background: #f8f9fa;
+                                    padding: 12px 20px;
+                                    border-top: 1px solid #e9ecef;
+                                    border-bottom: 1px solid #e9ecef;
+                                    display: flex;
+                                    gap: 12px;
+                                    justify-content: center;
+                                ">
+                                    <button onclick="showAudioRecording()" style="
+                                        padding: 8px 16px;
                                         background: #007bff;
                                         color: white;
-                                        border-radius: 8px 8px 0 0;
-                                        font-size: 14px;
-                                        font-weight: 500;
+                                        border: none;
+                                        border-radius: 8px;
+                                        font-size: 12px;
                                         cursor: pointer;
-                                        transition: all 0.2s;
+                                        transition: all 0.2s ease;
                                         display: flex;
                                         align-items: center;
-                                        justify-content: center;
-                                        gap: 8px;
-                                    ">
-                                        🔴 Live Transcription
-                                        <span id="liveTranscriptionCount" class="transcription-count" style="background: rgba(255,255,255,0.2);">0</span>
+                                        gap: 4px;
+                                    " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">
+                                        🎤 Record Audio
+                                    </button>
+                                    <button onclick="showUploadMedia()" style="
+                                        padding: 8px 16px;
+                                        background: #28a745;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 8px;
+                                        font-size: 12px;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                        display: flex;
+                                        align-items: center;
+                                        gap: 4px;
+                                    " onmouseover="this.style.background='#1e7e34'" onmouseout="this.style.background='#28a745'">
+                                        📁 Upload Media
                                     </button>
                                 </div>
                                 
-                                <!-- Tab Content Containers -->
-                                <div id="startRecordingContent" class="transcription-tab-content" style="
-                                    display: none;
-                                    min-height: 200px;
+                                <div id="audioPlayerContainer" style="
+                                    background: white;
                                     padding: 20px;
-                                    background: #f8f9fa;
-                                    border-radius: 12px;
-                                    color: #666;
-                                    font-size: 14px;
-                                    line-height: 1.6;
-                                    border: 2px dashed #ddd;
-                                    overflow-y: auto;
-                                    max-height: 400px;
+                                    min-height: 120px;
                                 ">
-                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
-                                        <div style="font-size: 32px; margin-bottom: 16px;">🎙️</div>
-                                        <p><strong>Start Recording Transcriptions</strong></p>
-                                        <p style="font-size: 12px; color: #999;">Transcriptions from Start Recording sessions will appear here</p>
+                                    <div id="recordingsList" style="display: none;">
+                                        <!-- Audio players will be populated here -->
                                     </div>
-                                </div>
-                                
-                                <div id="uploadMediaContent" class="transcription-tab-content" style="
-                                    display: none;
-                                    min-height: 200px;
-                                    padding: 20px;
-                                    background: #f8f9fa;
-                                    border-radius: 12px;
-                                    color: #666;
-                                    font-size: 14px;
-                                    line-height: 1.6;
-                                    border: 2px dashed #ddd;
-                                    overflow-y: auto;
-                                    max-height: 400px;
-                                ">
-                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
-                                        <div style="font-size: 32px; margin-bottom: 16px;">📎</div>
-                                        <p><strong>Upload Media Transcriptions</strong></p>
-                                        <p style="font-size: 12px; color: #999;">Transcriptions from uploaded audio files will appear here</p>
-                                    </div>
-                                </div>
-                                
-                                <div id="liveTranscriptionContent" class="transcription-tab-content" style="
-                                    display: block;
-                                    min-height: 200px;
-                                    padding: 20px;
-                                    background: #f8f9fa;
-                                    border-radius: 12px;
-                                    color: #666;
-                                    font-size: 14px;
-                                    line-height: 1.6;
-                                    border: 2px dashed #ddd;
-                                    overflow-y: auto;
-                                    max-height: 400px;
-                                ">
-                                    <div class="empty-state" style="text-align: center; margin-top: 40px; opacity: 0.7;">
-                                        <div style="font-size: 32px; margin-bottom: 16px;">🔴</div>
-                                        <p><strong>Live Transcription</strong></p>
-                                        <p style="font-size: 12px; color: #999;">Real-time transcriptions will appear here with speaker diarization</p>
-                                    </div>
-                                </div>
-                                
-                                <!-- Keep the original liveTranscript div for backward compatibility -->
-                                <div id="liveTranscript" style="display: none;"></div>
-                                
-                                <!-- Audio Player Section -->
-                                <div style="margin-top: 20px;">
-                                    <h3 style="margin: 0 0 16px 0; font-size: 18px; color: #333; display: flex; align-items: center; gap: 8px;">
-                                        🎵 Table Recordings
-                                        <span id="recordingCountBadge" style="background: #007bff; color: white; font-size: 12px; padding: 2px 8px; border-radius: 12px; font-weight: 500;">0</span>
-                                    </h3>
-                                    <div id="audioPlayerContainer" style="
-                                        background: #f8f9fa;
-                                        border-radius: 12px;
-                                        padding: 16px;
-                                        border: 1px solid #e9ecef;
+                                    <div id="noRecordingsMessage" style="
+                                        text-align: center;
+                                        color: #6c757d;
+                                        font-size: 14px;
+                                        padding: 40px 20px;
                                     ">
-                                        <div id="recordingsList" style="display: none;">
-                                            <!-- Audio players will be populated here -->
-                                        </div>
-                                        <div id="noRecordingsMessage" style="
-                                            text-align: center;
-                                            color: #666;
-                                            font-size: 14px;
-                                            padding: 20px;
-                                        ">
-                                            <div style="font-size: 24px; margin-bottom: 8px;">🎙️</div>
-                                            <p>No recordings available yet</p>
-                                            <p style="font-size: 12px; opacity: 0.7;">Recordings will appear here after transcription</p>
-                                        </div>
+                                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.7;">🎙️</div>
+                                        <h5 style="margin: 0 0 8px 0; font-weight: 500; color: #495057;">No recordings available yet</h5>
+                                        <p style="margin: 0; font-size: 12px; opacity: 0.7;">Audio recordings will appear here after processing</p>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden Audio Recording Modal -->
+                            <div id="audioRecordingModal" style="
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                bottom: 0;
+                                background: rgba(0,0,0,0.5);
+                                z-index: 20000;
+                                display: none;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 20px;
+                            ">
+                                <div style="
+                                    background: white;
+                                    border-radius: 16px;
+                                    padding: 30px;
+                                    max-width: 400px;
+                                    width: 100%;
+                                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                                ">
+                                    <h3 style="margin: 0 0 16px 0; color: #007bff; text-align: center;">🎤 Audio Recording</h3>
+                                    <p style="margin: 0 0 20px 0; color: #6c757d; text-align: center;">Record audio that will be processed for transcription</p>
+                                    <div style="display: flex; gap: 12px; justify-content: center;">
+                                        <button id="startRecordingBtn" onclick="startRecording()" style="
+                                            padding: 12px 20px;
+                                            background: #007bff;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 8px;
+                                            cursor: pointer;
+                                        ">Start Recording</button>
+                                        <button onclick="hideAudioRecording()" style="
+                                            padding: 12px 20px;
+                                            background: #6c757d;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 8px;
+                                            cursor: pointer;
+                                        ">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden Upload Media Modal -->
+                            <div id="uploadMediaModal" style="
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                bottom: 0;
+                                background: rgba(0,0,0,0.5);
+                                z-index: 20000;
+                                display: none;
+                                align-items: center;
+                                justify-content: center;
+                                padding: 20px;
+                            ">
+                                <div style="
+                                    background: white;
+                                    border-radius: 16px;
+                                    padding: 30px;
+                                    max-width: 400px;
+                                    width: 100%;
+                                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                                ">
+                                    <h3 style="margin: 0 0 16px 0; color: #6c757d; text-align: center;">📁 Upload Media</h3>
+                                    <p style="margin: 0 0 20px 0; color: #6c757d; text-align: center;">Select audio or video files for transcription</p>
+                                    <div style="display: flex; gap: 12px; justify-content: center;">
+                                        <button onclick="selectMediaFile()" style="
+                                            padding: 12px 20px;
+                                            background: #6c757d;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 8px;
+                                            cursor: pointer;
+                                        ">Choose File</button>
+                                        <button onclick="hideUploadMedia()" style="
+                                            padding: 12px 20px;
+                                            background: #dc3545;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 8px;
+                                            cursor: pointer;
+                                        ">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Hidden file input for media upload -->
-                        <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
-                    </div>
+                    </main>
+
+                    <!-- Hidden file input for media upload -->
+                    <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
                 </div>
             </div>
 
@@ -2404,17 +2219,6 @@
                             </div>
                             
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button onclick="generateAIAnalysis()" id="aiAnalysisBtn" style="
-                                    padding: 10px 16px;
-                                    background: linear-gradient(135deg, #667eea, #764ba2);
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                ">🤖 AI Analysis</button>
-                                
                                 <button onclick="exportAllTranscriptions()" style="
                                     padding: 10px 16px;
                                     background: #007bff;
@@ -2452,34 +2256,6 @@
                             </div>
                         </div>
 
-                        <!-- AI Analysis Section -->
-                        <div id="aiAnalysisSection" style="
-                            display: none;
-                            background: #f8f9fa;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 8px;
-                            padding: 20px;
-                            margin-bottom: 30px;
-                        ">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <h3 style="margin: 0; font-size: 18px; color: #333; font-weight: 600;">🤖 AI Analysis Results</h3>
-                                <button onclick="toggleAIAnalysis()" style="
-                                    background: none;
-                                    border: none;
-                                    font-size: 18px;
-                                    cursor: pointer;
-                                    color: #666;
-                                ">✕</button>
-                            </div>
-                            <div id="aiAnalysisResults">
-                                <!-- AI analysis results will be loaded here -->
-                            </div>
-                        </div>
 
                         <!-- Transcriptions List -->
                         <div id="allTranscriptionsList" style="
@@ -2634,29 +2410,6 @@
                                 ">-</span>
                             </div>
                             <div 
-                                onclick="showAdminTab('prompts')" 
-                                id="promptsNavCard"
-                                style="
-                                    background: rgba(168, 85, 247, 0.2);
-                                    border: 1px solid rgba(168, 85, 247, 0.3);
-                                    padding: 12px 20px;
-                                    border-radius: 25px;
-                                    cursor: pointer;
-                                    transition: all 0.3s ease;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    color: #a855f7;
-                                    font-weight: 600;
-                                    font-size: 14px;
-                                "
-                                onmouseover="this.style.background='rgba(168,85,247,0.3)'; this.style.transform='translateY(-2px)'"
-                                onmouseout="this.style.background='rgba(168,85,247,0.2)'; this.style.transform='translateY(0)'"
-                            >
-                                <span>🎯</span>
-                                <span>AI Prompts</span>
-                            </div>
-                            <div 
                                 onclick="showAdminTab('stats')" 
                                 id="statsNavCard"
                                 style="
@@ -2799,260 +2552,6 @@
                             </div>
                         </div>
 
-                        <!-- AI Prompts Panel -->
-                        <div id="adminPromptsTab" class="modern-admin-tab">
-                            <div class="tab-header">
-                                <h2>🎯 AI Prompts Configuration</h2>
-                                <p>Configure analysis prompts for automated insights</p>
-                            </div>
-                            
-                            <div style="
-                                display: grid;
-                                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                                gap: 24px;
-                                margin-bottom: 32px;
-                            ">
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e5e7eb;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 16px;
-                                    ">
-                                        <div style="
-                                            font-size: 24px;
-                                            width: 40px;
-                                            height: 40px;
-                                            background: linear-gradient(135deg, #fee2e2, #fecaca);
-                                            border-radius: 8px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                        ">⚡</div>
-                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Conflict Detection</h3>
-                                    </div>
-                                    <textarea 
-                                        id="conflictPrompt" 
-                                        placeholder="Enter conflict detection prompt to identify disagreements and opposing viewpoints..."
-                                        style="
-                                            width: 100%;
-                                            min-height: 150px;
-                                            padding: 16px;
-                                            border: 1px solid #d1d5db;
-                                            border-radius: 8px;
-                                            background: #f9fafb;
-                                            color: #111827;
-                                            font-size: 14px;
-                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                            resize: vertical;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                        "
-                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
-                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
-                                    ></textarea>
-                                </div>
-                                
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e5e7eb;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 16px;
-                                    ">
-                                        <div style="
-                                            font-size: 24px;
-                                            width: 40px;
-                                            height: 40px;
-                                            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-                                            border-radius: 8px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                        ">🤝</div>
-                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Agreement Detection</h3>
-                                    </div>
-                                    <textarea 
-                                        id="agreementPrompt" 
-                                        placeholder="Enter agreement detection prompt to find consensus and shared ideas..."
-                                        style="
-                                            width: 100%;
-                                            min-height: 150px;
-                                            padding: 16px;
-                                            border: 1px solid #d1d5db;
-                                            border-radius: 8px;
-                                            background: #f9fafb;
-                                            color: #111827;
-                                            font-size: 14px;
-                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                            resize: vertical;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                        "
-                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
-                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
-                                    ></textarea>
-                                </div>
-                                
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e5e7eb;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 16px;
-                                    ">
-                                        <div style="
-                                            font-size: 24px;
-                                            width: 40px;
-                                            height: 40px;
-                                            background: linear-gradient(135deg, #fef3c7, #fde68a);
-                                            border-radius: 8px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                        ">🎨</div>
-                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Theme Extraction</h3>
-                                    </div>
-                                    <textarea 
-                                        id="themePrompt" 
-                                        placeholder="Enter theme extraction prompt to identify key topics and recurring patterns..."
-                                        style="
-                                            width: 100%;
-                                            min-height: 150px;
-                                            padding: 16px;
-                                            border: 1px solid #d1d5db;
-                                            border-radius: 8px;
-                                            background: #f9fafb;
-                                            color: #111827;
-                                            font-size: 14px;
-                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                            resize: vertical;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                        "
-                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
-                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
-                                    ></textarea>
-                                </div>
-                                
-                                <div style="
-                                    background: white;
-                                    border: 1px solid #e5e7eb;
-                                    border-radius: 12px;
-                                    padding: 20px;
-                                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                                ">
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 12px;
-                                        margin-bottom: 16px;
-                                    ">
-                                        <div style="
-                                            font-size: 24px;
-                                            width: 40px;
-                                            height: 40px;
-                                            background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-                                            border-radius: 8px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                        ">😊</div>
-                                        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Sentiment Analysis</h3>
-                                    </div>
-                                    <textarea 
-                                        id="sentimentPrompt" 
-                                        placeholder="Enter sentiment analysis prompt to analyze emotional tone and attitudes..."
-                                        style="
-                                            width: 100%;
-                                            min-height: 150px;
-                                            padding: 16px;
-                                            border: 1px solid #d1d5db;
-                                            border-radius: 8px;
-                                            background: #f9fafb;
-                                            color: #111827;
-                                            font-size: 14px;
-                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                                            resize: vertical;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                        "
-                                        onfocus="this.style.borderColor='#3b82f6'; this.style.background='#ffffff'"
-                                        onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb'"
-                                    ></textarea>
-                                </div>
-                            </div>
-                            
-                            <div style="
-                                display: flex;
-                                gap: 16px;
-                                justify-content: flex-end;
-                                padding: 24px 0;
-                                border-top: 1px solid #e5e7eb;
-                                margin-top: 24px;
-                            ">
-                                <button 
-                                    onclick="resetPrompts()" 
-                                    style="
-                                        background: #f3f4f6;
-                                        border: 1px solid #d1d5db;
-                                        border-radius: 8px;
-                                        padding: 12px 20px;
-                                        cursor: pointer;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        color: #374151;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 8px;
-                                    "
-                                    onmouseover="this.style.background='#e5e7eb'"
-                                    onmouseout="this.style.background='#f3f4f6'"
-                                >
-                                    🔄 Reset to Default
-                                </button>
-                                <button 
-                                    onclick="savePrompts()" 
-                                    style="
-                                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                                        border: none;
-                                        border-radius: 8px;
-                                        padding: 12px 20px;
-                                        cursor: pointer;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        color: white;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 8px;
-                                    "
-                                    onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'"
-                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
-                                >
-                                    💾 Save Prompts
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- Analytics Panel -->
                         <div id="adminStatsTab" class="modern-admin-tab">
@@ -3112,10 +2611,6 @@
                                             <span class="health-label">Deepgram API</span>
                                             <span class="health-status connected" id="deepgramStatus">✓ Available</span>
                                         </div>
-                                        <div class="health-item">
-                                            <span class="health-label">Groq API</span>
-                                            <span class="health-status connected" id="groqStatus">✓ Available</span>
-                                        </div>
                                     </div>
                                 </div>
                                 
@@ -3166,16 +2661,6 @@
                                             </div>
                                         </div>
                                         
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label for="groqApiKey">Groq API Key</label>
-                                                <div class="api-key-input">
-                                                    <input type="password" id="groqApiKey" class="modern-input" placeholder="Enter Groq API key">
-                                                    <button type="button" class="toggle-visibility" onclick="toggleApiKeyVisibility('groqApiKey')">👁️</button>
-                                                </div>
-                                                <small class="form-hint">Used for AI analysis and content generation</small>
-                                            </div>
-                                        </div>
                                         
                                         <div class="form-actions">
                                             <button onclick="updateApiKeys()" class="modern-btn modern-btn-primary">💾 Save API Keys</button>
@@ -3266,10 +2751,6 @@
                                             <span class="config-status-badge" id="deepgramConfigStatus">Not Configured</span>
                                         </div>
                                         <div class="config-item">
-                                            <span class="config-label">Groq API</span>
-                                            <span class="config-status-badge" id="groqConfigStatus">Not Configured</span>
-                                        </div>
-                                        <div class="config-item">
                                             <span class="config-label">Database</span>
                                             <span class="config-status-badge configured">Configured</span>
                                         </div>
@@ -3302,159 +2783,6 @@
                 </style>
             </div>
 
-            <!-- Analysis Report - Modern Layout -->
-            <div id="analysisReport" class="screen" style="display: none;">
-                <div style="
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    box-sizing: border-box;
-                    padding: 20px;
-                    overflow-y: auto;
-                ">
-                    <div style="
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                        min-height: calc(100vh - 40px);
-                        position: relative;
-                    ">
-                        <!-- Report Header -->
-                        <div style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            border-radius: 16px 16px 0 0;
-                            padding: 30px 40px;
-                            position: relative;
-                            overflow: hidden;
-                        ">
-                            <div style="
-                                position: absolute;
-                                top: -50px;
-                                right: -50px;
-                                width: 200px;
-                                height: 200px;
-                                background: rgba(255,255,255,0.1);
-                                border-radius: 50%;
-                            "></div>
-                            <div style="position: relative; z-index: 2;">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                                    <div>
-                                        <h1 id="reportTitle" style="margin: 0 0 8px 0; font-size: 32px; font-weight: 700;">
-                                            Session Analysis Report
-                                        </h1>
-                                        <p id="reportSubtitle" style="margin: 0; font-size: 16px; opacity: 0.9;">
-                                            AI-powered insights from your World Café session
-                                        </p>
-                                    </div>
-                                    <button onclick="showSessionDashboard()" style="
-                                        background: rgba(255,255,255,0.2);
-                                        border: 1px solid rgba(255,255,255,0.3);
-                                        color: white;
-                                        padding: 10px 16px;
-                                        border-radius: 8px;
-                                        cursor: pointer;
-                                        font-weight: 500;
-                                        transition: all 0.2s ease;
-                                    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                                        ← Back
-                                    </button>
-                                </div>
-                                <div id="reportMeta" style="
-                                    display: flex;
-                                    gap: 24px;
-                                    font-size: 14px;
-                                    color: rgba(255,255,255,0.8);
-                                ">
-                                    <!-- Meta info will be populated dynamically -->
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Report Content -->
-                        <div style="padding: 40px;">
-                            <div id="reportContent" style="
-                                display: flex;
-                                flex-direction: column;
-                                gap: 40px;
-                            ">
-                                <!-- Report content will be loaded dynamically -->
-                            </div>
-                            
-                            <!-- Action Buttons -->
-                            <div style="
-                                margin-top: 60px;
-                                padding-top: 30px;
-                                border-top: 1px solid #e0e0e0;
-                                display: flex;
-                                gap: 16px;
-                                justify-content: center;
-                                flex-wrap: wrap;
-                            ">
-                                <button onclick="downloadReport()" style="
-                                    background: linear-gradient(135deg, #667eea, #764ba2);
-                                    color: white;
-                                    border: none;
-                                    padding: 14px 28px;
-                                    border-radius: 10px;
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    transition: all 0.2s ease;
-                                    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-                                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">
-                                    <span style="font-size: 18px;">📄</span>
-                                    Download Report
-                                </button>
-                                <button onclick="exportAnalysisData()" style="
-                                    background: #28a745;
-                                    color: white;
-                                    border: none;
-                                    padding: 14px 28px;
-                                    border-radius: 10px;
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    transition: all 0.2s ease;
-                                " onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
-                                    <span style="font-size: 18px;">📊</span>
-                                    Export Data
-                                </button>
-                                <button onclick="viewTableAnalyses()" style="
-                                    background: #17a2b8;
-                                    color: white;
-                                    border: none;
-                                    padding: 14px 28px;
-                                    border-radius: 10px;
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    transition: all 0.2s ease;
-                                " onmouseover="this.style.background='#138496'" onmouseout="this.style.background='#17a2b8'">
-                                    <span style="font-size: 18px;">📢</span>
-                                    View Tables
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </main>
 
         <!-- Loading Overlay -->
@@ -3536,18 +2864,7 @@
 
 
     <script>
-        // Live Transcription with Deepgram
-        let liveTranscriptionSocket;
-        let liveTranscriptionStream;
-        let liveTranscriptionMediaRecorder;
-        let liveTranscriptionSaveRecorder; // New: for saving audio to server
-        let liveTranscriptionAudioChunks = []; // New: collect audio chunks for saving
-        let liveTranscriptionStartTime = null; // New: track session start time
-        let liveTranscriptionSegments = []; // New: collect all transcription segments
-        let liveTranscriptionFullText = ''; // New: accumulate complete transcript
-        let currentTranscriptionSpeaker = null;
-        let currentTranscriptionBubble = null;
-        const DEEPGRAM_API_KEY = '5c0e7b6e611060387891a21b4d309ac439d0a404';
+        // Live Transcription variables moved to app.js to avoid conflicts
         
         // Reconnection variables
         let liveTranscriptionActive = false;
@@ -3993,17 +3310,26 @@
             // This will be called to update the counts in each tab
             console.log('📊 Updating transcription tab counts');
             
-            // Update Start Recording count
-            const startRecordingCount = document.querySelectorAll('#startRecordingContent .chat-bubble').length;
-            document.getElementById('startRecordingCount').textContent = startRecordingCount;
+            // Update Start Recording count (if element exists)
+            const startRecordingCountEl = document.getElementById('startRecordingCount');
+            if (startRecordingCountEl) {
+                const startRecordingCount = document.querySelectorAll('#startRecordingContent .chat-bubble').length;
+                startRecordingCountEl.textContent = startRecordingCount;
+            }
             
-            // Update Upload Media count  
-            const uploadMediaCount = document.querySelectorAll('#uploadMediaContent .chat-bubble').length;
-            document.getElementById('uploadMediaCount').textContent = uploadMediaCount;
+            // Update Upload Media count (if element exists)
+            const uploadMediaCountEl = document.getElementById('uploadMediaCount');
+            if (uploadMediaCountEl) {
+                const uploadMediaCount = document.querySelectorAll('#uploadMediaContent .chat-bubble').length;
+                uploadMediaCountEl.textContent = uploadMediaCount;
+            }
             
-            // Update Live Transcription count
-            const liveTranscriptionCount = document.querySelectorAll('#liveTranscriptionContent .chat-bubble').length;
-            document.getElementById('liveTranscriptionCount').textContent = liveTranscriptionCount;
+            // Update Live Transcription count (if element exists)
+            const liveTranscriptionCountEl = document.getElementById('liveTranscriptionCount');
+            if (liveTranscriptionCountEl) {
+                const liveTranscriptionCount = document.querySelectorAll('#liveTranscriptionContent .chat-bubble').length;
+                liveTranscriptionCountEl.textContent = liveTranscriptionCount;
+            }
         }
 
         function activateRecordingMethodTab(method) {

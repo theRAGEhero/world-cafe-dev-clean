@@ -38,7 +38,7 @@ class Transcription extends BaseModel {
         r.created_at as recording_created_at,
         p.name as participant_name
       FROM ${this.tableName} tr
-      JOIN recordings r ON tr.recording_id = r.id
+      LEFT JOIN recordings r ON tr.recording_id = r.id
       LEFT JOIN participants p ON r.participant_id = p.id
       WHERE tr.table_id = ?
       ORDER BY tr.created_at DESC

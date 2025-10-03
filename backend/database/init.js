@@ -18,11 +18,49 @@ class DatabaseInitializer {
       console.log('Executing database schema...');
       await db.executeSQLFile(schemaSQL);
 
+      console.log('Running pending migrations...');
+      await this.runMigrations();
+
       console.log('Database initialization completed successfully!');
       return true;
     } catch (error) {
       console.error('Database initialization failed:', error);
       return false;
+    }
+  }
+
+  async runMigrations() {
+    try {
+      const migrationsPath = path.join(__dirname, 'migrations');
+      const migrationFiles = await fs.readdir(migrationsPath);
+      
+      for (const file of migrationFiles.sort()) {
+        if (file.endsWith('.sql')) {
+          const migrationExists = await db.query(
+            'SELECT 1 FROM migrations WHERE filename = ?',
+            [file]
+          );
+          
+          if (migrationExists.length === 0) {
+            console.log(`Running migration: ${file}`);
+            const migrationSQL = await fs.readFile(
+              path.join(migrationsPath, file),
+              'utf8'
+            );
+            
+            await db.executeSQLFile(migrationSQL);
+            await db.query(
+              'INSERT INTO migrations (filename, executed_at) VALUES (?, NOW())',
+              [file]
+            );
+            
+            console.log(`✅ Migration ${file} completed`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Migration failed:', error);
+      throw error;
     }
   }
 
@@ -189,13 +227,11 @@ class DatabaseInitializer {
       
       // Get some basic stats
       const sessionCount = await db.queryOne('SELECT COUNT(*) as count FROM sessions') || { count: 0 };
-      const participantCount = await db.queryOne('SELECT COUNT(*) as count FROM participants WHERE left_at IS NULL') || { count: 0 };
       
       return {
         status: 'connected',
         tables: tables.length,
         sessions: sessionCount.count,
-        activeParticipants: participantCount.count,
         healthy: true
       };
     } catch (error) {
