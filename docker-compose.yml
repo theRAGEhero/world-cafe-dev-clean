@@ -3,17 +3,11 @@ version: '3.8'
 services:
   # MySQL Database
   mysql:
-    image: mysql:8.0
+    image: alexdoit/democracyroutes-cafe-mysql:latest
     container_name: world-cafe-mysql
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database_schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "3307:3306"
     healthcheck:
@@ -56,6 +50,9 @@ services:
       
       # Session Secret
       SESSION_SECRET: ${SESSION_SECRET}
+      
+      # Upload Configuration
+      MAX_UPLOAD_SIZE: "1073741824"  # 1GB in bytes
       
     depends_on:
       mysql:

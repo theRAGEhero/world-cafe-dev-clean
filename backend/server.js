@@ -32,8 +32,8 @@ const io = socketIo(server, {
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '1gb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '1gb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'worldcafe-session-secret-key',
   resave: false,
@@ -147,7 +147,7 @@ const upload = multer({
       cb(new Error('Only audio and video files are allowed (WAV, MP3, MP4, M4A, WebM, OGG, MOV, AVI)'));
     }
   },
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
 });
 
 // Initialize services
@@ -298,6 +298,43 @@ io.on('connection', (socket) => {
         hasClients: true,
         timestamp: new Date()
       });
+    }
+  });
+
+  // Handle explicit table leaving (for table switching)
+  socket.on('leave-table', (data) => {
+    if (typeof data === 'object' && data.tableId && data.sessionId) {
+      const { tableId, sessionId } = data;
+      
+      console.log(`Client ${socket.id} explicitly leaving table ${tableId} in session ${sessionId}`);
+      
+      // Remove from table tracking
+      if (tableClients.has(tableId)) {
+        tableClients.get(tableId).delete(socket.id);
+        
+        // Broadcast updated client count
+        const remainingClients = tableClients.get(tableId).size;
+        io.to(sessionId).emit('table-client-update', {
+          tableId,
+          clientCount: remainingClients,
+          hasClients: remainingClients > 0,
+          timestamp: new Date()
+        });
+        
+        // Clean up empty sets
+        if (remainingClients === 0) {
+          tableClients.delete(tableId);
+        }
+        
+        console.log(`Client ${socket.id} left table ${tableId}, ${remainingClients} clients remaining`);
+      }
+      
+      // Remove from clientToTable mapping only if it matches this table
+      const currentMapping = clientToTable.get(socket.id);
+      if (currentMapping && currentMapping.tableId === tableId) {
+        clientToTable.delete(socket.id);
+        console.log(`Removed client ${socket.id} from clientToTable mapping`);
+      }
     }
   });
   
