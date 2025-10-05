@@ -4,6 +4,7 @@
 let socket;
 let currentSession = null;
 let currentTable = null;
+let previousTable = null;
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
@@ -531,6 +532,17 @@ function initializeSocket() {
         console.log('🔄 Reprocess status update:', data);
         handleReprocessStatus(data);
     });
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        if (currentTable && currentSession && socket) {
+            console.log('[DEBUG] Page unloading, leaving table', currentTable.id);
+            socket.emit('leave-table', {
+                tableId: currentTable.id,
+                sessionId: currentSession.id
+            });
+        }
+    });
 }
 
 // Handle reprocess status updates
@@ -957,14 +969,159 @@ function hideQRScanner() {
     }
 }
 
-function initializeQRScanner() {
-    // QR scanner implementation would go here
-    // For now, just show the manual input option
-    console.log('QR Scanner not yet implemented. Use manual entry.');
+async function initializeQRScanner() {
+    console.log('Initializing QR Scanner...');
+    
+    const video = document.getElementById('qrVideo');
+    if (!video) {
+        console.error('QR video element not found');
+        showToast('QR scanner setup failed', 'error');
+        return;
+    }
+    
+    // Add loading overlay
+    const videoContainer = video.parentElement;
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'qrLoading';
+    loadingDiv.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(240, 240, 240, 0.9);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        border-radius: 12px;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="font-size: 24px; margin-bottom: 12px;">📷</div>
+        <div style="font-size: 14px; font-weight: 500; color: #666;">Starting camera...</div>
+        <div style="font-size: 12px; color: #999; margin-top: 4px;">Please allow camera permissions</div>
+    `;
+    videoContainer.appendChild(loadingDiv);
+    
+    // Set timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+        console.error('Camera startup timeout');
+        showToast('Camera timeout. Please try again or use manual entry.', 'error');
+        hideQRScanner();
+    }, 10000);
+    
+    try {
+        // Check if camera API is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera not supported');
+        }
+        
+        console.log('Requesting camera access...');
+        
+        // Try to get camera stream with simplified constraints
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        }).catch(async () => {
+            // Fallback to basic video
+            return await navigator.mediaDevices.getUserMedia({ video: true });
+        });
+        
+        console.log('Camera stream acquired');
+        
+        // Set video source
+        video.srcObject = stream;
+        
+        // Wait for video to be ready
+        video.onloadedmetadata = () => {
+            console.log('Video metadata loaded');
+            video.play().then(() => {
+                console.log('Video playing');
+                // Remove loading overlay
+                if (loadingDiv.parentElement) {
+                    loadingDiv.remove();
+                }
+                clearTimeout(timeout);
+                startQRDetection();
+                showToast('Camera ready - point at QR code', 'success');
+            }).catch(error => {
+                console.error('Video play failed:', error);
+                clearTimeout(timeout);
+                showToast('Failed to start video', 'error');
+                hideQRScanner();
+            });
+        };
+        
+        video.onerror = (error) => {
+            console.error('Video error:', error);
+            clearTimeout(timeout);
+            showToast('Camera error occurred', 'error');
+            hideQRScanner();
+        };
+        
+    } catch (error) {
+        console.error('Camera access failed:', error);
+        clearTimeout(timeout);
+        
+        let message = 'Camera failed: ';
+        switch (error.name) {
+            case 'NotAllowedError':
+                message += 'Permission denied';
+                break;
+            case 'NotFoundError':
+                message += 'No camera found';
+                break;
+            case 'NotReadableError':
+                message += 'Camera in use';
+                break;
+            default:
+                message += 'Not supported';
+        }
+        
+        showToast(message, 'error');
+        hideQRScanner();
+    }
 }
 
 function stopQRScanner() {
-    // Stop camera and cleanup
+    console.log('Stopping QR scanner...');
+    
+    // Stop camera stream
+    const video = document.getElementById('qrVideo');
+    if (video && video.srcObject) {
+        const tracks = video.srcObject.getTracks();
+        tracks.forEach(track => {
+            track.stop();
+            console.log('Camera track stopped');
+        });
+        video.srcObject = null;
+    }
+    
+    // Remove loading overlay if it exists
+    const loadingDiv = document.getElementById('qrLoading');
+    if (loadingDiv) {
+        loadingDiv.remove();
+    }
+    
+    // Stop QR detection if running
+    if (window.qrDetectionInterval) {
+        clearInterval(window.qrDetectionInterval);
+        window.qrDetectionInterval = null;
+    }
+}
+
+function hideQRScanner() {
+    console.log('Hiding QR scanner...');
+    stopQRScanner();
+    
+    const scanner = document.getElementById('mobileScanner');
+    if (scanner) {
+        scanner.style.display = 'none';
+    }
 }
 
 function closeQRScanner() {
@@ -1627,35 +1784,6 @@ function showJoinQRScanner() {
                 • Allow camera permissions when prompted
             </div>
             
-            <div style="display: flex; gap: 12px; justify-content: center;">
-                <button onclick="closeQRScanner()" style="
-                    background: #6c757d;
-                    color: white;
-                    border: none;
-                    padding: 10px 16px;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
-                    Cancel
-                </button>
-                
-                <button onclick="closeQRScanner(); showBrowseJoin();" style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    border: none;
-                    padding: 10px 16px;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
-                    Browse Instead
-                </button>
-            </div>
         </div>
     `;
     
@@ -1680,131 +1808,103 @@ function closeQRScanner() {
 }
 
 async function startQRCamera() {
-    const video = document.getElementById('qrVideo');
-    if (!video) return;
+    console.log('Starting QR camera...');
     
-    // Additional security context check for production
-    if (!window.isSecureContext) {
-        showToast('Camera requires secure context (HTTPS). Please use HTTPS version of the site.', 'error');
-        return;
-    }
+    // Wrap everything in a timeout to prevent infinite hanging
+    const overallTimeout = setTimeout(() => {
+        console.error('Overall camera startup timeout - forcing close');
+        showToast('Camera startup failed. Closing scanner...', 'error');
+        closeQRScanner();
+    }, 8000); // 8 second overall timeout
     
     try {
-        // First check if we can enumerate devices (additional permission check)
-        let devices = [];
-        try {
-            devices = await navigator.mediaDevices.enumerateDevices();
-            console.log('Available devices:', devices.length);
-        } catch (e) {
-            console.warn('Could not enumerate devices:', e);
+        const video = document.getElementById('qrVideo');
+        if (!video) {
+            console.error('Video element not found');
+            clearTimeout(overallTimeout);
+            closeQRScanner();
+            return;
         }
         
-        // Progressive fallback constraints for better compatibility
-        const constraints = [
-            // First try: Ideal settings for QR scanning
-            {
+        // Check basic requirements
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera API not available');
+        }
+        
+        // Additional security context check for production
+        if (!window.isSecureContext) {
+            throw new Error('Camera requires secure context (HTTPS)');
+        }
+        
+        console.log('Requesting camera access...');
+        
+        // Simplified constraints to avoid issues
+        const stream = await Promise.race([
+            navigator.mediaDevices.getUserMedia({ 
                 video: { 
                     facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
                 } 
-            },
-            // Second try: Basic back camera
-            {
-                video: { 
-                    facingMode: 'environment',
-                    width: { min: 640 },
-                    height: { min: 480 }
-                } 
-            },
-            // Third try: Any camera with decent resolution
-            {
-                video: { 
-                    width: { min: 640 },
-                    height: { min: 480 }
-                } 
-            },
-            // Last resort: Any video
-            { video: true }
-        ];
+            }),
+            navigator.mediaDevices.getUserMedia({ video: true }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Camera request timeout')), 5000)
+            )
+        ]);
         
-        let stream = null;
-        let lastError = null;
-        
-        for (let i = 0; i < constraints.length; i++) {
-            try {
-                console.log(`Trying camera constraint ${i + 1}:`, constraints[i]);
-                stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
-                console.log('Camera stream acquired successfully');
-                break;
-            } catch (error) {
-                console.warn(`Camera constraint ${i + 1} failed:`, error.name, error.message);
-                lastError = error;
-                continue;
-            }
-        }
-        
-        if (!stream) {
-            throw lastError || new Error('All camera constraints failed');
-        }
+        console.log('Camera stream acquired, setting up video...');
         
         video.srcObject = stream;
         
-        // Wait for video to load before starting
-        return new Promise((resolve, reject) => {
-            video.onloadedmetadata = () => {
-                video.play().then(() => {
-                    console.log('Video playing, starting QR detection');
-                    startQRDetection();
-                    showToast('Camera started - point at QR code', 'success');
-                    resolve();
-                }).catch(error => {
-                    console.error('Video play failed:', error);
-                    showToast('Failed to start video playback', 'error');
-                    reject(error);
-                });
-            };
-            
-            video.onerror = (error) => {
-                console.error('Video error:', error);
-                showToast('Video error occurred', 'error');
-                reject(error);
-            };
-        });
+        // Simplified video setup with timeout
+        await Promise.race([
+            new Promise((resolve, reject) => {
+                video.onloadedmetadata = () => {
+                    console.log('Video metadata loaded, starting playback...');
+                    video.play().then(() => {
+                        console.log('Video playing successfully');
+                        resolve();
+                    }).catch(reject);
+                };
+                video.onerror = reject;
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Video setup timeout')), 3000)
+            )
+        ]);
+        
+        // Start QR detection
+        startQRDetection();
+        showToast('Camera ready - scan QR code', 'success');
+        
+        clearTimeout(overallTimeout);
         
     } catch (error) {
-        console.error('Camera access error:', error);
+        console.error('Camera startup failed:', error);
+        clearTimeout(overallTimeout);
         
-        let message = 'Camera access failed. ';
-        
-        switch (error.name) {
+        let message = 'Camera failed: ';
+        switch (error.name || error.message) {
             case 'NotAllowedError':
-                message += 'Please allow camera permissions in your browser settings and try again.';
+                message += 'Permission denied';
                 break;
             case 'NotFoundError':
-                message += 'No camera found on this device.';
-                break;
-            case 'NotSupportedError':
-                message += 'Camera not supported in this browser.';
+                message += 'No camera found';
                 break;
             case 'NotReadableError':
-                message += 'Camera is being used by another application.';
+                message += 'Camera in use by another app';
                 break;
-            case 'OverconstrainedError':
-                message += 'Camera constraints could not be satisfied.';
-                break;
-            case 'SecurityError':
-                message += 'Security error - ensure you\'re on HTTPS and have proper permissions.';
+            case 'Camera request timeout':
+            case 'Video setup timeout':
+                message += 'Timeout - camera not responding';
                 break;
             default:
-                message += `Error: ${error.message || 'Unknown error'}`;
+                message += error.message || 'Unknown error';
         }
         
         showToast(message, 'error');
-        
-        // Close scanner on error
-        setTimeout(closeQRScanner, 3000);
+        closeQRScanner();
     }
 }
 
@@ -1907,7 +2007,10 @@ async function findAndJoinSessionByCode(sessionCode, participantName) {
             currentSession = result.session;
             currentTable = result.table;
             socket.emit('join-session', result.session.id);
-            socket.emit('join-table', result.table.id);
+            socket.emit('join-table', {
+                tableId: result.table.id,
+                sessionId: result.session.id
+            });
             setupTableInterface();
             showScreen('tableInterface');
         }
@@ -3282,18 +3385,66 @@ async function loadSessionDashboard(sessionId) {
     document.getElementById('sessionCodeValue').textContent = session.id; // Session code is the session ID
     document.getElementById('activeTableCount').textContent = session.active_tables || session.tableCount || 0;
     
-    // Get actual recording count from transcriptions
+    // Get actual recording count and duration from recordings
     try {
-        const transcriptionsResponse = await fetch(`/api/sessions/${sessionId}/all-transcriptions`);
-        if (transcriptionsResponse.ok) {
-            const transcriptions = await transcriptionsResponse.json();
-            document.getElementById('recordingCount').textContent = transcriptions.length;
+        // First try to get recordings from each table
+        let totalRecordings = 0;
+        let totalDuration = 0;
+        
+        if (session.tables && session.tables.length > 0) {
+            // Get recordings from all tables
+            const recordingPromises = session.tables.map(async (table) => {
+                try {
+                    const response = await fetch(`/api/sessions/${sessionId}/tables/${table.table_number}/recordings`);
+                    if (response.ok) {
+                        return await response.json();
+                    }
+                    return [];
+                } catch (error) {
+                    console.warn(`Failed to load recordings for table ${table.table_number}:`, error);
+                    return [];
+                }
+            });
+            
+            const allTableRecordings = await Promise.all(recordingPromises);
+            const allRecordings = allTableRecordings.flat();
+            
+            totalRecordings = allRecordings.length;
+            totalDuration = allRecordings.reduce((sum, recording) => {
+                return sum + (parseFloat(recording.duration_seconds) || 0);
+            }, 0);
         } else {
-            document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+            // Fallback to session totals
+            totalRecordings = session.total_recordings || 0;
+            totalDuration = 0; // No duration available from session totals
         }
+        
+        // Update recording count
+        document.getElementById('recordingCount').textContent = totalRecordings;
+        
+        // Update total duration with proper formatting
+        const durationElement = document.getElementById('totalRecordingDuration');
+        if (durationElement) {
+            if (totalDuration > 0) {
+                const minutes = Math.floor(totalDuration / 60);
+                const seconds = Math.floor(totalDuration % 60);
+                if (minutes > 0) {
+                    durationElement.textContent = `${minutes}m${seconds > 0 ? ` ${seconds}s` : ''}`;
+                } else {
+                    durationElement.textContent = `${seconds}s`;
+                }
+            } else {
+                durationElement.textContent = '0m';
+            }
+        }
+        
     } catch (error) {
-        console.warn('Failed to load transcriptions for count:', error);
+        console.warn('Failed to load recordings for dashboard:', error);
         document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+        const durationElement = document.getElementById('totalRecordingDuration');
+        if (durationElement) {
+            durationElement.textContent = '0m';
+        }
     }
     
     // Update language indicator
@@ -4473,6 +4624,16 @@ function setupTableInterface() {
     console.log('[DEBUG] setupTableInterface called with currentTable:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
     if (!currentTable) return;
     
+    // Handle table switching cleanup
+    if (previousTable && previousTable.id !== currentTable.id && currentSession) {
+        console.log('[DEBUG] Switching from table', previousTable.id, 'to table', currentTable.id);
+        // Emit leave-table event for old table cleanup
+        socket.emit('leave-table', {
+            tableId: previousTable.id,
+            sessionId: currentSession.id
+        });
+    }
+    
     // Emit join-table event for client tracking
     if (currentSession && currentTable) {
         socket.emit('join-table', {
@@ -4480,6 +4641,9 @@ function setupTableInterface() {
             sessionId: currentSession.id
         });
         console.log(`[DEBUG] Emitted join-table event for table ${currentTable.id} in session ${currentSession.id}`);
+        
+        // Update previous table reference
+        previousTable = { ...currentTable };
     }
     
     // Update session info in header
