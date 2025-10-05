@@ -16,7 +16,7 @@
     
     <!-- Meta tags -->
     <meta name="description" content="World Café Platform - Facilitating meaningful conversations and collaborative discussions across multiple tables">
-    <meta name="theme-color" content="#4A90E2">
+    <meta name="theme-color" content="#8C4A24">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
@@ -707,136 +707,34 @@
             </div>
 
             <!-- Create Session Screen -->
-            <div id="createSessionScreen" class="screen" style="display: none;">
-                <!-- COMPLETELY ISOLATED CREATE SESSION SCREEN -->
-                <div class="create-session-overlay">
-                    <div style="
-                        max-width: 600px;
-                        margin: 40px auto;
-                        background: white;
-                        border-radius: 20px;
-                        box-shadow: 0 15px 50px rgba(0,0,0,0.2);
-                        padding: 0;
-                        box-sizing: border-box;
-                        overflow: hidden;
-                    ">
-                        <!-- Header -->
-                        <div style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            padding: 30px 40px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                        ">
-                            <button onclick="showWelcome()" style="
-                                background: rgba(255,255,255,0.2);
-                                color: white;
-                                border: 1px solid rgba(255,255,255,0.3);
-                                border-radius: 12px;
-                                width: 45px;
-                                height: 45px;
-                                cursor: pointer;
-                                font-size: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                backdrop-filter: blur(10px);
-                            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">←</button>
-                            
-                            <div style="flex: 1; text-align: center; margin: 0 20px;">
-                                <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Create New Session</h1>
-                                <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.9;">Start a new World Café discussion</p>
+            <div id="createSessionScreen" class="screen">
+                <div class="screen-cover screen-cover--gradient">
+                    <div class="screen-panel screen-panel--wizard">
+                        <header class="screen-panel__header">
+                            <button type="button" class="btn btn-ghost btn-icon" onclick="showWelcome()" aria-label="Back to welcome">←</button>
+                            <div class="screen-panel__heading">
+                                <h1 class="screen-panel__title">Create New Session</h1>
+                                <p class="screen-panel__subtitle">Start a new World Café discussion</p>
                             </div>
-                            
-                            <div style="width: 45px;"></div>
-                        </div>
-                        
-                        <!-- Form Content -->
-                        <div style="padding: 40px;">
-                            <form id="createSessionForm" style="
-                                display: flex;
-                                flex-direction: column;
-                                gap: 24px;
-                            ">
-                                <!-- Session Title -->
-                                <div style="
-                                    display: flex;
-                                    flex-direction: column;
-                                    gap: 8px;
-                                ">
-                                    <label for="sessionTitle" style="
-                                        font-weight: 600;
-                                        color: #333;
-                                        font-size: 16px;
-                                    ">Session Title</label>
-                                    <input type="text" id="sessionTitle" required style="
-                                        padding: 16px 20px;
-                                        border: 2px solid #e0e0e0;
-                                        border-radius: 12px;
-                                        font-size: 16px;
-                                        transition: all 0.2s ease;
-                                        box-sizing: border-box;
-                                    " placeholder="Enter session title..."
-                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102,126,234,0.1)'"
-                                    onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                            <span class="screen-panel__badge">
+                                <span aria-hidden="true">🎯</span>
+                                New
+                            </span>
+                        </header>
+                        <div class="screen-panel__body">
+                            <form id="createSessionForm" class="form-grid form-grid--stacked" novalidate>
+                                <div class="form-group">
+                                    <label class="label label-required" for="sessionTitle">Session Title</label>
+                                    <input id="sessionTitle" type="text" class="input" placeholder="Enter session title..." required autocomplete="off">
                                 </div>
-                                
-                                <!-- Session Description -->
-                                <div style="
-                                    display: flex;
-                                    flex-direction: column;
-                                    gap: 8px;
-                                ">
-                                    <label for="sessionDescription" style="
-                                        font-weight: 600;
-                                        color: #333;
-                                        font-size: 16px;
-                                    ">Description</label>
-                                    <textarea id="sessionDescription" rows="3" style="
-                                        padding: 16px 20px;
-                                        border: 2px solid #e0e0e0;
-                                        border-radius: 12px;
-                                        font-size: 16px;
-                                        transition: all 0.2s ease;
-                                        box-sizing: border-box;
-                                        font-family: inherit;
-                                        resize: vertical;
-                                        min-height: 80px;
-                                    " placeholder="Brief description of the session (optional)..."
-                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102,126,234,0.1)'"
-                                    onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'"></textarea>
+                                <div class="form-group">
+                                    <label class="label" for="sessionDescription">Description</label>
+                                    <textarea id="sessionDescription" class="textarea" rows="3" placeholder="Brief description of the session (optional)..."></textarea>
                                 </div>
-                                
-                                <!-- Language and Tables Row -->
-                                <div style="
-                                    display: grid;
-                                    grid-template-columns: 1fr 1fr;
-                                    gap: 20px;
-                                " class="form-row-mobile">
-                                    <!-- Language Selection -->
-                                    <div style="
-                                        display: flex;
-                                        flex-direction: column;
-                                        gap: 8px;
-                                    ">
-                                        <label for="sessionLanguage" style="
-                                            font-weight: 600;
-                                            color: #333;
-                                            font-size: 16px;
-                                        ">Language</label>
-                                        <select id="sessionLanguage" style="
-                                            padding: 16px 20px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 12px;
-                                            font-size: 16px;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                            background: white;
-                                            cursor: pointer;
-                                        " onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102,126,234,0.1)'"
-                                        onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                                <div class="form-grid form-grid--two">
+                                    <div class="form-group">
+                                        <label class="label" for="sessionLanguage">Language</label>
+                                        <select id="sessionLanguage" class="input">
                                             <option value="en-US">English (US)</option>
                                             <option value="en-GB">English (UK)</option>
                                             <option value="es-ES">Spanish (Spain)</option>
@@ -859,1428 +757,408 @@
                                             <option value="sv-SE">Swedish</option>
                                         </select>
                                     </div>
-                                    
-                                    <!-- Number of Tables -->
-                                    <div style="
-                                        display: flex;
-                                        flex-direction: column;
-                                        gap: 8px;
-                                    ">
-                                        <label for="tableCount" style="
-                                            font-weight: 600;
-                                            color: #333;
-                                            font-size: 16px;
-                                        ">Number of Tables</label>
-                                        <input type="number" id="tableCount" value="10" min="1" max="50" style="
-                                            padding: 16px 20px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 12px;
-                                            font-size: 16px;
-                                            transition: all 0.2s ease;
-                                            box-sizing: border-box;
-                                        " onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102,126,234,0.1)'"
-                                        onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                                    <div class="form-group">
+                                        <label class="label" for="tableCount">Number of Tables</label>
+                                        <input id="tableCount" type="number" class="input" value="10" min="1" max="50">
                                     </div>
                                 </div>
-                                
-                                <!-- Action Buttons -->
-                                <div style="
-                                    display: flex;
-                                    gap: 16px;
-                                    margin-top: 20px;
-                                " class="form-actions-mobile">
-                                    <button type="button" onclick="showWelcome()" style="
-                                        flex: 1;
-                                        padding: 16px 24px;
-                                        background: #f8f9fa;
-                                        border: 2px solid #e0e0e0;
-                                        border-radius: 12px;
-                                        cursor: pointer;
-                                        font-size: 16px;
-                                        font-weight: 600;
-                                        color: #666;
-                                        transition: all 0.2s ease;
-                                    " onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#d0d0d0'"
-                                    onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#e0e0e0'">Cancel</button>
-                                    
-                                    <button type="submit" style="
-                                        flex: 2;
-                                        padding: 16px 24px;
-                                        background: linear-gradient(135deg, #667eea, #764ba2);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 12px;
-                                        cursor: pointer;
-                                        font-size: 16px;
-                                        font-weight: 600;
-                                        transition: all 0.2s ease;
-                                        box-shadow: 0 4px 12px rgba(102,126,234,0.3);
-                                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102,126,234,0.4)'"
-                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.3)'">Create Session</button>
+                                <div class="screen-panel__actions">
+                                    <button type="button" class="btn btn-secondary btn-full" onclick="showWelcome()">Cancel</button>
+                                    <button type="submit" class="btn btn-primary btn-full">Create Session</button>
                                 </div>
                             </form>
                         </div>
                     </div>
                 </div>
             </div>
-
             <!-- Join Session Screen -->
-            <div id="joinSessionScreen" style="display: none;">
-                <!-- COMPLETELY ISOLATED JOIN SESSION SCREEN -->
-                <div class="join-session-overlay">
-                    <div style="
-                        max-width: 500px;
-                        margin: 60px auto;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                        padding: 40px;
-                        box-sizing: border-box;
-                        min-height: 400px;
-                    ">
-                        <!-- Header -->
-                        <div style="
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                            margin-bottom: 40px;
-                            padding-bottom: 20px;
-                            border-bottom: 1px solid #eee;
-                        ">
-                            <button onclick="showWelcome()" style="
-                                background: #f5f5f5;
-                                border: 1px solid #ddd;
-                                border-radius: 8px;
-                                width: 40px;
-                                height: 40px;
-                                cursor: pointer;
-                                font-size: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                            ">←</button>
-                            
-                            <div style="flex: 1; text-align: center; margin: 0 20px;">
-                                <h1 style="margin: 0; font-size: 24px; color: #333; font-weight: 600;">Join Session</h1>
-                                <p style="margin: 8px 0 0 0; color: #666; font-size: 14px;">Choose how you'd like to join</p>
+            <div id="joinSessionScreen" class="screen">
+                <div class="screen-cover screen-cover--gradient">
+                    <div class="screen-panel screen-panel--wizard">
+                        <header class="screen-panel__header">
+                            <button type="button" class="btn btn-ghost btn-icon" onclick="showWelcome()" aria-label="Back to welcome">←</button>
+                            <div class="screen-panel__heading">
+                                <h1 class="screen-panel__title">Join Session</h1>
+                                <p class="screen-panel__subtitle">Choose how you'd like to participate</p>
                             </div>
-                            
-                        </div>
+                            <span class="screen-panel__badge">
+                                <span aria-hidden="true">🌐</span>
+                                Join
+                            </span>
+                        </header>
+                        <div class="screen-panel__body join-wizard">
+                            <nav class="join-progress" aria-label="Join session steps">
+                                <div class="join-progress__step join-progress__step--active" data-step="1">
+                                    <span class="join-progress__index">1</span>
+                                    <span class="join-progress__label">Choose Method</span>
+                                </div>
+                                <div class="join-progress__step" data-step="2">
+                                    <span class="join-progress__index">2</span>
+                                    <span class="join-progress__label">Pick Session</span>
+                                </div>
+                                <div class="join-progress__step" data-step="3">
+                                    <span class="join-progress__index">3</span>
+                                    <span class="join-progress__label">Select Table</span>
+                                </div>
+                            </nav>
 
-                        <!-- Step 1: Choose Method -->
-                        <div id="joinStep1" style="display: block;">
-                            <div class="join-method-container" style="
-                                display: flex;
-                                justify-content: center;
-                                align-items: stretch;
-                                gap: 24px;
-                                flex-wrap: wrap;
-                                max-width: 1000px;
-                                margin: 0 auto;
-                                padding: 0 20px;
-                            ">
-                                
-                                <!-- Session Code Box -->
-                                <div class="join-method-box" style="
-                                    flex: 1;
-                                    min-width: 280px;
-                                    max-width: 320px;
-                                    background: white;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 16px;
-                                    padding: 20px;
-                                    text-align: center;
-                                    transition: all 0.2s ease;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                                    display: flex;
-                                    flex-direction: column;
-                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
-                                    <div style="font-size: 32px; margin-bottom: 16px;">🔑</div>
-                                    <h4 style="margin: 0 0 20px 0; font-size: 16px; color: #333; font-weight: 600;">Session Code</h4>
-                                    
-                                    <input type="text" id="sessionCodeInput" placeholder="Enter session or table code" maxlength="60" style="
-                                        width: 100%;
-                                        padding: 12px;
-                                        border: 2px solid #e0e0e0;
-                                        border-radius: 8px;
-                                        font-size: 14px;
-                                        text-align: center;
-                                        font-family: monospace;
-                                        letter-spacing: 0.5px;
-                                        box-sizing: border-box;
-                                        font-weight: 500;
-                                        margin-bottom: 16px;
-                                    " onfocus="this.style.borderColor='#007bff'" onblur="this.style.borderColor='#e0e0e0'">
-                                    
-                                    <button onclick="joinWithSessionCode()" style="
-                                        width: 100%;
-                                        padding: 12px;
-                                        background: #007bff;
-                                        color: white;
-                                        border: none;
-                                        border-radius: 8px;
-                                        font-size: 14px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                    " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">Join</button>
-                                    
-                                    <small style="color: #666; font-size: 11px; text-align: center; display: block; margin-top: 8px; line-height: 1.3;">
-                                        Accepts session codes, table codes (sessionId/table/N), or passwords
-                                    </small>
-                                </div>
-                                
-                                <!-- QR Code Scanner Box -->
-                                <div class="join-method-box" onclick="showJoinQRScanner()" style="
-                                    flex: 1;
-                                    min-width: 280px;
-                                    max-width: 320px;
-                                    background: white;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 16px;
-                                    padding: 20px;
-                                    text-align: center;
-                                    cursor: pointer;
-                                    transition: all 0.2s ease;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                                    display: flex;
-                                    flex-direction: column;
-                                    justify-content: center;
-                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
-                                    <div style="
-                                        width: 48px; 
-                                        height: 48px; 
-                                        margin: 0 auto 16px auto; 
-                                        background: #333; 
-                                        border-radius: 6px;
-                                        display: grid;
-                                        grid-template-columns: repeat(7, 1fr);
-                                        grid-template-rows: repeat(7, 1fr);
-                                        gap: 1px;
-                                        padding: 4px;
-                                        box-sizing: border-box;
-                                    ">
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: white;"></div>
-                                        <div style="background: #333;"></div>
-                                        <div style="background: #333;"></div>
+                            <div id="joinStep1" class="join-step join-step--active">
+                                <div class="join-methods">
+                                    <div class="join-method method-card selected" data-method="code">
+                                        <div class="join-method-icon">🔑</div>
+                                        <h3 class="join-method-title">Session Code</h3>
+                                        <p class="join-method-description">Enter a session, table code, or password to join instantly.</p>
+                                        <div class="form-group">
+                                            <label class="label" for="sessionCodeInput">Session/Table Code</label>
+                                            <input id="sessionCodeInput" type="text" class="input" placeholder="Enter session or table code" maxlength="60" autocomplete="off" spellcheck="false">
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-full" onclick="joinWithSessionCode()">Join</button>
+                                        <p class="helper-text helper-text--muted">Accepts session codes, table codes, admin passwords, or table passwords.</p>
                                     </div>
-                                    <h4 style="margin: 0; font-size: 16px; color: #333; font-weight: 600;">Scan QR Code</h4>
+                                    <div class="join-method method-card join-method--interactive" data-method="qr" onclick="showJoinQRScanner()">
+                                        <div class="join-method-icon">📷</div>
+                                        <h3 class="join-method-title">Scan QR Code</h3>
+                                        <p class="join-method-description">Use your camera to scan a World Café QR code and jump right in.</p>
+                                        <button type="button" class="btn btn-secondary btn-full">Open Scanner</button>
+                                    </div>
+                                    <div class="join-method method-card join-method--interactive" data-method="browse" onclick="selectJoinMethod('browse')">
+                                        <div class="join-method-icon">📚</div>
+                                        <h3 class="join-method-title">Browse Sessions</h3>
+                                        <p class="join-method-description">See all active sessions and choose your table from the list.</p>
+                                        <button type="button" class="btn btn-secondary btn-full">Browse Sessions</button>
+                                    </div>
                                 </div>
-                                
-                                <!-- Browse Sessions Box -->
-                                <div class="join-method-box" onclick="goToStep(2, 'browse')" style="
-                                    flex: 1;
-                                    min-width: 280px;
-                                    max-width: 320px;
-                                    background: white;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 16px;
-                                    padding: 20px;
-                                    text-align: center;
-                                    cursor: pointer;
-                                    transition: all 0.2s ease;
-                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                                    display: flex;
-                                    flex-direction: column;
-                                    justify-content: center;
-                                " onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
-                                    <div style="font-size: 32px; margin-bottom: 16px;">📋</div>
-                                    <h4 style="margin: 0; font-size: 16px; color: #333; font-weight: 600;">Browse Sessions</h4>
-                                </div>
-                                
                             </div>
-                        </div>
-                        
-                        <!-- Duplicate Step 2: Code Input removed - using Step 1 direct input instead -->
-                        
-                        <!-- Step 2: Browse Sessions -->
-                        <div id="joinStep2Browse" style="display: none;">
-                            <div style="
-                                max-width: 400px;
-                                margin: 0 auto;
-                                background: white;
-                                border-radius: 16px;
-                                padding: 32px;
-                                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-                                border: 1px solid #e0e0e0;
-                            ">
-                                <div style="margin-bottom: 24px; text-align: center;">
-                                    <h3 style="margin: 0 0 24px 0; font-size: 20px; color: #333; font-weight: 600;">Select Session</h3>
+
+                            <div id="joinStep2Browse" class="join-step">
+                                <div class="step-header">
+                                    <button type="button" class="btn btn-ghost" onclick="resetWizard()">← Back to options</button>
+                                    <h3 class="step-title">Browse Active Sessions</h3>
+                                    <p class="step-subtitle">Select a session to review details and pick a table.</p>
                                 </div>
-                                
-                                <div style="margin-bottom: 24px;">
-                                    <select id="sessionSelect" onchange="handleSessionSelection()" style="
-                                        width: 100%;
-                                        padding: 16px;
-                                        border: 2px solid #e0e0e0;
-                                        border-radius: 8px;
-                                        font-size: 16px;
-                                        box-sizing: border-box;
-                                        background: white;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                    " onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0,123,255,0.1)'" onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                                <div class="form-group">
+                                    <label class="label" for="sessionSelect">Active Sessions</label>
+                                    <select id="sessionSelect" class="input" onchange="handleSessionSelection()">
                                         <option value="">Loading sessions...</option>
                                     </select>
-                                    
-                                    <div style="
-                                        margin-top: 12px;
-                                        text-align: center;
-                                        font-size: 14px;
-                                        color: #666;
-                                        font-style: italic;
-                                    ">Select a session to continue automatically</div>
                                 </div>
-                                
-                                <div style="text-align: center;">
-                                    <button onclick="goToStep(1)" style="
-                                        padding: 12px 24px;
-                                        background: #f5f5f5;
-                                        border: 1px solid #ddd;
-                                        border-radius: 8px;
-                                        cursor: pointer;
-                                        font-size: 14px;
-                                        color: #666;
-                                        transition: all 0.2s ease;
-                                    " onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f5f5f5'">← Back to Options</button>
+                            </div>
+
+                            <div id="joinStep3" class="join-step">
+                                <div class="step-header">
+                                    <button type="button" class="btn btn-ghost" onclick="goToStep(2, currentJoinMethod)">← Back</button>
+                                    <h3 class="step-title">Choose Table</h3>
+                                    <p class="step-subtitle">Select your table to join the conversation.</p>
+                                </div>
+                                <div id="selectedSessionInfo" class="info-card"></div>
+                                <div id="tableSelection" class="join-table-grid"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="btn btn-secondary" onclick="goToStep(2, currentJoinMethod)">Back</button>
+                                    <button type="button" id="finalJoinBtn" class="btn btn-primary" onclick="finalJoinTable()" disabled>Join Table</button>
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Step 3: Select Table -->
-                        <div id="joinStep3" style="display: none;">
-                            <div style="margin-bottom: 20px;">
-                                <button onclick="goToStep(2, currentJoinMethod)" style="
-                                    background: transparent;
-                                    border: none;
-                                    color: #666;
-                                    cursor: pointer;
-                                    font-size: 14px;
-                                    padding: 8px 0;
-                                    margin-bottom: 20px;
-                                ">← Back</button>
-                                <h3 style="margin: 0 0 30px 0; font-size: 20px; color: #333; font-weight: 500;">Choose Table</h3>
-                            </div>
-                            
-                            <div id="selectedSessionInfo" style="
-                                background: #f8f9fa;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 8px;
-                                padding: 16px;
-                                margin-bottom: 24px;
-                            "></div>
-                            
-                            <div id="tableSelection" style="margin-bottom: 30px;"></div>
-                            
-                            <div style="display: flex; gap: 16px;">
-                                <button onclick="goToStep(2, currentJoinMethod)" style="
-                                    flex: 1;
-                                    padding: 16px;
-                                    background: #f5f5f5;
-                                    border: 1px solid #ddd;
-                                    border-radius: 8px;
-                                    cursor: pointer;
-                                    font-size: 16px;
-                                ">Back</button>
-                                <button onclick="finalJoinTable()" id="finalJoinBtn" disabled style="
-                                    flex: 2;
-                                    padding: 16px;
-                                    background: #007bff;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 8px;
-                                    cursor: pointer;
-                                    font-size: 16px;
-                                    opacity: 0.5;
-                                ">Join Table</button>
-                            </div>
-                        </div>
-                        
                     </div>
                 </div>
             </div>
+            <!-- Session Dashboard -->
+            <div id="sessionDashboard" class="screen">
+                <div class="screen-cover screen-cover--gradient">
+                    <div class="session-shell">
+                        <header class="session-shell__header">
+                            <button type="button" class="btn btn-ghost btn-icon" onclick="showWelcome()" aria-label="Back to welcome">←</button>
+                            <div class="session-shell__heading">
+                                <h1 id="dashboardTitle" class="session-shell__title">Session Dashboard</h1>
+                                <p class="session-shell__subtitle">Manage your World Café session</p>
+                                <div class="session-shell__code">
+                                    <span>Session Code:</span>
+                                    <span id="sessionCodeValue">-</span>
+                                </div>
+                            </div>
+                            <div class="session-shell__meta">
+                                <div id="sessionLanguageIndicator" class="language-pill">
+                                    <span class="language-pill__flag">🌍</span>
+                                    <span id="sessionLanguageText" class="language-pill__text">Language</span>
+                                </div>
+                                <div class="session-shell__actions">
+                                    <button type="button" id="showQRCodesBtn" class="btn btn-secondary btn-sm" onclick="toggleQRCodesSection()">📱 QR Codes</button>
+                                </div>
+                            </div>
+                        </header>
+                        <div class="session-shell__body">
+                            <section class="stat-grid">
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">🪑</div>
+                                    <div class="stat-card__label">Active Tables</div>
+                                    <div class="stat-card__value" id="activeTableCount">0</div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">🎙️</div>
+                                    <div class="stat-card__label">Recordings</div>
+                                    <div class="stat-card__value" id="recordingCount">0</div>
+                                    <div class="stat-card__meta">Total duration <span id="totalRecordingDuration">0m</span></div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">📝</div>
+                                    <div class="stat-card__label">Transcriptions</div>
+                                    <div class="stat-card__value" id="totalTranscriptions">0</div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">👥</div>
+                                    <div class="stat-card__label">Speakers</div>
+                                    <div class="stat-card__value" id="totalSpeakers">0</div>
+                                </article>
+                            </section>
 
-            <!-- Session Dashboard - NUCLEAR ISOLATED -->
-            <div id="sessionDashboard" style="display: none;">
-                <!-- COMPLETELY ISOLATED SESSION DASHBOARD SCREEN -->
-                <div style="
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    box-sizing: border-box;
-                    padding: 20px;
-                    overflow-y: auto;
-                ">
-                    <div style="
-                        max-width: 1400px;
-                        margin: 0 auto;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                        padding: 40px;
-                        box-sizing: border-box;
-                        min-height: calc(100vh - 40px);
-                    ">
-                        <!-- Header -->
-                        <div style="
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            margin-bottom: 30px;
-                            padding-bottom: 20px;
-                            border-bottom: 1px solid #eee;
-                        ">
-                            <div style="display: flex; align-items: center; gap: 20px;">
-                                <button onclick="showWelcome()" style="
-                                    background: #f5f5f5;
-                                    border: 1px solid #ddd;
-                                    border-radius: 8px;
-                                    width: 40px;
-                                    height: 40px;
-                                    cursor: pointer;
-                                    font-size: 18px;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                ">🏠</button>
-                                
-                                <div>
-                                    <h1 id="dashboardTitle" style="margin: 0; font-size: 28px; color: #333; font-weight: 600;">Session Dashboard</h1>
-                                    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Manage your World Café session</p>
-                                    <div id="sessionCodeDisplay" style="
-                                        margin-top: 8px;
-                                        padding: 8px 12px;
-                                        background: #f8f9fa;
-                                        border: 1px solid #e0e0e0;
-                                        border-radius: 6px;
-                                        display: inline-block;
-                                    ">
-                                        <span style="font-size: 12px; color: #666; font-weight: 500;">Session Code: </span>
-                                        <span id="sessionCodeValue" style="font-family: monospace; font-weight: 600; color: #333; font-size: 13px; letter-spacing: 0.5px;">-</span>
+                            <div class="session-shell__actions">
+                                <button type="button" class="btn btn-primary" onclick="viewAllTranscriptions(currentSession.id)">📝 All Transcriptions</button>
+                                <button type="button" class="btn btn-secondary" onclick="toggleQRCodesSection()">📱 Toggle QR Codes</button>
+                            </div>
+
+                            <section id="qrCodesSection" class="card card--ghost is-hidden">
+                                <header class="card__header">
+                                    <h2 class="card__title">Session QR Codes</h2>
+                                    <button type="button" class="btn btn-icon" onclick="toggleQRCodesSection()" aria-label="Close QR codes">✕</button>
+                                </header>
+                                <p class="card__subtitle">Share these QR codes to allow participants to join tables easily.</p>
+                                <div id="qrCodesGrid" class="qr-grid"></div>
+                                <div class="session-shell__actions">
+                                    <button type="button" id="downloadAllQRBtn" class="btn btn-secondary btn-sm">📥 Download All</button>
+                                    <button type="button" id="printQRBtn" class="btn btn-secondary btn-sm">🖨️ Print</button>
+                                </div>
+                            </section>
+
+                            <section class="card">
+                                <header class="card__header">
+                                    <h2 class="card__title">Active Tables</h2>
+                                </header>
+                                <div id="tablesGrid" class="tables-grid"></div>
+                            </section>
+
+                            <section class="card">
+                                <header class="card__header">
+                                    <h2 class="card__title">Recordings</h2>
+                                    <span id="recordingCountBadge" class="badge badge-neutral">0</span>
+                                </header>
+                                <p id="noRecordingsMessage" class="empty-state">No recordings yet. Start a recording to capture the conversation.</p>
+                                <div id="recordingsList" class="recordings-grid"></div>
+                            </section>
+
+                            <section class="card">
+                                <header class="card__header">
+                                    <h2 class="card__title">Live Transcription</h2>
+                                    <div class="card__header-actions">
+                                        <button type="button" id="liveTranscriptionBtn" class="btn btn-primary">Start Live Transcription</button>
+                                        <button type="button" id="stopLiveTranscriptionBtn" class="btn btn-secondary">Stop</button>
+                                        <span class="badge badge-primary" id="liveTranscriptionCount">0</span>
                                     </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Right Side - Language Indicator -->
-                            <div style="display: flex; align-items: center; gap: 15px;">
-                                <!-- Language Indicator -->
-                                <div id="sessionLanguageIndicator" style="
-                                    background: linear-gradient(135deg, #ff6b6b, #feca57);
-                                    color: white;
-                                    padding: 8px 16px;
-                                    border-radius: 20px;
-                                    font-size: 14px;
-                                    font-weight: 600;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
-                                    border: 2px solid rgba(255, 255, 255, 0.2);
-                                    backdrop-filter: blur(10px);
-                                    transition: all 0.3s ease;
-                                " 
-                                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255,107,107,0.4)'"
-                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(255,107,107,0.3)'"
-                                title="Session Language">
-                                    <span style="font-size: 16px;">🌍</span>
-                                    <span id="sessionLanguageText">English</span>
-                                </div>
-                            </div>
-                            
+                                </header>
+                                <div id="liveTranscriptionContent" class="transcription-scroll"></div>
+                            </section>
                         </div>
-
-                        <!-- Stats Cards -->
-                        <div style="
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                            gap: 16px;
-                            margin-bottom: 30px;
-                        " class="session-stats-mobile">
-                            
-                            <div style="
-                                background: linear-gradient(135deg, #f093fb, #f5576c);
-                                color: white;
-                                padding: 20px;
-                                border-radius: 12px;
-                                text-align: center;
-                                box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
-                            ">
-                                <div style="font-size: 28px; font-weight: 700; margin-bottom: 6px;" id="activeTableCount">0</div>
-                                <div style="font-size: 13px; opacity: 0.9;">📢 Active Tables</div>
-                            </div>
-                            
-                            <div style="
-                                background: linear-gradient(135deg, #4facfe, #00f2fe);
-                                color: white;
-                                padding: 20px;
-                                border-radius: 12px;
-                                text-align: center;
-                                box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
-                            ">
-                                <div style="font-size: 28px; font-weight: 700; margin-bottom: 6px;" id="recordingCount">0</div>
-                                <div style="font-size: 13px; opacity: 0.9;">🎤 Recordings</div>
-                            </div>
-                            
-                            <div style="
-                                background: linear-gradient(135deg, #ff9a56, #ffcc69);
-                                color: white;
-                                padding: 20px;
-                                border-radius: 12px;
-                                text-align: center;
-                                box-shadow: 0 4px 12px rgba(255, 154, 86, 0.3);
-                            ">
-                                <div style="font-size: 28px; font-weight: 700; margin-bottom: 6px;" id="totalRecordingDuration">0m</div>
-                                <div style="font-size: 13px; opacity: 0.9;">⏱️ Total Duration</div>
-                            </div>
-                        </div>
-
-                        <!-- Action Controls -->
-                        <div style="
-                            display: flex;
-                            gap: 12px;
-                            margin-bottom: 40px;
-                            flex-wrap: wrap;
-                            justify-content: center;
-                        ">
-                            <button onclick="viewAllTranscriptions(currentSession.id)" style="
-                                padding: 12px 24px;
-                                background: #28a745;
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 14px;
-                                font-weight: 500;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s ease;
-                            " onmouseover="this.style.background='#1e7e34'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#28a745'; this.style.transform='translateY(0)'">
-                                <span style="font-size: 16px;">📝</span>
-                                All Transcriptions
-                            </button>
-                            
-                            <button onclick="toggleQRCodesSection()" id="showQRCodesBtn" style="
-                                padding: 12px 24px;
-                                background: #17a2b8;
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 14px;
-                                font-weight: 500;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s ease;
-                            " onmouseover="this.style.background='#138496'; this.style.transform='translateY(-1px)'" onmouseout="this.style.background='#17a2b8'; this.style.transform='translateY(0)'">
-                                <span style="font-size: 16px;">📱</span>
-                                QR Codes
-                            </button>
-                        </div>
-
-
-                        <!-- QR Codes Section -->
-                        <div id="qrCodesSection" style="
-                            display: none;
-                            background: #f8f9fa;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 12px;
-                            padding: 24px;
-                            margin-bottom: 30px;
-                        ">
-                            <div style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 16px;
-                            ">
-                                <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: 600;">Session QR Codes</h3>
-                                <button onclick="toggleQRCodesSection()" style="
-                                    background: none;
-                                    border: none;
-                                    font-size: 18px;
-                                    cursor: pointer;
-                                    color: #666;
-                                ">✕</button>
-                            </div>
-                            <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">Share these QR codes to allow participants to join tables easily with their mobile devices.</p>
-                            
-                            <div id="qrCodesGrid" style="
-                                display: grid;
-                                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                                gap: 16px;
-                                margin-bottom: 20px;
-                            ">
-                                <!-- QR codes will be dynamically populated -->
-                            </div>
-                            
-                            <div style="
-                                display: flex;
-                                gap: 12px;
-                                flex-wrap: wrap;
-                                justify-content: center;
-                            ">
-                                <button onclick="downloadAllQRCodes()" id="downloadAllQRBtn" style="
-                                    padding: 10px 16px;
-                                    background: #6c757d;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                ">📥 Download All</button>
-                                <button onclick="printQRCodes()" id="printQRBtn" style="
-                                    padding: 10px 16px;
-                                    background: #6c757d;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                ">🖨️ Print QR Codes</button>
-                            </div>
-                        </div>
-
-
-                        <!-- Main Content Grid -->
-                        <div style="
-                            display: grid;
-                            grid-template-columns: 2fr 1fr;
-                            gap: 30px;
-                            margin-bottom: 30px;
-                        " class="session-main-content-mobile">
-                            <!-- Left Column: Tables -->
-                            <div>
-                                <h2 style="margin: 0 0 20px 0; font-size: 22px; color: #333; font-weight: 600;">📢 Active Tables</h2>
-                                <div id="tablesGrid" style="
-                                    display: grid;
-                                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                                    gap: 16px;
-                                ">
-                                    <!-- Tables will be dynamically populated -->
-                                </div>
-                            </div>
-                            
-                            <!-- Right Column: Quick Info -->
-                            <div>
-                                
-                            </div>
-                        </div>
-
-                        <!-- Simple Session Chat -->
                     </div>
                 </div>
             </div>
-
             <!-- Simplified Live Transcription Interface -->
-            <div id="tableInterface" style="display: none;">
-                <div style="
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                    z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-                    overflow: hidden;
-                    display: flex;
-                    flex-direction: column;
-                ">
-                    <!-- Navigation Header -->
-                    <header style="
-                        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-                        color: white;
-                        padding: 16px 24px;
-                        box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
-                        position: relative;
-                        z-index: 1;
-                        flex-shrink: 0;
-                    ">
-                        <div style="
-                            max-width: 800px;
-                            margin: 0 auto;
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                        ">
-                            <!-- Back Button -->
-                            <button onclick="backToSession()" style="
-                                background: rgba(255,255,255,0.15);
-                                border: 1px solid rgba(255,255,255,0.2);
-                                color: white;
-                                border-radius: 12px;
-                                width: 48px;
-                                height: 48px;
-                                cursor: pointer;
-                                font-size: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                backdrop-filter: blur(10px);
-                            " onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
-                                ←
-                            </button>
-                            
-                            <!-- Title -->
-                            <div style="text-align: center;">
-                                <h1 id="tableTitle" style="
-                                    margin: 0;
-                                    font-size: 24px;
-                                    color: white;
-                                    font-weight: 700;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                ">
-                                    <span style="font-size: 24px;">🎙️</span>
-                                    Live Transcription
-                                </h1>
-                                <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;" id="sessionTitleHeader">Session Name</p>
-                                <p style="margin: 2px 0 0 0; font-size: 12px; opacity: 0.7; font-family: monospace;" id="tableCodeDisplay">Table Code: <span id="tableCodeValue">-</span></p>
-                            </div>
-                            
-                            <!-- Status -->
-                            <span id="tableStatus" style="
-                                background: rgba(255,255,255,0.15);
-                                color: white;
-                                padding: 6px 16px;
-                                border-radius: 20px;
-                                font-size: 11px;
-                                font-weight: 600;
-                                text-transform: uppercase;
-                                letter-spacing: 0.5px;
-                                backdrop-filter: blur(10px);
-                                border: 1px solid rgba(255,255,255,0.2);
-                            ">Ready</span>
+            <div id="tableInterface" class="table-interface is-hidden">
+                <div class="table-interface__container">
+                    <header class="table-interface__header">
+                        <button type="button" class="btn btn-ghost btn-icon" onclick="backToSession()" aria-label="Back to session">←</button>
+                        <div class="table-interface__heading">
+                            <h1 id="tableTitle" class="table-interface__title">Live Transcription</h1>
+                            <p id="sessionTitleHeader" class="table-interface__subtitle">Session Name</p>
+                            <p id="tableCodeDisplay" class="table-interface__meta">Table Code: <span id="tableCodeValue">-</span></p>
                         </div>
+                        <span id="tableStatus" class="badge badge-primary">Ready</span>
                     </header>
+                    <main class="table-interface__body">
+                        <section class="card table-interface__card">
+                            <header class="card__header">
+                                <h2 class="card__title">Live Transcription Controls</h2>
+                                <div class="card__header-actions">
+                                    <button type="button" id="liveTranscriptionBtn" class="btn btn-primary">Start Live Transcription</button>
+                                    <button type="button" id="stopLiveTranscriptionBtn" class="btn btn-secondary is-hidden">Stop</button>
+                                    <span class="badge badge-primary" id="liveTranscriptionCount">0</span>
+                                </div>
+                            </header>
+                            <div class="card-body table-interface__controls">
+                                <p class="helper-text">Start recording to see real-time speech-to-text transcription.</p>
+                                <div id="audioWaveContainer" class="audio-visualizer is-hidden">
+                                    <div class="audio-visualizer__label">🎙️ Listening...</div>
+                                    <div id="audioWave" class="audio-visualizer__wave"></div>
+                                    <div class="audio-visualizer__meta">Audio level: <span id="audioLevel">0%</span></div>
+                                </div>
+                            </div>
+                        </section>
 
-                    <!-- Main Content -->
-                    <main style="
-                        flex: 1;
-                        overflow-y: auto;
-                        padding: 24px;
-                        display: flex;
-                        flex-direction: column;
-                    ">
-                        <div style="
-                            max-width: 800px;
-                            margin: 0 auto;
-                            width: 100%;
-                            display: flex;
-                            flex-direction: column;
-                            gap: 24px;
-                            flex: 1;
-                        ">
-                            
-                            <!-- Live Transcription Controls -->
-                            <div style="
-                                background: white;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 16px;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                                padding: 30px;
-                                text-align: center;
-                            ">
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 8px 0; color: #28a745; font-size: 20px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                        🔴 Live Transcription
-                                    </h3>
-                                    <p style="margin: 0; color: #6c757d; font-size: 14px;">Start recording to see real-time speech-to-text transcription</p>
-                                </div>
-                                
-                                <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-                                    <button id="liveTranscriptionBtn" onclick="startLiveTranscription()" style="
-                                        padding: 16px 32px;
-                                        background: linear-gradient(135deg, #28a745, #20c997);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 12px;
-                                        font-size: 16px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 8px;
-                                        box-shadow: 0 4px 12px rgba(40,167,69,0.3);
-                                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                        <span>🎙️</span> Start Live Transcription
-                                    </button>
-                                    <button id="stopLiveTranscriptionBtn" onclick="stopLiveTranscription()" style="
-                                        padding: 16px 32px;
-                                        background: linear-gradient(135deg, #dc3545, #c82333);
-                                        color: white;
-                                        border: none;
-                                        border-radius: 12px;
-                                                    font-size: 16px;
-                                        font-weight: 600;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: none;
-                                        align-items: center;
-                                        gap: 8px;
-                                        box-shadow: 0 4px 12px rgba(220,53,69,0.3);
-                                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                        <span>⏹️</span> Stop Transcription
-                                    </button>
-                                </div>
-                                
-                                <!-- Audio Wave Visualization -->
-                                <div id="audioWaveContainer" style="
-                                    display: none;
-                                    margin: 20px 0;
-                                    padding: 20px;
-                                    background: rgba(40, 167, 69, 0.1);
-                                    border-radius: 12px;
-                                    border: 2px solid rgba(40, 167, 69, 0.2);
-                                    text-align: center;
-                                ">
-                                    <div style="margin-bottom: 12px; color: #28a745; font-size: 14px; font-weight: 500;">
-                                        🎙️ Listening...
-                                    </div>
-                                    <div id="audioWave" style="
-                                        display: flex;
-                                        justify-content: center;
-                                        align-items: end;
-                                        height: 40px;
-                                        gap: 2px;
-                                    ">
-                                        <!-- Wave bars will be generated here -->
-                                    </div>
-                                    <div style="margin-top: 8px; color: #6c757d; font-size: 12px;">
-                                        Audio level: <span id="audioLevel">0%</span>
-                                    </div>
-                                </div>
-                                
-                                <!-- Marginal Options -->
-                                <!-- Removed Audio Recording and Upload Media buttons - moved to Table Recordings tab -->
-                            </div>
-                            
-                            <!-- Live Transcription Display Area -->
-                            <div style="
-                                background: white;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 16px;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                                overflow: hidden;
-                            ">
-                                <div style="
-                                    background: #f8f9fa;
-                                    padding: 16px 20px;
-                                    border-bottom: 1px solid #e9ecef;
-                                ">
-                                    <h4 style="margin: 0; color: #28a745; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                                        🔴 Transcription Results
-                                        <span id="liveTranscriptionCount" style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">0</span>
-                                    </h4>
-                                </div>
-                                
-                                <div id="liveTranscriptionContent" style="
-                                    min-height: 300px;
-                                    max-height: 500px;
-                                    padding: 20px;
-                                    background: white;
-                                    color: #333;
-                                    font-size: 14px;
-                                    line-height: 1.6;
-                                    overflow-y: auto;
-                                ">
-                                    <div id="transcriptionDisplay" style="display: none;">
-                                        <!-- Real-time transcription will appear here -->
-                                    </div>
-                                    <div id="emptyTranscriptionState" style="text-align: center; margin-top: 80px; opacity: 0.7;">
-                                        <div style="font-size: 48px; margin-bottom: 16px;">🎙️</div>
-                                        <h5 style="margin: 0 0 8px 0; color: #28a745; font-size: 16px;">Ready for Live Transcription</h5>
-                                        <p style="margin: 0; font-size: 14px; color: #6c757d;">Start recording to see real-time speech-to-text transcription</p>
-                                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #999;">Results will appear here with timestamps and speaker identification</p>
-                                    </div>
+                        <section class="card table-interface__card">
+                            <header class="card__header">
+                                <h2 class="card__title">Transcription Stream</h2>
+                            </header>
+                            <div id="liveTranscriptionContent" class="transcription-scroll">
+                                <div id="transcriptionDisplay" hidden></div>
+                                <div id="emptyTranscriptionState" class="empty-state">
+                                    <div class="empty-state__icon">🎙️</div>
+                                    <h5 class="empty-state__title">Ready for Live Transcription</h5>
+                                    <p class="empty-state__description">Start recording to see real-time speech-to-text transcription.</p>
+                                    <p class="empty-state__meta">Results will appear here with timestamps and speaker identification.</p>
                                 </div>
                             </div>
-                            
-                            <!-- Saved Audio Files Section -->
-                            <div style="
-                                background: white;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 16px;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                                overflow: hidden;
-                                margin-top: 24px;
-                            ">
-                                <div style="
-                                    background: #f8f9fa;
-                                    padding: 16px 20px;
-                                    border-bottom: 1px solid #e9ecef;
-                                ">
-                                    <h4 style="margin: 0; color: #007bff; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                                        🎵 Table Recordings
-                                        <span id="recordingCountBadge" style="background: #007bff; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">0</span>
-                                    </h4>
-                                </div>
-                                
-                                <!-- Table Recordings Controls -->
-                                <div style="
-                                    background: #f8f9fa;
-                                    padding: 12px 20px;
-                                    border-top: 1px solid #e9ecef;
-                                    border-bottom: 1px solid #e9ecef;
-                                    display: flex;
-                                    gap: 12px;
-                                    justify-content: center;
-                                ">
-                                    <button onclick="showAudioRecording()" style="
-                                        padding: 8px 16px;
-                                        background: #007bff;
-                                        color: white;
-                                        border: none;
-                                        border-radius: 8px;
-                                        font-size: 12px;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 4px;
-                                    " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">
-                                        🎤 Record Audio
-                                    </button>
-                                    <button onclick="showUploadMedia()" style="
-                                        padding: 8px 16px;
-                                        background: #28a745;
-                                        color: white;
-                                        border: none;
-                                        border-radius: 8px;
-                                        font-size: 12px;
-                                        cursor: pointer;
-                                        transition: all 0.2s ease;
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 4px;
-                                    " onmouseover="this.style.background='#1e7e34'" onmouseout="this.style.background='#28a745'">
-                                        📁 Upload Media
-                                    </button>
-                                </div>
-                                
-                                <div id="audioPlayerContainer" style="
-                                    background: white;
-                                    padding: 20px;
-                                    min-height: 120px;
-                                ">
-                                    <div id="recordingsList" style="display: none;">
-                                        <!-- Audio players will be populated here -->
-                                    </div>
-                                    <div id="noRecordingsMessage" style="
-                                        text-align: center;
-                                        color: #6c757d;
-                                        font-size: 14px;
-                                        padding: 40px 20px;
-                                    ">
-                                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.7;">🎙️</div>
-                                        <h5 style="margin: 0 0 8px 0; font-weight: 500; color: #495057;">No recordings available yet</h5>
-                                        <p style="margin: 0; font-size: 12px; opacity: 0.7;">Audio recordings will appear here after processing</p>
-                                    </div>
+                        </section>
+
+                        <section class="card table-interface__card">
+                            <header class="card__header">
+                                <h2 class="card__title">Table Recordings</h2>
+                                <span id="recordingCountBadge" class="badge badge-neutral">0</span>
+                            </header>
+                            <div class="card__header-actions table-interface__actions">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="showAudioRecording()">🎤 Record Audio</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="showUploadMedia()">📁 Upload Media</button>
+                            </div>
+                            <div id="audioPlayerContainer" class="table-recordings">
+                                <div id="recordingsList" class="recordings-grid is-hidden"></div>
+                                <div id="noRecordingsMessage" class="empty-state">
+                                    <div class="empty-state__icon">🎙️</div>
+                                    <h5 class="empty-state__title">No recordings available yet</h5>
+                                    <p class="empty-state__description">Audio recordings will appear here after processing.</p>
                                 </div>
                             </div>
-                            
-                            <!-- Hidden Audio Recording Modal -->
-                            <div id="audioRecordingModal" style="
-                                position: fixed;
-                                top: 0;
-                                left: 0;
-                                right: 0;
-                                bottom: 0;
-                                background: rgba(0,0,0,0.5);
-                                z-index: 20000;
-                                display: none;
-                                align-items: center;
-                                justify-content: center;
-                                padding: 20px;
-                            ">
-                                <div style="
-                                    background: white;
-                                    border-radius: 16px;
-                                    padding: 30px;
-                                    max-width: 400px;
-                                    width: 100%;
-                                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-                                ">
-                                    <h3 style="margin: 0 0 16px 0; color: #007bff; text-align: center;">🎤 Audio Recording</h3>
-                                    <p style="margin: 0 0 20px 0; color: #6c757d; text-align: center;">Record audio that will be processed for transcription</p>
-                                    <div style="display: flex; gap: 12px; justify-content: center;">
-                                        <button id="startRecordingBtn" onclick="startRecording()" style="
-                                            padding: 12px 20px;
-                                            background: #007bff;
-                                            color: white;
-                                            border: none;
-                                            border-radius: 8px;
-                                            cursor: pointer;
-                                        ">Start Recording</button>
-                                        <button onclick="hideAudioRecording()" style="
-                                            padding: 12px 20px;
-                                            background: #6c757d;
-                                            color: white;
-                                            border: none;
-                                            border-radius: 8px;
-                                            cursor: pointer;
-                                        ">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Hidden Upload Media Modal -->
-                            <div id="uploadMediaModal" style="
-                                position: fixed;
-                                top: 0;
-                                left: 0;
-                                right: 0;
-                                bottom: 0;
-                                background: rgba(0,0,0,0.5);
-                                z-index: 20000;
-                                display: none;
-                                align-items: center;
-                                justify-content: center;
-                                padding: 20px;
-                            ">
-                                <div style="
-                                    background: white;
-                                    border-radius: 16px;
-                                    padding: 30px;
-                                    max-width: 400px;
-                                    width: 100%;
-                                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-                                ">
-                                    <h3 style="margin: 0 0 16px 0; color: #6c757d; text-align: center;">📁 Upload Media</h3>
-                                    <p style="margin: 0 0 20px 0; color: #6c757d; text-align: center;">Select audio or video files for transcription</p>
-                                    <div style="display: flex; gap: 12px; justify-content: center;">
-                                        <button onclick="selectMediaFile()" style="
-                                            padding: 12px 20px;
-                                            background: #6c757d;
-                                            color: white;
-                                            border: none;
-                                            border-radius: 8px;
-                                            cursor: pointer;
-                                        ">Choose File</button>
-                                        <button onclick="hideUploadMedia()" style="
-                                            padding: 12px 20px;
-                                            background: #dc3545;
-                                            color: white;
-                                            border: none;
-                                            border-radius: 8px;
-                                            cursor: pointer;
-                                        ">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                                </div>
-                            </div>
-                        </div>
+                        </section>
                     </main>
-
-                    <!-- Hidden file input for media upload -->
-                    <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" style="display: none;">
                 </div>
-            </div>
 
-
-            <!-- Active Sessions - Compact Modern Layout -->
-            <div id="sessionListScreen" class="screen" style="display: none;">
-                <div style="
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    box-sizing: border-box;
-                    padding: 16px;
-                    overflow-y: auto;
-                ">
-                    <div style="
-                        max-width: 1000px;
-                        margin: 0 auto;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                        min-height: calc(100vh - 32px);
-                        display: flex;
-                        flex-direction: column;
-                    ">
-                        <!-- Compact Header -->
-                        <div style="
-                            background: linear-gradient(135deg, #667eea, #764ba2);
-                            color: white;
-                            border-radius: 16px 16px 0 0;
-                            padding: 20px 24px;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            flex-shrink: 0;
-                        ">
-                            <div>
-                                <h1 style="margin: 0; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 24px;">📋</span>
-                                    Active Sessions
-                                </h1>
-                                <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">
-                                    Join existing World Café sessions
-                                </p>
-                            </div>
-                            <button onclick="showWelcome()" style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 8px 16px;
-                                border-radius: 8px;
-                                cursor: pointer;
-                                font-weight: 500;
-                                transition: all 0.2s ease;
-                                font-size: 14px;
-                            " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                                ← Back
-                            </button>
+                <div id="audioRecordingModal" class="table-modal is-hidden">
+                    <div class="table-modal__content">
+                        <h3 class="table-modal__title">🎤 Audio Recording</h3>
+                        <p class="table-modal__subtitle">Record audio that will be processed for transcription.</p>
+                        <div class="table-modal__actions">
+                            <button type="button" id="startRecordingBtn" class="btn btn-primary" onclick="startRecording()">Start Recording</button>
+                            <button type="button" id="stopRecordingBtn" class="btn btn-secondary is-hidden" onclick="stopRecording()">Stop Recording</button>
+                            <button type="button" class="btn btn-ghost" onclick="hideAudioRecording()">Cancel</button>
                         </div>
+                    </div>
+                </div>
 
-                        <!-- Compact Search -->
-                        <div style="padding: 20px 24px 0 24px; flex-shrink: 0;">
-                            <div style="
-                                display: flex;
-                                align-items: center;
-                                background: #f8f9fa;
-                                border: 2px solid #e0e0e0;
-                                border-radius: 12px;
-                                padding: 12px 16px;
-                                transition: all 0.2s ease;
-                            " id="searchInputContainer" onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#e0e0e0'">
-                                <span style="color: #667eea; margin-right: 12px; font-size: 18px;">🔍</span>
-                                <input 
-                                    type="text" 
+                <div id="uploadMediaModal" class="table-modal is-hidden">
+                    <div class="table-modal__content">
+                        <h3 class="table-modal__title">📁 Upload Media</h3>
+                        <p class="table-modal__subtitle">Select audio or video files for transcription.</p>
+                        <div class="table-modal__actions">
+                            <button type="button" class="btn btn-primary" onclick="selectMediaFile()">Choose File</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideUploadMedia()">Cancel</button>
+                        </div>
+                        <div id="uploadProgress" class="upload-progress is-hidden">
+                            <p id="uploadFileName" class="upload-progress__name">No file selected</p>
+                            <div class="upload-progress__bar">
+                                <span id="uploadProgressBar" class="upload-progress__indicator"></span>
+                            </div>
+                            <p id="uploadStatus" class="upload-progress__status">Preparing...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="file" id="mediaFileInput" accept="audio/*,video/*,.mp3,.wav,.mp4,.m4a,.webm,.ogg,.mov,.avi" hidden>
+            </div>
+            <!-- Active Sessions -->
+            <div id="sessionListScreen" class="screen">
+                <div class="screen-cover screen-cover--gradient">
+                    <div class="screen-panel screen-panel--wide">
+                        <header class="session-list__header">
+                            <div class="session-list__heading">
+                                <h1 class="session-list__title">📋 Active Sessions</h1>
+                                <p class="session-list__subtitle">Join existing World Café sessions</p>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="showWelcome()">← Back</button>
+                        </header>
+                        <div class="screen-panel__body">
+                            <div class="search-bar" id="searchInputContainer">
+                                <span class="search-bar__icon">🔍</span>
+                                <input
+                                    type="text"
                                     id="sessionsSearchInput"
+                                    class="search-bar__input"
                                     placeholder="Search sessions..."
                                     oninput="filterSessions()"
                                     onfocus="handleSearchFocus()"
                                     onblur="handleSearchBlur()"
-                                    style="
-                                        border: none;
-                                        outline: none;
-                                        flex: 1;
-                                        font-size: 16px;
-                                        color: #333;
-                                        background: transparent;
-                                        font-weight: 500;
-                                    "
                                 />
-                                <button 
-                                    onclick="clearSearch()"
-                                    id="clearSearchBtn"
-                                    style="
-                                        background: #667eea;
-                                        border: none;
-                                        color: white;
-                                        cursor: pointer;
-                                        font-size: 12px;
-                                        padding: 6px 10px;
-                                        border-radius: 6px;
-                                        font-weight: 600;
-                                        display: none;
-                                        transition: all 0.2s ease;
-                                    "
-                                    onmouseover="this.style.background='#5a67d8'" onmouseout="this.style.background='#667eea'"
-                                    title="Clear search"
-                                >Clear</button>
+                                <button type="button" id="clearSearchBtn" class="btn btn-secondary btn-sm is-hidden" onclick="clearSearch()" title="Clear search">Clear</button>
                             </div>
-                            <div id="searchResults" style="
-                                margin-top: 8px;
-                                font-size: 12px;
-                                color: #667eea;
-                                font-weight: 500;
-                                display: none;
-                            "></div>
-                        </div>
+                            <div id="searchResults" class="search-meta is-hidden"></div>
 
-                        <!-- Sessions Grid -->
-                        <div style="
-                            padding: 20px 24px;
-                            flex: 1;
-                            overflow-y: auto;
-                        ">
-                            <div id="sessionsList" style="
-                                display: grid;
-                                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-                                gap: 16px;
-                                max-height: none;
-                            ">
-                                <!-- Sessions will be loaded dynamically -->
-                            </div>
+                            <section id="sessionsList" class="session-grid">
+                                <!-- Sessions populated via JS -->
+                            </section>
                         </div>
                     </div>
                 </div>
             </div>
+            <!-- All Transcriptions Screen -->
+            <div id="allTranscriptionsScreen" class="screen">
+                <div class="screen-cover screen-cover--gradient">
+                    <div class="screen-panel screen-panel--wide">
+                        <header class="screen-panel__header">
+                            <button type="button" class="btn btn-ghost btn-icon" onclick="showSessionList()" aria-label="Back to sessions">←</button>
+                            <div class="screen-panel__heading">
+                                <h1 id="allTranscriptionsTitle" class="screen-panel__title">📝 All Transcriptions</h1>
+                                <p id="allTranscriptionsSubtitle" class="screen-panel__subtitle">Session Overview</p>
+                            </div>
+                        </header>
+                        <div class="screen-panel__body">
+                            <section class="stat-grid">
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">📊</div>
+                                    <div class="stat-card__label">Total</div>
+                                    <div class="stat-card__value" id="totalTranscriptions">0</div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">📢</div>
+                                    <div class="stat-card__label">Tables</div>
+                                    <div class="stat-card__value" id="activeTables">0</div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">⏱️</div>
+                                    <div class="stat-card__label">Duration</div>
+                                    <div class="stat-card__value" id="totalDuration">0min</div>
+                                </article>
+                                <article class="stat-card">
+                                    <div class="stat-card__icon">👥</div>
+                                    <div class="stat-card__label">Speakers</div>
+                                    <div class="stat-card__value" id="totalSpeakers">0</div>
+                                </article>
+                            </section>
 
-            <!-- All Transcriptions View - NUCLEAR ISOLATED -->
-            <div id="allTranscriptionsScreen" style="display: none;">
-                <!-- COMPLETELY ISOLATED ALL TRANSCRIPTIONS SCREEN -->
-                <div style="
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    z-index: 10000;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    box-sizing: border-box;
-                    padding: 20px;
-                    overflow-y: auto;
-                ">
-                    <div style="
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                        padding: 40px;
-                        box-sizing: border-box;
-                        min-height: calc(100vh - 40px);
-                    ">
-                        <!-- Header -->
-                        <div style="
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                            margin-bottom: 30px;
-                            padding-bottom: 20px;
-                            border-bottom: 1px solid #eee;
-                        ">
-                            <div style="display: flex; align-items: center; gap: 20px;">
-                                <button onclick="showSessionList()" style="
-                                    background: #f5f5f5;
-                                    border: 1px solid #ddd;
-                                    border-radius: 8px;
-                                    width: 40px;
-                                    height: 40px;
-                                    cursor: pointer;
-                                    font-size: 18px;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                ">←</button>
-                                
-                                <div>
-                                    <h1 id="allTranscriptionsTitle" style="margin: 0; font-size: 28px; color: #333; font-weight: 600;">📝 All Transcriptions</h1>
-                                    <p id="allTranscriptionsSubtitle" style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Session Overview</p>
+                            <div class="toolbar">
+                                <div class="toolbar__group">
+                                    <label class="label" for="tableFilter">Table</label>
+                                    <select id="tableFilter" class="input">
+                                        <option value="">🌐 All Tables</option>
+                                    </select>
+                                </div>
+                                <div class="toolbar__group">
+                                    <label class="label" for="sortFilter">Sort By</label>
+                                    <select id="sortFilter" class="input">
+                                        <option value="newest">🕐 Newest First</option>
+                                        <option value="oldest">🕑 Oldest First</option>
+                                        <option value="table">📢 By Table</option>
+                                        <option value="duration">⏱️ By Duration</option>
+                                    </select>
+                                </div>
+                                <div class="toolbar__actions">
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="exportAllTranscriptions()">📥 Export All</button>
+                                    <input type="file" id="importSessionFile" accept=".json" hidden onchange="importSession(event)">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('importSessionFile').click()">📤 Import Session</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="refreshTranscriptions()">🔄 Refresh</button>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Stats Bar -->
-                        <div style="
-                            display: flex;
-                            gap: 16px;
-                            margin-bottom: 30px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="
-                                background: #f8f9fa;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                min-width: 120px;
-                            ">
-                                <span style="font-size: 16px;">📊</span>
-                                <span style="font-size: 14px; color: #666;">Total: <strong id="totalTranscriptions" style="color: #333;">0</strong></span>
-                            </div>
-                            <div style="
-                                background: #f8f9fa;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                min-width: 120px;
-                            ">
-                                <span style="font-size: 16px;">📢</span>
-                                <span style="font-size: 14px; color: #666;">Tables: <strong id="activeTables" style="color: #333;">0</strong></span>
-                            </div>
-                            <div style="
-                                background: #f8f9fa;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                min-width: 120px;
-                            ">
-                                <span style="font-size: 16px;">⏱️</span>
-                                <span style="font-size: 14px; color: #666;">Duration: <strong id="totalDuration" style="color: #333;">0min</strong></span>
-                            </div>
-                            <div style="
-                                background: #f8f9fa;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                min-width: 120px;
-                            ">
-                                <span style="font-size: 16px;">👥</span>
-                                <span style="font-size: 14px; color: #666;">Speakers: <strong id="totalSpeakers" style="color: #333;">0</strong></span>
-                            </div>
-                        </div>
-
-                        <!-- Controls -->
-                        <div style="
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            margin-bottom: 30px;
-                            gap: 20px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <select id="tableFilter" style="
-                                    padding: 8px 12px;
-                                    border: 1px solid #ddd;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    background: white;
-                                    cursor: pointer;
-                                ">
-                                    <option value="">🌐 All Tables</option>
-                                </select>
-                                
-                                <select id="sortFilter" style="
-                                    padding: 8px 12px;
-                                    border: 1px solid #ddd;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    background: white;
-                                    cursor: pointer;
-                                ">
-                                    <option value="newest">🕐 Newest First</option>
-                                    <option value="oldest">🕑 Oldest First</option>
-                                    <option value="table">📢 By Table</option>
-                                    <option value="duration">⏱️ By Duration</option>
-                                </select>
-                            </div>
-                            
-                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button onclick="exportAllTranscriptions()" style="
-                                    padding: 10px 16px;
-                                    background: #007bff;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                ">📥 Export All</button>
-                                
-                                <input type="file" id="importSessionFile" accept=".json" style="display: none;" onchange="importSession(event)">
-                                <button onclick="document.getElementById('importSessionFile').click()" style="
-                                    padding: 10px 16px;
-                                    background: #28a745;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                    margin-left: 8px;
-                                ">📤 Import Session</button>
-                                
-                                <button onclick="refreshTranscriptions()" style="
-                                    padding: 10px 16px;
-                                    background: #6c757d;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 6px;
-                                    font-size: 14px;
-                                    cursor: pointer;
-                                    font-weight: 500;
-                                ">🔄 Refresh</button>
-                            </div>
-                        </div>
-
-
-                        <!-- Transcriptions List -->
-                        <div id="allTranscriptionsList" style="
-                            display: grid;
-                            gap: 16px;
-                            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-                        ">
-                            <!-- All transcriptions will be loaded here -->
+                            <section id="allTranscriptionsList" class="transcription-grid">
+                                <!-- Transcriptions populated via JS -->
+                            </section>
                         </div>
                     </div>
                 </div>
             </div>
-
             <!-- Admin Dashboard - CLEAN REDESIGN -->
             <div id="adminDashboard" class="screen">
                 <div class="admin-dashboard-overlay">

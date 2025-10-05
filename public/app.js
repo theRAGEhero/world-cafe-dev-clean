@@ -124,6 +124,20 @@ function preventZoom() {
     }, false);
 }
 
+function showElement(element) {
+    if (!element) return;
+    element.classList.remove('is-hidden');
+    element.removeAttribute('hidden');
+    element.style.removeProperty('display');
+}
+
+function hideElement(element) {
+    if (!element) return;
+    element.classList.add('is-hidden');
+    element.setAttribute('hidden', '');
+    element.style.removeProperty('display');
+}
+
 // Setup swipe gestures
 function setupSwipeGestures() {
     let startX = 0;
@@ -712,25 +726,29 @@ function showScreen(screenId) {
     // Hide all screens including our isolated join screen
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
-        screen.style.display = 'none';
+        hideElement(screen);
     });
     
     // Also hide isolated screens specifically
     const joinScreen = document.getElementById('joinSessionScreen');
     if (joinScreen) {
-        joinScreen.style.display = 'none';
+        hideElement(joinScreen);
     }
     const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
     if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
+        hideElement(transcriptionsScreen);
     }
     const sessionDashboardScreen = document.getElementById('sessionDashboard');
     if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
+        hideElement(sessionDashboardScreen);
     }
     
     targetScreen.classList.add('active');
-    targetScreen.style.display = 'block';
+    if (targetScreen.classList.contains('table-interface')) {
+        showElement(targetScreen);
+    } else {
+        showElement(targetScreen);
+    }
     
     console.log(`Screen activated: ${screenId}`);
     
@@ -765,155 +783,65 @@ function showScreen(screenId) {
 }
 
 function showWelcome() {
-    navigationHistory = ['welcomeScreen']; // Reset history
-    
-    // Hide isolated screens if they're showing
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'none';
-    }
-    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-    if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
-    }
-    const sessionDashboardScreen = document.getElementById('sessionDashboard');
-    if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
-    }
-    
+    navigationHistory = ['welcomeScreen'];
+    hideElement(document.getElementById('tableInterface'));
     showScreen('welcomeScreen');
 }
 
 function showCreateSession() {
+    hideElement(document.getElementById('tableInterface'));
     showScreen('createSessionScreen');
 }
 
 function showJoinSession() {
     loadActiveSessions();
-    
-    // Hide all other screens
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
-        screen.style.display = 'none';
-    });
-    
-    // Show the completely isolated join screen
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'block';
-        console.log('Join session screen activated with isolated styles');
-    }
-    
-    // Reset to step 1
-    goToStep(1);
+    hideElement(document.getElementById('tableInterface'));
+    showScreen('joinSessionScreen');
+    resetWizard();
 }
 
 function showSessionList() {
     loadActiveSessions();
-    
-    // Hide isolated screens
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'none';
-    }
-    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-    if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
-    }
-    const sessionDashboardScreen = document.getElementById('sessionDashboard');
-    if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
-    }
-    
+    hideElement(document.getElementById('tableInterface'));
     showScreen('sessionListScreen');
 }
 
 function showSessionDashboard() {
-    if (currentSession) {
-        loadSessionDashboard(currentSession.id);
-        
-        console.log('Showing isolated session dashboard...');
-        // Hide all other screens
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.remove('active');
-            screen.style.display = 'none';
-        });
-        
-        // Hide isolated screens
-        const joinScreen = document.getElementById('joinSessionScreen');
-        if (joinScreen) {
-            joinScreen.style.display = 'none';
-        }
-        const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-        if (transcriptionsScreen) {
-            transcriptionsScreen.style.display = 'none';
-        }
-        
-        // Show the completely isolated session dashboard screen
-        const dashboardScreen = document.getElementById('sessionDashboard');
-        if (dashboardScreen) {
-            dashboardScreen.style.display = 'block';
-            console.log('Session dashboard activated with isolated styles');
-        }
-    } else {
+    if (!currentSession) {
         alert('No session selected');
+        return;
     }
+
+    hideElement(document.getElementById('tableInterface'));
+    loadSessionDashboard(currentSession.id);
+    showScreen('sessionDashboard');
 }
 
 function showTableInterface(tableId) {
     console.log('[DEBUG] showTableInterface called with tableId:', tableId);
     console.log('[DEBUG] Current currentTable before override:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
     
-    if (currentSession && currentSession.tables) {
-        const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
-        console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
-        currentTable = foundTable;
-        if (currentTable) {
-            setupTableInterface();
-            
-            // Load existing transcriptions and recordings  
-            // Note: loadExistingTranscriptions() will be called in setupTableInterface, so skip here to avoid duplicates
-            loadTableRecordings();
-            
-            // Nuclear isolation approach - hide all other screens
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-            });
-            
-            // Hide isolated screens
-            const sessionDashboard = document.getElementById('sessionDashboard');
-            if (sessionDashboard) {
-                sessionDashboard.style.display = 'none';
-            }
-            const joinScreen = document.getElementById('joinSessionScreen');
-            if (joinScreen) {
-                joinScreen.style.display = 'none';
-            }
-            
-            // Show table interface
-            const tableInterface = document.getElementById('tableInterface');
-            if (tableInterface) {
-                tableInterface.style.display = 'block';
-            }
-        }
-    }
+    if (!currentSession || !currentSession.tables) return;
+
+    const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
+    console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
+    currentTable = foundTable;
+
+    if (!currentTable) return;
+
+    setupTableInterface();
+    loadTableRecordings();
+    showScreen('tableInterface');
 }
 
 function backToSession() {
+    const tableInterface = document.getElementById('tableInterface');
+    if (tableInterface) {
+        hideElement(tableInterface);
+    }
+
     if (currentSession) {
-        // Hide table interface
-        const tableInterface = document.getElementById('tableInterface');
-        if (tableInterface) {
-            tableInterface.style.display = 'none';
-        }
-        
-        // Show session dashboard
-        const sessionDashboard = document.getElementById('sessionDashboard');
-        if (sessionDashboard) {
-            sessionDashboard.style.display = 'block';
-        }
-        
+        showScreen('sessionDashboard');
         loadSessionDashboard(currentSession.id);
     } else {
         showWelcome();
@@ -1193,23 +1121,36 @@ function resetWizard() {
     selectedTableId = null;
     
     // Reset progress steps - with null checks
-    document.querySelectorAll('.progress-step').forEach(step => {
-        if (step) step.classList.remove('active', 'completed');
+    document.querySelectorAll('.join-progress__step').forEach(step => {
+        if (!step) return;
+        step.classList.remove('join-progress__step--active', 'join-progress__step--completed');
     });
-    const firstProgressStep = document.querySelector('.progress-step[data-step="1"]');
-    if (firstProgressStep) firstProgressStep.classList.add('active');
+    const firstProgressStep = document.querySelector('.join-progress__step[data-step="1"]');
+    if (firstProgressStep) {
+        firstProgressStep.classList.add('join-progress__step--active');
+    }
     
     // Reset wizard steps - with null checks
-    document.querySelectorAll('.wizard-step').forEach(step => {
-        if (step) step.classList.remove('active');
+    document.querySelectorAll('.join-step').forEach(step => {
+        if (!step) return;
+        step.classList.remove('active', 'join-step--active');
+        hideElement(step);
     });
     const joinStep1 = document.getElementById('joinStep1');
-    if (joinStep1) joinStep1.classList.add('active');
+    if (joinStep1) {
+        joinStep1.classList.add('active', 'join-step--active');
+        showElement(joinStep1);
+    }
     
     // Reset method cards - with null checks
     document.querySelectorAll('.method-card').forEach(card => {
-        if (card) card.classList.remove('selected');
+        if (!card) return;
+        card.classList.remove('selected');
     });
+    const defaultMethodCard = document.querySelector('.method-card[data-method="code"]');
+    if (defaultMethodCard) {
+        defaultMethodCard.classList.add('selected');
+    }
     
     // Clear form inputs - with null checks
     const inputs = ['sessionCodeInput'];
@@ -1217,6 +1158,23 @@ function resetWizard() {
         const input = document.getElementById(id);
         if (input) input.value = '';
     });
+
+    const sessionInfo = document.getElementById('selectedSessionInfo');
+    if (sessionInfo) {
+        sessionInfo.innerHTML = '';
+    }
+
+    const tableSelection = document.getElementById('tableSelection');
+    if (tableSelection) {
+        tableSelection.innerHTML = '';
+    }
+
+    const finalJoinBtn = document.getElementById('finalJoinBtn');
+    if (finalJoinBtn) {
+        finalJoinBtn.disabled = true;
+    }
+    
+    updateProgressSteps(1);
 }
 
 function selectJoinMethod(method) {
@@ -1226,16 +1184,14 @@ function selectJoinMethod(method) {
     document.querySelectorAll('.method-card').forEach(card => {
         card.classList.remove('selected');
     });
-    document.querySelector(`[data-method="${method}"]`).classList.add('selected');
+    const selectedCard = document.querySelector(`[data-method="${method}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+    }
     
-    // Proceed to step 2 after a short delay for visual feedback
-    setTimeout(() => {
-        if (method === 'code') {
-            goToStep(2, 'code');
-        } else if (method === 'browse') {
-            goToStep(2, 'browse');
-        }
-    }, 300);
+    if (method === 'browse') {
+        goToStep(2, 'browse');
+    }
 }
 
 function goToStep(step, method = null) {
@@ -1243,12 +1199,11 @@ function goToStep(step, method = null) {
     currentWizardStep = step;
     
     // Hide all steps
-    const steps = ['joinStep1', 'joinStep2Browse', 'joinStep3'];
-    steps.forEach(stepId => {
+    ['joinStep1', 'joinStep2Browse', 'joinStep3'].forEach(stepId => {
         const stepElement = document.getElementById(stepId);
-        if (stepElement) {
-            stepElement.style.display = 'none';
-        }
+        if (!stepElement) return;
+        stepElement.classList.remove('join-step--active', 'active');
+        hideElement(stepElement);
     });
     
     // Show appropriate step
@@ -1270,28 +1225,29 @@ function goToStep(step, method = null) {
     // Show the target step
     const targetStep = document.getElementById(targetStepId);
     if (targetStep) {
-        targetStep.style.display = 'block';
+        targetStep.classList.add('join-step--active', 'active');
+        showElement(targetStep);
         console.log(`Showing step: ${targetStepId}`);
     }
+    
+    updateProgressSteps(step);
 }
 
 function updateProgressSteps(activeStep) {
-    // Only update if progress steps exist (they were removed from HTML)
-    const progressSteps = document.querySelectorAll('.progress-step');
-    if (progressSteps.length > 0) {
-        progressSteps.forEach((step, index) => {
-            const stepNumber = index + 1;
-            if (step) {
-                step.classList.remove('active', 'completed');
-                
-                if (stepNumber < activeStep) {
-                    step.classList.add('completed');
-                } else if (stepNumber === activeStep) {
-                    step.classList.add('active');
-                }
-            }
-        });
-    }
+    const progressSteps = document.querySelectorAll('.join-progress__step');
+    progressSteps.forEach(step => {
+        if (!step) return;
+        const stepNumber = Number(step.dataset.step);
+        step.classList.remove('join-progress__step--active', 'join-progress__step--completed');
+        if (stepNumber < activeStep) {
+            step.classList.add('join-progress__step--completed');
+        } else if (stepNumber === activeStep) {
+            step.classList.add('join-progress__step--active');
+            step.setAttribute('aria-current', 'step');
+        } else {
+            step.removeAttribute('aria-current');
+        }
+    });
 }
 
 async function loadSessionsForBrowse() {
@@ -2288,8 +2244,8 @@ function populateSessionsList() {
     
     if (searchInput) {
         searchInput.value = '';
-        clearBtn && (clearBtn.style.display = 'none');
-        searchResults && (searchResults.style.display = 'none');
+        hideElement(clearBtn);
+        hideElement(searchResults);
     }
     
     // Use the new filtered version
@@ -2641,10 +2597,10 @@ function filterSessions() {
     
     // Show/hide clear button
     if (searchValue) {
-        clearBtn.style.display = 'block';
+        showElement(clearBtn);
     } else {
-        clearBtn.style.display = 'none';
-        searchResults.style.display = 'none';
+        hideElement(clearBtn);
+        hideElement(searchResults);
         populateSessionsListFiltered(); // Show all sessions
         return;
     }
@@ -2657,7 +2613,7 @@ function filterSessions() {
     });
     
     // Update search results info
-    searchResults.style.display = 'block';
+    showElement(searchResults);
     if (filteredSessions.length === 0) {
         searchResults.textContent = `No results found for "${searchInput.value}"`;
         searchResults.style.color = '#dc3545';
@@ -2680,8 +2636,8 @@ function clearSearch() {
     const searchResults = document.getElementById('searchResults');
     
     searchInput.value = '';
-    clearBtn.style.display = 'none';
-    searchResults.style.display = 'none';
+    hideElement(clearBtn);
+    hideElement(searchResults);
     
     // Reset to show all sessions
     populateSessionsListFiltered();
@@ -2722,31 +2678,8 @@ async function loadSpecificSession(sessionId, isAdmin = false) {
             loadSessionDashboard(sessionId);
             
             console.log('[DEBUG] Showing session dashboard...');
-            // Hide all other screens using the same approach as showSessionDashboard
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-            });
-            
-            // Hide isolated screens
-            const joinScreen = document.getElementById('joinSessionScreen');
-            if (joinScreen) {
-                joinScreen.style.display = 'none';
-                console.log('[DEBUG] Join screen hidden');
-            }
-            const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-            if (transcriptionsScreen) {
-                transcriptionsScreen.style.display = 'none';
-            }
-            
-            // Show the completely isolated session dashboard screen
-            const dashboardScreen = document.getElementById('sessionDashboard');
-            if (dashboardScreen) {
-                dashboardScreen.style.display = 'block';
-                console.log('[DEBUG] Session dashboard screen shown');
-            } else {
-                console.error('[DEBUG] Session dashboard screen not found!');
-            }
+            hideElement(document.getElementById('tableInterface'));
+            showScreen('sessionDashboard');
             
             console.log(`[DEBUG] Successfully joined session: ${session.title}`);
         } else {
@@ -3725,10 +3658,11 @@ function displayTables(tables) {
 // Toggle functions for isolated sections
 function toggleQRCodesSection() {
     const qrSection = document.getElementById('qrCodesSection');
-    if (qrSection.style.display === 'none' || !qrSection.style.display) {
-        qrSection.style.display = 'block';
+    if (!qrSection) return;
+    if (qrSection.classList.contains('is-hidden') || qrSection.hasAttribute('hidden') || qrSection.style.display === 'none') {
+        showElement(qrSection);
     } else {
-        qrSection.style.display = 'none';
+        hideElement(qrSection);
     }
 }
 
@@ -3750,7 +3684,7 @@ function setupQRCodesSection(session) {
 }
 
 function showQRCodes() {
-    document.getElementById('qrCodesSection').style.display = 'block';
+    showElement(document.getElementById('qrCodesSection'));
     populateQRCodesGrid();
     document.getElementById('showQRCodesBtn').textContent = '✅ QR Codes Shown';
     
@@ -3759,7 +3693,7 @@ function showQRCodes() {
 }
 
 function hideQRCodes() {
-    document.getElementById('qrCodesSection').style.display = 'none';
+    hideElement(document.getElementById('qrCodesSection'));
     document.getElementById('showQRCodesBtn').textContent = '📱 QR Codes';
 }
 
@@ -4709,11 +4643,11 @@ async function startRecording() {
         // Update UI (if elements exist)
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
-        const audioVisualization = document.getElementById('audioVisualization');
+        const audioWaveContainer = document.getElementById('audioWaveContainer');
         
-        if (startRecordingBtn) startRecordingBtn.style.display = 'none';
-        if (stopRecordingBtn) stopRecordingBtn.style.display = 'block';
-        if (audioVisualization) audioVisualization.style.display = 'block';
+        hideElement(startRecordingBtn);
+        showElement(stopRecordingBtn);
+        showElement(audioWaveContainer);
         
         // Update status
         updateRecordingStatus({ status: 'recording', timestamp: new Date() });
@@ -4753,11 +4687,11 @@ function stopRecording() {
         // Update UI (if elements exist)
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
-        const audioVisualization = document.getElementById('audioVisualization');
+        const audioWaveContainer = document.getElementById('audioWaveContainer');
         
-        if (startRecordingBtn) startRecordingBtn.style.display = 'block';
-        if (stopRecordingBtn) stopRecordingBtn.style.display = 'none';
-        if (audioVisualization) audioVisualization.style.display = 'none';
+        showElement(startRecordingBtn);
+        hideElement(stopRecordingBtn);
+        hideElement(audioWaveContainer);
         
         // Notify other clients
         socket.emit('recording-stopped', {
@@ -4891,8 +4825,8 @@ async function startLiveTranscription() {
             // Update UI
             const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
             const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'none';
-            if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'block';
+            hideElement(liveTranscriptionBtn);
+            showElement(stopLiveTranscriptionBtn);
             
             showToast('Live transcription started - speak now!', 'success');
         };
@@ -4963,8 +4897,8 @@ async function startLiveTranscription() {
             // Update UI
             const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
             const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'block';
-            if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'none';
+            showElement(liveTranscriptionBtn);
+            hideElement(stopLiveTranscriptionBtn);
         }
 
     } catch (error) {
@@ -5034,8 +4968,8 @@ async function stopLiveTranscription() {
         const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
         const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
         
-        if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'block';
-        if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'none';
+        showElement(liveTranscriptionBtn);
+        hideElement(stopLiveTranscriptionBtn);
         
         console.log('Live transcription stopped');
         showToast('Live transcription stopped and audio saved', 'info');
@@ -5500,13 +5434,13 @@ function displayTableRecordings(recordings) {
     }
     
     if (recordings.length === 0) {
-        recordingsList.style.display = 'none';
-        noRecordingsMessage.style.display = 'block';
+        hideElement(recordingsList);
+        showElement(noRecordingsMessage);
         return;
     }
     
-    noRecordingsMessage.style.display = 'none';
-    recordingsList.style.display = 'block';
+    hideElement(noRecordingsMessage);
+    showElement(recordingsList);
     recordingsList.innerHTML = '';
     
     recordings.forEach((recording, index) => {
@@ -6436,7 +6370,7 @@ async function uploadMediaFile(file) {
     if (uploadFileName) uploadFileName.textContent = file.name;
     if (uploadStatus) uploadStatus.textContent = 'Preparing...';
     if (uploadProgressBar) uploadProgressBar.style.width = '0%';
-    if (uploadProgress) uploadProgress.style.display = 'block';
+    showElement(uploadProgress);
     
     try {
         const xhr = new XMLHttpRequest();
@@ -6491,7 +6425,7 @@ async function uploadMediaFile(file) {
         
         // Hide upload progress after 3 seconds
         setTimeout(() => {
-            if (uploadProgress) uploadProgress.style.display = 'none';
+            hideElement(uploadProgress);
         }, 3000);
         
     } catch (error) {
@@ -6501,7 +6435,7 @@ async function uploadMediaFile(file) {
         
         // Hide upload progress after 5 seconds
         setTimeout(() => {
-            if (uploadProgress) uploadProgress.style.display = 'none';
+        hideElement(uploadProgress);
         }, 5000);
     }
 }
@@ -6787,19 +6721,23 @@ function updateSystemHealthStatus(status) {
 
 // Modal functions for the simplified interface
 function showAudioRecording() {
-    document.getElementById('audioRecordingModal').style.display = 'flex';
+    const modal = document.getElementById('audioRecordingModal');
+    hideElement(document.getElementById('uploadMediaModal'));
+    showElement(modal);
 }
 
 function hideAudioRecording() {
-    document.getElementById('audioRecordingModal').style.display = 'none';
+    hideElement(document.getElementById('audioRecordingModal'));
 }
 
 function showUploadMedia() {
-    document.getElementById('uploadMediaModal').style.display = 'flex';
+    const modal = document.getElementById('uploadMediaModal');
+    hideElement(document.getElementById('audioRecordingModal'));
+    showElement(modal);
 }
 
 function hideUploadMedia() {
-    document.getElementById('uploadMediaModal').style.display = 'none';
+    hideElement(document.getElementById('uploadMediaModal'));
 }
 
 function selectMediaFile() {
@@ -6815,8 +6753,8 @@ function updateLiveTranscriptionDisplay(transcript) {
     if (!displayDiv || !emptyState) return;
     
     // Hide empty state and show transcription
-    emptyState.style.display = 'none';
-    displayDiv.style.display = 'block';
+    hideElement(emptyState);
+    showElement(displayDiv);
     
     // Create a new transcript entry
     const entry = document.createElement('div');
@@ -6851,11 +6789,11 @@ function resetLiveTranscriptionDisplay() {
     
     if (displayDiv) {
         displayDiv.innerHTML = '';
-        displayDiv.style.display = 'none';
+        hideElement(displayDiv);
     }
     
     if (emptyState) {
-        emptyState.style.display = 'block';
+        showElement(emptyState);
     }
     
     if (counter) {
