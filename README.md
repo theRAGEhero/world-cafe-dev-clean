@@ -105,8 +105,15 @@ docker-compose up -d
 # Install dependencies
 npm install
 
-# Configure local MySQL database
-# Create database: world_cafe_platform
+# Copy environment template and configure credentials
+cp .env.example .env
+# Required at minimum: DEEPGRAM_API_KEY, ADMIN_PASSWORD, SESSION_SECRET
+
+# Start a local MySQL instance (skip if using Docker Compose)
+docker run --name world-cafe-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=worldcafe -d mysql:8
+
+# Create the expected database schema once MySQL is ready
+mysql -h 127.0.0.1 -u root -pworldcafe -e "CREATE DATABASE IF NOT EXISTS world_cafe_platform;"
 
 # Start development server
 npm run dev
@@ -158,11 +165,21 @@ docker-compose restart
 
 **Database connection errors:**
 ```bash
-# Wait for MySQL to fully initialize
+# Ensure MySQL is running locally (default: localhost:3306)
+docker ps | grep mysql
+
+# Create the database if it does not exist
+mysql -h 127.0.0.1 -u root -p -e "CREATE DATABASE IF NOT EXISTS world_cafe_platform;"
+
+# Wait for MySQL to fully initialize (Docker workflow)
 docker-compose logs mysql
 
 # Reset database (⚠️ destroys data)
 docker-compose down -v && docker-compose up -d
+
+# Error: ECONNREFUSED ::1:3306
+# -> The Node.js server cannot reach MySQL. Verify DB_HOST/DB_PORT in .env and confirm the
+#    database container or service is accepting connections.
 ```
 
 **QR codes not working:**
