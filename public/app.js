@@ -13,6 +13,9 @@ let activeSessions = [];
 let isMobile = false;
 let isTouch = false;
 let mobileMenuOpen = false;
+const transcriptionRegistry = new Map();
+let transcriptionPreviewEscapeHandler = null;
+let lastFocusedTranscriptionCard = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -59,7 +62,9 @@ function initializeMobileOptimizations() {
 
 // Add touch feedback to all interactive elements
 function addTouchFeedback() {
-    const interactiveElements = document.querySelectorAll('.btn, .card, .table-card, .session-item, .admin-session-item');
+    const interactiveElements = document.querySelectorAll(
+        '.btn, .card, .transcription-card, .table-card, .session-item, .admin-session-item'
+    );
     
     interactiveElements.forEach(element => {
         element.addEventListener('touchstart', function() {
@@ -122,6 +127,20 @@ function preventZoom() {
         }
         lastTouchEnd = now;
     }, false);
+}
+
+function showElement(element) {
+    if (!element) return;
+    element.classList.remove('is-hidden');
+    element.removeAttribute('hidden');
+    element.style.removeProperty('display');
+}
+
+function hideElement(element) {
+    if (!element) return;
+    element.classList.add('is-hidden');
+    element.setAttribute('hidden', '');
+    element.style.removeProperty('display');
 }
 
 // Setup swipe gestures
@@ -622,7 +641,20 @@ function setupEventListeners() {
     
     // Forms
     safeSetEventListener('createSessionForm', 'onsubmit', createSession);
-    safeSetEventListener('sessionSelect', 'onchange', loadSessionTables);
+    safeSetEventListener('adminLoginForm', 'onsubmit', function(event) {
+        event.preventDefault();
+        adminLogin();
+    });
+    safeSetEventListener('sessionSelect', 'onchange', event => {
+        // Support both the legacy join form (session/table selects) and the new wizard
+        if (document.getElementById('tableSelect')) {
+            loadSessionTables(event);
+        }
+
+        if (typeof handleSessionSelection === 'function') {
+            handleSessionSelection(event);
+        }
+    });
     
     // Join Wizard functionality
     setupJoinWizard();
@@ -654,14 +686,27 @@ function setupEventListeners() {
     safeSetEventListener('closeScannerBtn', 'onclick', closeQRScanner);
     safeSetEventListener('manualJoinBtn', 'onclick', showManualJoin);
     safeSetEventListener('closeManualJoinBtn', 'onclick', closeManualJoin);
+    safeSetEventListener('cancelManualJoinBtn', 'onclick', closeManualJoin);
     safeSetEventListener('submitManualJoinBtn', 'onclick', submitManualJoin);
-    
+    safeSetEventListener('dismissActionBtn', 'onclick', closeSessionActionModal);
+    safeSetEventListener('dismissHistoryBtn', 'onclick', closeSessionHistory);
+    safeSetEventListener('closeTranscriptionPreviewBtn', 'onclick', closeTranscriptionPreview);
+
     // Handle manual code input with keypress
     const manualCodeInput = document.getElementById('manualCode');
     if (manualCodeInput) {
         manualCodeInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 submitManualJoin();
+            }
+        });
+    }
+
+    const transcriptionPreviewModal = document.getElementById('transcriptionPreviewModal');
+    if (transcriptionPreviewModal) {
+        transcriptionPreviewModal.addEventListener('click', event => {
+            if (event.target === transcriptionPreviewModal) {
+                closeTranscriptionPreview();
             }
         });
     }
@@ -712,25 +757,29 @@ function showScreen(screenId) {
     // Hide all screens including our isolated join screen
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
-        screen.style.display = 'none';
+        hideElement(screen);
     });
     
     // Also hide isolated screens specifically
     const joinScreen = document.getElementById('joinSessionScreen');
     if (joinScreen) {
-        joinScreen.style.display = 'none';
+        hideElement(joinScreen);
     }
     const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
     if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
+        hideElement(transcriptionsScreen);
     }
     const sessionDashboardScreen = document.getElementById('sessionDashboard');
     if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
+        hideElement(sessionDashboardScreen);
     }
     
     targetScreen.classList.add('active');
-    targetScreen.style.display = 'block';
+    if (targetScreen.classList.contains('table-interface')) {
+        showElement(targetScreen);
+    } else {
+        showElement(targetScreen);
+    }
     
     console.log(`Screen activated: ${screenId}`);
     
@@ -765,155 +814,65 @@ function showScreen(screenId) {
 }
 
 function showWelcome() {
-    navigationHistory = ['welcomeScreen']; // Reset history
-    
-    // Hide isolated screens if they're showing
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'none';
-    }
-    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-    if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
-    }
-    const sessionDashboardScreen = document.getElementById('sessionDashboard');
-    if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
-    }
-    
+    navigationHistory = ['welcomeScreen'];
+    hideElement(document.getElementById('tableInterface'));
     showScreen('welcomeScreen');
 }
 
 function showCreateSession() {
+    hideElement(document.getElementById('tableInterface'));
     showScreen('createSessionScreen');
 }
 
 function showJoinSession() {
     loadActiveSessions();
-    
-    // Hide all other screens
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
-        screen.style.display = 'none';
-    });
-    
-    // Show the completely isolated join screen
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'block';
-        console.log('Join session screen activated with isolated styles');
-    }
-    
-    // Reset to step 1
-    goToStep(1);
+    hideElement(document.getElementById('tableInterface'));
+    showScreen('joinSessionScreen');
+    resetWizard();
 }
 
 function showSessionList() {
     loadActiveSessions();
-    
-    // Hide isolated screens
-    const joinScreen = document.getElementById('joinSessionScreen');
-    if (joinScreen) {
-        joinScreen.style.display = 'none';
-    }
-    const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-    if (transcriptionsScreen) {
-        transcriptionsScreen.style.display = 'none';
-    }
-    const sessionDashboardScreen = document.getElementById('sessionDashboard');
-    if (sessionDashboardScreen) {
-        sessionDashboardScreen.style.display = 'none';
-    }
-    
+    hideElement(document.getElementById('tableInterface'));
     showScreen('sessionListScreen');
 }
 
 function showSessionDashboard() {
-    if (currentSession) {
-        loadSessionDashboard(currentSession.id);
-        
-        console.log('Showing isolated session dashboard...');
-        // Hide all other screens
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.remove('active');
-            screen.style.display = 'none';
-        });
-        
-        // Hide isolated screens
-        const joinScreen = document.getElementById('joinSessionScreen');
-        if (joinScreen) {
-            joinScreen.style.display = 'none';
-        }
-        const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-        if (transcriptionsScreen) {
-            transcriptionsScreen.style.display = 'none';
-        }
-        
-        // Show the completely isolated session dashboard screen
-        const dashboardScreen = document.getElementById('sessionDashboard');
-        if (dashboardScreen) {
-            dashboardScreen.style.display = 'block';
-            console.log('Session dashboard activated with isolated styles');
-        }
-    } else {
+    if (!currentSession) {
         alert('No session selected');
+        return;
     }
+
+    hideElement(document.getElementById('tableInterface'));
+    loadSessionDashboard(currentSession.id);
+    showScreen('sessionDashboard');
 }
 
 function showTableInterface(tableId) {
     console.log('[DEBUG] showTableInterface called with tableId:', tableId);
     console.log('[DEBUG] Current currentTable before override:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
     
-    if (currentSession && currentSession.tables) {
-        const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
-        console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
-        currentTable = foundTable;
-        if (currentTable) {
-            setupTableInterface();
-            
-            // Load existing transcriptions and recordings  
-            // Note: loadExistingTranscriptions() will be called in setupTableInterface, so skip here to avoid duplicates
-            loadTableRecordings();
-            
-            // Nuclear isolation approach - hide all other screens
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-            });
-            
-            // Hide isolated screens
-            const sessionDashboard = document.getElementById('sessionDashboard');
-            if (sessionDashboard) {
-                sessionDashboard.style.display = 'none';
-            }
-            const joinScreen = document.getElementById('joinSessionScreen');
-            if (joinScreen) {
-                joinScreen.style.display = 'none';
-            }
-            
-            // Show table interface
-            const tableInterface = document.getElementById('tableInterface');
-            if (tableInterface) {
-                tableInterface.style.display = 'block';
-            }
-        }
-    }
+    if (!currentSession || !currentSession.tables) return;
+
+    const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
+    console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
+    currentTable = foundTable;
+
+    if (!currentTable) return;
+
+    setupTableInterface();
+    loadTableRecordings();
+    showScreen('tableInterface');
 }
 
 function backToSession() {
+    const tableInterface = document.getElementById('tableInterface');
+    if (tableInterface) {
+        hideElement(tableInterface);
+    }
+
     if (currentSession) {
-        // Hide table interface
-        const tableInterface = document.getElementById('tableInterface');
-        if (tableInterface) {
-            tableInterface.style.display = 'none';
-        }
-        
-        // Show session dashboard
-        const sessionDashboard = document.getElementById('sessionDashboard');
-        if (sessionDashboard) {
-            sessionDashboard.style.display = 'block';
-        }
-        
+        showScreen('sessionDashboard');
         loadSessionDashboard(currentSession.id);
     } else {
         showWelcome();
@@ -956,16 +915,8 @@ function closeMobileMenu() {
 function showQRScanner() {
     const scanner = document.getElementById('mobileScanner');
     if (scanner) {
-        scanner.style.display = 'flex';
+        showElement(scanner);
         initializeQRScanner();
-    }
-}
-
-function hideQRScanner() {
-    const scanner = document.getElementById('mobileScanner');
-    if (scanner) {
-        scanner.style.display = 'none';
-        stopQRScanner();
     }
 }
 
@@ -1117,10 +1068,10 @@ function stopQRScanner() {
 function hideQRScanner() {
     console.log('Hiding QR scanner...');
     stopQRScanner();
-    
+
     const scanner = document.getElementById('mobileScanner');
     if (scanner) {
-        scanner.style.display = 'none';
+        hideElement(scanner);
     }
 }
 
@@ -1132,20 +1083,26 @@ function showManualJoin() {
     hideQRScanner();
     const modal = document.getElementById('manualJoinModal');
     if (modal) {
-        modal.style.display = 'flex';
+        showElement(modal);
+        document.getElementById('manualCode')?.focus();
     }
 }
 
 function closeManualJoin() {
     const modal = document.getElementById('manualJoinModal');
     if (modal) {
-        modal.style.display = 'none';
+        hideElement(modal);
+    }
+    const manualCode = document.getElementById('manualCode');
+    if (manualCode) {
+        manualCode.value = '';
     }
 }
 
 // Join Session QR Scanner - enhanced version for join session context
 function showJoinQRScanner() {
     console.log('QR scanning works best on mobile devices');
+    selectJoinMethod('qr');
     const scanner = document.getElementById('mobileScanner');
     if (scanner) {
         // Update scanner title for join session context
@@ -1154,7 +1111,7 @@ function showJoinQRScanner() {
         if (scannerTitle) scannerTitle.textContent = 'Scan QR Code';
         if (scannerDescription) scannerDescription.textContent = 'Point camera at session QR code';
         
-        scanner.style.display = 'flex';
+        showElement(scanner);
         initializeQRScanner();
     }
 }
@@ -1164,7 +1121,7 @@ function showJoinQRScanner() {
 // Old duplicate function removed - using proper backend API now
 
 // Join Wizard Management
-let currentJoinMethod = null;
+let currentJoinMethod = 'code';
 let currentWizardStep = 1;
 let selectedSessionData = null;
 let selectedTableId = null;
@@ -1184,32 +1141,67 @@ function setupJoinWizard() {
         });
         observer.observe(joinScreen, { attributes: true });
     }
+
+    document.querySelectorAll('.join-method.join-method--interactive').forEach(card => {
+        if (card.dataset.interactiveInitialized === 'true') {
+            return;
+        }
+        card.dataset.interactiveInitialized = 'true';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                const method = card.dataset.method;
+                if (method === 'qr') {
+                    showJoinQRScanner();
+                } else if (method) {
+                    selectJoinMethod(method);
+                }
+            }
+        });
+    });
 }
 
 function resetWizard() {
-    currentJoinMethod = null;
+    currentJoinMethod = 'code';
     currentWizardStep = 1;
     selectedSessionData = null;
     selectedTableId = null;
     
     // Reset progress steps - with null checks
-    document.querySelectorAll('.progress-step').forEach(step => {
-        if (step) step.classList.remove('active', 'completed');
+    document.querySelectorAll('.join-progress__step').forEach(step => {
+        if (!step) return;
+        step.classList.remove('join-progress__step--active', 'join-progress__step--completed');
     });
-    const firstProgressStep = document.querySelector('.progress-step[data-step="1"]');
-    if (firstProgressStep) firstProgressStep.classList.add('active');
+    const firstProgressStep = document.querySelector('.join-progress__step[data-step="1"]');
+    if (firstProgressStep) {
+        firstProgressStep.classList.add('join-progress__step--active');
+    }
     
     // Reset wizard steps - with null checks
-    document.querySelectorAll('.wizard-step').forEach(step => {
-        if (step) step.classList.remove('active');
+    document.querySelectorAll('.join-step').forEach(step => {
+        if (!step) return;
+        step.classList.remove('active', 'join-step--active');
+        hideElement(step);
     });
     const joinStep1 = document.getElementById('joinStep1');
-    if (joinStep1) joinStep1.classList.add('active');
+    if (joinStep1) {
+        joinStep1.classList.add('active', 'join-step--active');
+        showElement(joinStep1);
+    }
     
     // Reset method cards - with null checks
-    document.querySelectorAll('.method-card').forEach(card => {
-        if (card) card.classList.remove('selected');
+    document.querySelectorAll('.join-method').forEach(card => {
+        if (!card) return;
+        card.classList.remove('selected');
+        card.setAttribute('aria-pressed', 'false');
     });
+    const defaultMethodCard = document.querySelector('.join-method[data-method="code"]');
+    if (defaultMethodCard) {
+        defaultMethodCard.classList.add('selected');
+        defaultMethodCard.setAttribute('aria-pressed', 'true');
+    }
     
     // Clear form inputs - with null checks
     const inputs = ['sessionCodeInput'];
@@ -1217,25 +1209,42 @@ function resetWizard() {
         const input = document.getElementById(id);
         if (input) input.value = '';
     });
+
+    const sessionInfo = document.getElementById('selectedSessionInfo');
+    if (sessionInfo) {
+        sessionInfo.innerHTML = '';
+    }
+
+    const tableSelection = document.getElementById('tableSelection');
+    if (tableSelection) {
+        tableSelection.innerHTML = '';
+    }
+
+    const finalJoinBtn = document.getElementById('finalJoinBtn');
+    if (finalJoinBtn) {
+        finalJoinBtn.disabled = true;
+    }
+    
+    updateProgressSteps(1);
 }
 
 function selectJoinMethod(method) {
     currentJoinMethod = method;
     
     // Update method card selection
-    document.querySelectorAll('.method-card').forEach(card => {
+    document.querySelectorAll('.join-method').forEach(card => {
         card.classList.remove('selected');
+        card.setAttribute('aria-pressed', 'false');
     });
-    document.querySelector(`[data-method="${method}"]`).classList.add('selected');
+    const selectedCard = document.querySelector(`.join-method[data-method="${method}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('selected');
+        selectedCard.setAttribute('aria-pressed', 'true');
+    }
     
-    // Proceed to step 2 after a short delay for visual feedback
-    setTimeout(() => {
-        if (method === 'code') {
-            goToStep(2, 'code');
-        } else if (method === 'browse') {
-            goToStep(2, 'browse');
-        }
-    }, 300);
+    if (method === 'browse') {
+        goToStep(2, 'browse');
+    }
 }
 
 function goToStep(step, method = null) {
@@ -1243,12 +1252,11 @@ function goToStep(step, method = null) {
     currentWizardStep = step;
     
     // Hide all steps
-    const steps = ['joinStep1', 'joinStep2Browse', 'joinStep3'];
-    steps.forEach(stepId => {
+    ['joinStep1', 'joinStep2Browse', 'joinStep3'].forEach(stepId => {
         const stepElement = document.getElementById(stepId);
-        if (stepElement) {
-            stepElement.style.display = 'none';
-        }
+        if (!stepElement) return;
+        stepElement.classList.remove('join-step--active', 'active');
+        hideElement(stepElement);
     });
     
     // Show appropriate step
@@ -1270,28 +1278,29 @@ function goToStep(step, method = null) {
     // Show the target step
     const targetStep = document.getElementById(targetStepId);
     if (targetStep) {
-        targetStep.style.display = 'block';
+        targetStep.classList.add('join-step--active', 'active');
+        showElement(targetStep);
         console.log(`Showing step: ${targetStepId}`);
     }
+    
+    updateProgressSteps(step);
 }
 
 function updateProgressSteps(activeStep) {
-    // Only update if progress steps exist (they were removed from HTML)
-    const progressSteps = document.querySelectorAll('.progress-step');
-    if (progressSteps.length > 0) {
-        progressSteps.forEach((step, index) => {
-            const stepNumber = index + 1;
-            if (step) {
-                step.classList.remove('active', 'completed');
-                
-                if (stepNumber < activeStep) {
-                    step.classList.add('completed');
-                } else if (stepNumber === activeStep) {
-                    step.classList.add('active');
-                }
-            }
-        });
-    }
+    const progressSteps = document.querySelectorAll('.join-progress__step');
+    progressSteps.forEach(step => {
+        if (!step) return;
+        const stepNumber = Number(step.dataset.step);
+        step.classList.remove('join-progress__step--active', 'join-progress__step--completed');
+        if (stepNumber < activeStep) {
+            step.classList.add('join-progress__step--completed');
+        } else if (stepNumber === activeStep) {
+            step.classList.add('join-progress__step--active');
+            step.setAttribute('aria-current', 'step');
+        } else {
+            step.removeAttribute('aria-current');
+        }
+    });
 }
 
 async function loadSessionsForBrowse() {
@@ -1345,21 +1354,23 @@ async function loadTablesForStep3() {
     
     if (!selectedSessionData) {
         console.error('selectedSessionData is null');
-        document.getElementById('tableSelection').innerHTML = '<p>No session selected. Please go back and select a session.</p>';
+        document.getElementById('tableSelection').innerHTML = '<p class="empty-state">No session selected. Please go back and select a session.</p>';
         return;
     }
-    
+
     // Update session info card
     const sessionInfoCard = document.getElementById('selectedSessionInfo');
     sessionInfoCard.innerHTML = `
-        <h4>${selectedSessionData.title}</h4>
-        <p>Select an available table to join</p>
+        <div class="info-card__content">
+            <h4 class="info-card__title">${selectedSessionData.title}</h4>
+            <p class="info-card__subtitle">Select an available table to join.</p>
+        </div>
     `;
-    
+
     // Load tables
     const tableSelection = document.getElementById('tableSelection');
-    tableSelection.innerHTML = '<p>Loading tables...</p>';
-    
+    tableSelection.innerHTML = '<p class="helper-text">Loading tables...</p>';
+
     try {
         console.log('Fetching session with tables:', selectedSessionData.id);
         const response = await fetch(`/api/sessions/${selectedSessionData.id}`);
@@ -1376,105 +1387,87 @@ async function loadTablesForStep3() {
         console.log('Tables loaded:', tables);
         
         if (!tables || tables.length === 0) {
-            tableSelection.innerHTML = '<p>No tables available for this session.</p>';
+            tableSelection.innerHTML = '<p class="empty-state">No tables available for this session.</p>';
             return;
         }
-        
+
         tableSelection.innerHTML = tables.map(table => {
             const currentParticipants = table.current_participants || 0;
             const maxSize = table.max_size || 10;
             const isFull = currentParticipants >= maxSize;
-            
+
             return `
-                <div class="table-card" 
-                     onclick="${isFull ? '' : `selectTable(${table.table_number})`}" 
-                     data-table-id="${table.id}"
-                     data-table-number="${table.table_number}"
-                     style="
-                         display: inline-block;
-                         width: 140px;
-                         height: 100px;
-                         margin: 8px;
-                         padding: 16px;
-                         background: ${isFull ? '#f5f5f5' : 'white'};
-                         border: 2px solid ${isFull ? '#ccc' : '#e0e0e0'};
-                         border-radius: 8px;
-                         cursor: ${isFull ? 'not-allowed' : 'pointer'};
-                         text-align: center;
-                         box-sizing: border-box;
-                         opacity: ${isFull ? '0.6' : '1'};
-                         transition: all 0.2s ease;
-                     "
-                     ${!isFull ? `onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-2px)'" onmouseout="if(!this.classList.contains('selected')) { this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; }"` : ''}>
-                    <h5 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: ${isFull ? '#999' : '#333'};">Table ${table.table_number}</h5>
-                    <p style="margin: 0 0 4px 0; font-size: 12px; color: ${isFull ? '#999' : '#666'};">${currentParticipants}/${maxSize} participants</p>
-                    ${table.name ? `<p style="margin: 0; font-size: 11px; color: ${isFull ? '#999' : '#888'};">${table.name}</p>` : ''}
-                    ${isFull ? '<p style="margin: 4px 0 0 0; font-size: 10px; color: #ff6b6b; font-weight: 600;">FULL</p>' : ''}
-                </div>
+                <button type="button"
+                        class="table-card join-table-card ${isFull ? 'join-table-card--full' : ''}"
+                        data-table-id="${table.id}"
+                        data-table-number="${table.table_number}"
+                        role="listitem"
+                        ${isFull ? 'disabled aria-disabled="true"' : 'aria-pressed="false"'}>
+                    <span class="join-table-card__title">Table ${table.table_number}</span>
+                    <span class="join-table-card__meta">${currentParticipants}/${maxSize} participants</span>
+                    ${table.name ? `<span class="join-table-card__note">${table.name}</span>` : ''}
+                    ${isFull ? '<span class="join-table-card__status">Full</span>' : ''}
+                </button>
             `;
         }).join('');
-        
+
+        tableSelection.querySelectorAll('.join-table-card').forEach(card => {
+            if (card.disabled) {
+                return;
+            }
+            card.addEventListener('click', () => selectTable(Number(card.dataset.tableNumber)));
+        });
+
     } catch (error) {
         console.error('Error loading tables:', error);
-        tableSelection.innerHTML = `<p>Error loading tables: ${error.message}</p>`;
+        tableSelection.innerHTML = `<p class="empty-state">Error loading tables: ${error.message}</p>`;
     }
 }
 
 function selectTable(tableId) {
     // Ensure tableId is a number for consistent comparison
     tableId = parseInt(tableId);
-    
+
     // Check if clicking the same table to unselect it
     if (selectedTableId === tableId) {
         // Unselect the table
         selectedTableId = null;
-        
+
         // Reset all table cards to unselected state
-        document.querySelectorAll('.table-card').forEach(card => {
-            card.classList.remove('selected');
-            card.style.borderColor = '#e0e0e0';
-            card.style.background = 'white';
-            card.style.transform = 'translateY(0)';
+        document.querySelectorAll('.join-table-card').forEach(card => {
+            card.classList.remove('is-selected');
+            card.setAttribute('aria-pressed', 'false');
         });
-        
+
         // Disable final join button
         const finalJoinBtn = document.getElementById('finalJoinBtn');
         if (finalJoinBtn) {
             finalJoinBtn.disabled = true;
-            finalJoinBtn.style.opacity = '0.5';
-            finalJoinBtn.style.cursor = 'not-allowed';
         }
         return;
     }
-    
+
     // Select new table
     selectedTableId = tableId;
     console.log(`[DEBUG] Selected table ID set to: ${selectedTableId}`);
-    
+
     // Update table selection visuals
-    document.querySelectorAll('.table-card').forEach(card => {
-        card.classList.remove('selected');
-        // Reset all cards to normal state first
-        card.style.borderColor = '#e0e0e0';
-        card.style.background = 'white';
-        card.style.transform = 'translateY(0)';
+    document.querySelectorAll('.join-table-card').forEach(card => {
+        card.classList.remove('is-selected');
+        card.setAttribute('aria-pressed', 'false');
     });
-    
-    // Highlight selected card  
-    const selectedCard = document.querySelector(`[data-table-number="${tableId}"]`);
+
+    // Highlight selected card
+    const selectedCard = document.querySelector(`.join-table-card[data-table-number="${tableId}"]`);
     if (selectedCard) {
-        selectedCard.classList.add('selected');
-        selectedCard.style.borderColor = '#007bff';
-        selectedCard.style.background = '#f0f8ff';
-        selectedCard.style.transform = 'translateY(-2px)';
+        selectedCard.classList.add('is-selected');
+        selectedCard.setAttribute('aria-pressed', 'true');
     }
-    
+
     // Enable final join button
     const finalJoinBtn = document.getElementById('finalJoinBtn');
     if (finalJoinBtn) {
         finalJoinBtn.disabled = false;
-        finalJoinBtn.style.opacity = '1';
-        finalJoinBtn.style.cursor = 'pointer';
     }
 }
 
@@ -1599,10 +1592,13 @@ async function joinWithSessionCode() {
         return;
     }
     
-    const joinButton = sessionCodeInput.parentElement.querySelector('button');
-    const originalText = joinButton.textContent;
-    joinButton.textContent = 'Joining...';
-    joinButton.disabled = true;
+    const joinMethodCard = sessionCodeInput.closest('.join-method');
+    const joinButton = joinMethodCard ? joinMethodCard.querySelector('.btn-primary') : null;
+    const originalText = joinButton ? joinButton.textContent : '';
+    if (joinButton) {
+        joinButton.textContent = 'Joining...';
+        joinButton.disabled = true;
+    }
     
     try {
         const response = await fetch('/api/entry', {
@@ -1653,8 +1649,10 @@ async function joinWithSessionCode() {
         showToast('Connection error. Please check your internet connection and try again.', 'error');
         sessionCodeInput.focus();
     } finally {
-        joinButton.textContent = originalText;
-        joinButton.disabled = false;
+        if (joinButton) {
+            joinButton.textContent = originalText;
+            joinButton.disabled = false;
+        }
     }
 }
 
@@ -2288,8 +2286,8 @@ function populateSessionsList() {
     
     if (searchInput) {
         searchInput.value = '';
-        clearBtn && (clearBtn.style.display = 'none');
-        searchResults && (searchResults.style.display = 'none');
+        hideElement(clearBtn);
+        hideElement(searchResults);
     }
     
     // Use the new filtered version
@@ -2641,10 +2639,10 @@ function filterSessions() {
     
     // Show/hide clear button
     if (searchValue) {
-        clearBtn.style.display = 'block';
+        showElement(clearBtn);
     } else {
-        clearBtn.style.display = 'none';
-        searchResults.style.display = 'none';
+        hideElement(clearBtn);
+        hideElement(searchResults);
         populateSessionsListFiltered(); // Show all sessions
         return;
     }
@@ -2657,7 +2655,7 @@ function filterSessions() {
     });
     
     // Update search results info
-    searchResults.style.display = 'block';
+    showElement(searchResults);
     if (filteredSessions.length === 0) {
         searchResults.textContent = `No results found for "${searchInput.value}"`;
         searchResults.style.color = '#dc3545';
@@ -2680,8 +2678,8 @@ function clearSearch() {
     const searchResults = document.getElementById('searchResults');
     
     searchInput.value = '';
-    clearBtn.style.display = 'none';
-    searchResults.style.display = 'none';
+    hideElement(clearBtn);
+    hideElement(searchResults);
     
     // Reset to show all sessions
     populateSessionsListFiltered();
@@ -2722,31 +2720,8 @@ async function loadSpecificSession(sessionId, isAdmin = false) {
             loadSessionDashboard(sessionId);
             
             console.log('[DEBUG] Showing session dashboard...');
-            // Hide all other screens using the same approach as showSessionDashboard
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-            });
-            
-            // Hide isolated screens
-            const joinScreen = document.getElementById('joinSessionScreen');
-            if (joinScreen) {
-                joinScreen.style.display = 'none';
-                console.log('[DEBUG] Join screen hidden');
-            }
-            const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-            if (transcriptionsScreen) {
-                transcriptionsScreen.style.display = 'none';
-            }
-            
-            // Show the completely isolated session dashboard screen
-            const dashboardScreen = document.getElementById('sessionDashboard');
-            if (dashboardScreen) {
-                dashboardScreen.style.display = 'block';
-                console.log('[DEBUG] Session dashboard screen shown');
-            } else {
-                console.error('[DEBUG] Session dashboard screen not found!');
-            }
+            hideElement(document.getElementById('tableInterface'));
+            showScreen('sessionDashboard');
             
             console.log(`[DEBUG] Successfully joined session: ${session.title}`);
         } else {
@@ -2903,35 +2878,37 @@ function setupAwesomeFilters(transcriptions) {
 
 function renderAwesomeTranscriptions(transcriptions) {
     console.log('renderAwesomeTranscriptions called with:', transcriptions.length, 'transcriptions');
-    
+
     const allTranscriptionsList = document.getElementById('allTranscriptionsList');
     const tableFilter = document.getElementById('tableFilter');
     const sortFilter = document.getElementById('sortFilter');
-    
+
     if (!allTranscriptionsList) {
         console.error('allTranscriptionsList element not found');
         throw new Error('Required DOM element missing: allTranscriptionsList');
     }
-    
+
     if (!tableFilter) {
         console.error('tableFilter element not found');
         throw new Error('Required DOM element missing: tableFilter');
     }
-    
+
     if (!sortFilter) {
         console.error('sortFilter element not found');
         throw new Error('Required DOM element missing: sortFilter');
     }
-    
+
     console.log('All required DOM elements found');
-    
+
+    transcriptionRegistry.clear();
+
     // Apply filters
     let filteredTranscriptions = transcriptions;
-    
+
     if (tableFilter.value) {
         filteredTranscriptions = filteredTranscriptions.filter(t => t.table_number.toString() === tableFilter.value);
     }
-    
+
     // Apply sorting
     const sortOption = sortFilter.value;
     switch (sortOption) {
@@ -2949,17 +2926,30 @@ function renderAwesomeTranscriptions(transcriptions) {
             filteredTranscriptions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             break;
     }
-    
+
+    allTranscriptionsList.innerHTML = '';
+
     if (filteredTranscriptions.length === 0) {
-        allTranscriptionsList.innerHTML = `
-            <div class="no-transcriptions-message">
-                <h3>🔍 No Transcriptions Found</h3>
-                <p>No recordings match the current filter criteria.</p>
-            </div>
-        `;
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+
+        const emptyIcon = document.createElement('div');
+        emptyIcon.className = 'empty-state__icon';
+        emptyIcon.textContent = '🔍';
+
+        const emptyTitle = document.createElement('h5');
+        emptyTitle.className = 'empty-state__title';
+        emptyTitle.textContent = 'No transcriptions found';
+
+        const emptyDescription = document.createElement('p');
+        emptyDescription.className = 'empty-state__description';
+        emptyDescription.textContent = 'No recordings match the current filter criteria yet.';
+
+        emptyState.append(emptyIcon, emptyTitle, emptyDescription);
+        allTranscriptionsList.appendChild(emptyState);
         return;
     }
-    
+
     // Group by table for better organization
     const groupedTranscriptions = {};
     filteredTranscriptions.forEach(transcription => {
@@ -2969,201 +2959,408 @@ function renderAwesomeTranscriptions(transcriptions) {
         }
         groupedTranscriptions[tableKey].push(transcription);
     });
-    
-    let html = '';
-    Object.keys(groupedTranscriptions).sort((a, b) => {
-        const tableA = parseInt(a.split('_')[1]);
-        const tableB = parseInt(b.split('_')[1]);
-        return tableA - tableB;
-    }).forEach(tableKey => {
-        const tableNumber = tableKey.split('_')[1];
-        const tableTranscriptions = groupedTranscriptions[tableKey];
-        
-        html += `
-            <div style="margin-bottom: 24px;">
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 16px;
-                    padding: 16px 20px;
-                    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-                    border-radius: 12px;
-                    border-left: 4px solid #007bff;
-                ">
-                    <h3 style="
-                        margin: 0;
-                        font-size: 20px;
-                        font-weight: 600;
-                        color: #333;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    ">
-                        <span style="font-size: 24px;">📢</span>
-                        Table ${tableNumber}
-                    </h3>
-                    <span style="
-                        background: #007bff;
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 16px;
-                        font-size: 12px;
-                        font-weight: 600;
-                    ">${tableTranscriptions.length} recording${tableTranscriptions.length !== 1 ? 's' : ''}</span>
-                </div>
-        `;
-        
-        tableTranscriptions.forEach((transcription, index) => {
-            const speakerSegments = transcription.speaker_segments ? 
-                (typeof transcription.speaker_segments === 'string' ? 
-                    JSON.parse(transcription.speaker_segments) : 
-                    transcription.speaker_segments) : [];
-            
-            const consolidatedSegments = consolidateSpeakerSegments(speakerSegments);
-            const uniqueSpeakers = new Set(consolidatedSegments.map(s => s.speaker));
-            const recordingDate = new Date(transcription.created_at).toLocaleDateString();
-            const recordingTime = new Date(transcription.created_at).toLocaleTimeString();
-            const duration = Math.round(parseFloat(transcription.duration_seconds) || 0);
-            
-            html += `
-                <div class="awesome-transcription-card" 
-                     data-transcription-id="${transcription.id || index}"
-                     style="
-                         background: white;
-                         border: 2px solid #e0e0e0;
-                         border-radius: 12px;
-                         padding: 20px;
-                         margin-bottom: 16px;
-                         cursor: pointer;
-                         transition: all 0.2s ease;
-                         box-sizing: border-box;
-                         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                     "
-                     onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(0,123,255,0.15)'"
-                     onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'"
-                     onclick="selectTranscription('${transcription.id || index}')">
-                    <div style="
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 16px;
-                        padding-bottom: 12px;
-                        border-bottom: 1px solid #f0f0f0;
-                    ">
-                        <div style="
-                            font-size: 16px;
-                            font-weight: 600;
-                            color: #333;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                        ">
-                            <span style="font-size: 20px;">🎤</span>
-                            Recording ${index + 1}
-                        </div>
-                        <div style="
-                            display: flex;
-                            flex-direction: column;
-                            align-items: flex-end;
-                            gap: 4px;
-                            color: #666;
-                            font-size: 12px;
-                        ">
-                            <div>${recordingDate} ${recordingTime}</div>
-                            ${duration > 0 ? `<span style="
-                                background: #007bff;
-                                color: white;
-                                padding: 2px 8px;
-                                border-radius: 4px;
-                                font-size: 11px;
-                                font-weight: 500;
-                            ">${duration}s</span>` : ''}
-                        </div>
-                    </div>
-                    <div style="max-height: 200px; overflow-y: auto;">
-                        ${consolidatedSegments.length > 0 ? 
-                                consolidatedSegments.map(segment => `
-                                    <div style="
-                                        margin-bottom: 12px;
-                                        padding: 12px;
-                                        background: #f8f9fa;
-                                        border-radius: 8px;
-                                        border-left: 3px solid #007bff;
-                                    ">
-                                        <div style="
-                                            font-size: 12px;
-                                            font-weight: 600;
-                                            color: #007bff;
-                                            margin-bottom: 6px;
-                                        ">Speaker ${(segment.speaker || 0) + 1}</div>
-                                        <div style="
-                                            font-size: 14px;
-                                            line-height: 1.4;
-                                            color: #333;
-                                        ">${
-                                            (typeof segment.consolidatedText === 'string' ? segment.consolidatedText : null) ||
-                                            (typeof segment.transcript === 'string' ? segment.transcript : null) ||
-                                            (typeof segment.text === 'string' ? segment.text : null) ||
-                                            'No text available'
-                                        }</div>
-                                    </div>
-                                `).join('') : 
-                            `<div class="awesome-speaker-segment">
-                                <div class="awesome-speaker-label">No Audio</div>
-                                <div class="awesome-speaker-text" style="font-style: italic; color: #999;">No transcription available for this recording</div>
-                            </div>`
-                        }
-                    </div>
-                </div>
-            `;
+
+    const fragment = document.createDocumentFragment();
+
+    Object.keys(groupedTranscriptions)
+        .sort((a, b) => {
+            const tableA = parseInt(a.split('_')[1], 10);
+            const tableB = parseInt(b.split('_')[1], 10);
+            return tableA - tableB;
+        })
+        .forEach(tableKey => {
+            const tableNumber = tableKey.split('_')[1];
+            const tableTranscriptions = groupedTranscriptions[tableKey];
+
+            const groupCard = document.createElement('section');
+            groupCard.className = 'card transcription-group';
+            groupCard.dataset.tableNumber = tableNumber;
+
+            const header = document.createElement('header');
+            header.className = 'card__header transcription-group__header';
+
+            const heading = document.createElement('div');
+            heading.className = 'transcription-group__heading';
+
+            const title = document.createElement('h3');
+            title.className = 'transcription-group__title';
+
+            const titleIcon = document.createElement('span');
+            titleIcon.className = 'transcription-group__icon';
+            titleIcon.setAttribute('aria-hidden', 'true');
+            titleIcon.textContent = '📢';
+
+            const titleText = document.createElement('span');
+            titleText.textContent = `Table ${tableNumber}`;
+
+            title.append(titleIcon, titleText);
+            heading.appendChild(title);
+
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-neutral transcription-group__badge';
+            badge.textContent = `${tableTranscriptions.length} recording${tableTranscriptions.length !== 1 ? 's' : ''}`;
+
+            header.append(heading, badge);
+
+            const body = document.createElement('div');
+            body.className = 'transcription-group__body';
+
+            const list = document.createElement('div');
+            list.className = 'transcription-group__list';
+
+            tableTranscriptions.forEach((transcription, index) => {
+                const speakerSegments = transcription.speaker_segments ?
+                    (typeof transcription.speaker_segments === 'string'
+                        ? JSON.parse(transcription.speaker_segments)
+                        : transcription.speaker_segments)
+                    : [];
+
+                const consolidatedSegments = consolidateSpeakerSegments(speakerSegments);
+                const uniqueSpeakers = new Set(consolidatedSegments.map(segment => segment.speaker));
+                const createdAt = new Date(transcription.created_at);
+                const recordedAt = transcription.recording_created_at
+                    ? new Date(transcription.recording_created_at)
+                    : null;
+                const durationSeconds = parseFloat(transcription.duration_seconds) || 0;
+                const transcriptionId = String(transcription.id || `${tableNumber}-${index}`);
+
+                const card = document.createElement('article');
+                card.className = 'transcription-card';
+                card.dataset.transcriptionId = transcriptionId;
+                card.dataset.tableNumber = tableNumber;
+                card.tabIndex = 0;
+                card.setAttribute('role', 'button');
+                card.setAttribute('aria-pressed', 'false');
+                card.setAttribute('aria-label', `Recording ${index + 1} from table ${tableNumber}`);
+
+                const cardHeader = document.createElement('div');
+                cardHeader.className = 'transcription-card__header';
+
+                const cardTitle = document.createElement('h4');
+                cardTitle.className = 'transcription-card__title';
+
+                const cardIcon = document.createElement('span');
+                cardIcon.className = 'transcription-card__icon';
+                cardIcon.setAttribute('aria-hidden', 'true');
+                cardIcon.textContent = '🎤';
+
+                const cardTitleText = document.createElement('span');
+                cardTitleText.textContent = `Recording ${index + 1}`;
+
+                cardTitle.append(cardIcon, cardTitleText);
+
+                const meta = document.createElement('div');
+                meta.className = 'transcription-card__meta';
+                meta.append(
+                    createTranscriptionMetaItem('📅', `${createdAt.toLocaleDateString()} · ${createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`),
+                    createTranscriptionMetaItem('⏱️', formatDuration(durationSeconds)),
+                    createTranscriptionMetaItem('🗣️', `${uniqueSpeakers.size || 0} speaker${uniqueSpeakers.size === 1 ? '' : 's'}`)
+                );
+
+                cardHeader.append(cardTitle, meta);
+
+                const segments = document.createElement('div');
+                segments.className = 'transcription-card__segments';
+
+                if (consolidatedSegments.length === 0) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'transcription-card__empty';
+                    placeholder.textContent = 'No transcription available for this recording yet.';
+                    segments.appendChild(placeholder);
+                } else {
+                    consolidatedSegments.forEach(segment => {
+                        const segmentWrapper = document.createElement('div');
+                        segmentWrapper.className = 'transcription-segment';
+
+                        const speakerLabel = document.createElement('p');
+                        speakerLabel.className = 'transcription-segment__speaker';
+                        speakerLabel.textContent = `Speaker ${(segment.speaker || 0) + 1}`;
+
+                        const text = document.createElement('p');
+                        text.className = 'transcription-segment__text';
+                        text.textContent =
+                            (typeof segment.consolidatedText === 'string' && segment.consolidatedText) ||
+                            (typeof segment.transcript === 'string' && segment.transcript) ||
+                            (typeof segment.text === 'string' && segment.text) ||
+                            'No text available';
+
+                        segmentWrapper.append(speakerLabel, text);
+                        segments.appendChild(segmentWrapper);
+                    });
+                }
+
+                card.append(cardHeader, segments);
+
+                transcriptionRegistry.set(transcriptionId, {
+                    id: transcriptionId,
+                    index: index + 1,
+                    tableNumber,
+                    createdAt,
+                    recordedAt,
+                    durationSeconds,
+                    speakerCount: uniqueSpeakers.size || 0,
+                    source: transcription.source,
+                    participantName: transcription.participant_name,
+                    filename: transcription.filename,
+                    transcriptText: transcription.transcript_text,
+                    consolidatedSegments,
+                    confidence: transcription.confidence_score,
+                    language: transcription.language,
+                    wordCount: transcription.word_count
+                });
+
+                card.addEventListener('click', () => {
+                    selectTranscription(transcriptionId);
+                    openTranscriptionPreview(transcriptionId);
+                });
+                card.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectTranscription(transcriptionId);
+                        openTranscriptionPreview(transcriptionId);
+                    }
+                });
+
+                list.appendChild(card);
+            });
+
+            body.appendChild(list);
+            groupCard.append(header, body);
+
+            fragment.appendChild(groupCard);
         });
-        
-        html += `</div>`; // Close the table group div
-    });
-    
-    allTranscriptionsList.innerHTML = html;
+
+    allTranscriptionsList.appendChild(fragment);
 }
 
-// Transcription selection function with beautiful effects like Join Session
+function createTranscriptionMetaItem(icon, text) {
+    const item = document.createElement('span');
+    item.className = 'transcription-card__meta-item';
+
+    const iconEl = document.createElement('span');
+    iconEl.className = 'transcription-card__meta-icon';
+    iconEl.setAttribute('aria-hidden', 'true');
+    iconEl.textContent = icon;
+
+    const textEl = document.createElement('span');
+    textEl.className = 'transcription-card__meta-text';
+    textEl.textContent = text;
+
+    item.append(iconEl, textEl);
+    return item;
+}
+
+// Transcription selection function with shared card states
 function selectTranscription(transcriptionId) {
     console.log('Transcription selected:', transcriptionId);
-    
-    // Update visual selection
-    document.querySelectorAll('.awesome-transcription-card').forEach(card => {
-        // Reset all cards to default state
-        if (card.getAttribute('data-transcription-id') != transcriptionId) {
-            card.style.borderColor = '#e0e0e0';
-            card.style.background = 'white';
-            card.style.transform = 'translateY(0)';
-            card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+
+    const cards = document.querySelectorAll('.transcription-card');
+    cards.forEach(card => {
+        const isMatch = card.dataset.transcriptionId === String(transcriptionId);
+        card.classList.toggle('is-selected', isMatch);
+        card.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+
+        if (isMatch) {
+            card.classList.remove('is-animating');
+            // Trigger reflow so the animation can replay when reselecting the same card
+            void card.offsetWidth;
+            card.classList.add('is-animating');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            card.classList.remove('is-animating');
         }
     });
-    
-    // Highlight selected card
-    const selectedCard = document.querySelector(`[data-transcription-id="${transcriptionId}"]`);
-    if (selectedCard) {
-        selectedCard.style.borderColor = '#007bff';
-        selectedCard.style.background = 'linear-gradient(135deg, #f0f8ff, #e6f3ff)';
-        selectedCard.style.transform = 'translateY(-4px)';
-        selectedCard.style.boxShadow = '0 8px 24px rgba(0,123,255,0.2)';
-        
-        // Optional: scroll into view smoothly
-        selectedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Add a subtle pulse effect
-        selectedCard.style.animation = 'pulse 0.6s ease-in-out';
-        setTimeout(() => {
-            if (selectedCard.style) {
-                selectedCard.style.animation = '';
-            }
-        }, 600);
+}
+
+function openTranscriptionPreview(transcriptionId) {
+    const modalOverlay = document.getElementById('transcriptionPreviewModal');
+    const dialog = document.getElementById('transcriptionPreviewDialog');
+
+    if (!modalOverlay || !dialog) {
+        console.warn('Transcription preview modal elements not found');
+        return;
     }
-    
-    // Here you could add additional functionality like:
-    // - Show detailed view
-    // - Enable export for this specific transcription
-    console.log('Transcription selection completed');
+
+    const entry = transcriptionRegistry.get(String(transcriptionId));
+    if (!entry) {
+        console.warn('No transcription data available for preview:', transcriptionId);
+        return;
+    }
+
+    populateTranscriptionPreview(entry);
+
+    modalOverlay.dataset.activeTranscriptionId = String(transcriptionId);
+    lastFocusedTranscriptionCard = document.querySelector(
+        `.transcription-card[data-transcription-id="${transcriptionId}"]`
+    );
+
+    showElement(modalOverlay);
+    dialog.focus();
+
+    if (!transcriptionPreviewEscapeHandler) {
+        transcriptionPreviewEscapeHandler = event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeTranscriptionPreview();
+            }
+        };
+        document.addEventListener('keydown', transcriptionPreviewEscapeHandler);
+    }
+}
+
+function closeTranscriptionPreview() {
+    const modalOverlay = document.getElementById('transcriptionPreviewModal');
+    if (!modalOverlay) {
+        return;
+    }
+
+    hideElement(modalOverlay);
+    modalOverlay.dataset.activeTranscriptionId = '';
+
+    if (transcriptionPreviewEscapeHandler) {
+        document.removeEventListener('keydown', transcriptionPreviewEscapeHandler);
+        transcriptionPreviewEscapeHandler = null;
+    }
+
+    if (lastFocusedTranscriptionCard) {
+        lastFocusedTranscriptionCard.focus();
+        lastFocusedTranscriptionCard = null;
+    }
+}
+
+function populateTranscriptionPreview(entry) {
+    const title = document.getElementById('transcriptionPreviewTitle');
+    const metaContainer = document.getElementById('transcriptionPreviewMeta');
+    const segmentsContainer = document.getElementById('transcriptionPreviewSegments');
+    const fullTextSection = document.getElementById('transcriptionPreviewFullTextSection');
+    const fullTextContent = document.getElementById('transcriptionPreviewFullText');
+
+    if (!title || !metaContainer || !segmentsContainer || !fullTextSection || !fullTextContent) {
+        console.warn('Transcription preview containers missing');
+        return;
+    }
+
+    title.textContent = `Table ${entry.tableNumber} · Recording ${entry.index}`;
+
+    metaContainer.innerHTML = '';
+    const metaItems = [];
+
+    const recordedDate = entry.recordedAt instanceof Date && !Number.isNaN(entry.recordedAt)
+        ? entry.recordedAt
+        : entry.createdAt;
+    const recordedLabel = formatDateTime(recordedDate);
+    if (recordedLabel) {
+        metaItems.push({ label: 'Recorded', value: recordedLabel });
+    }
+
+    if (entry.durationSeconds) {
+        metaItems.push({ label: 'Duration', value: formatDuration(entry.durationSeconds) });
+    }
+
+    if (entry.speakerCount) {
+        const speakerLabel = entry.speakerCount === 1
+            ? '1 speaker'
+            : `${entry.speakerCount} speakers`;
+        metaItems.push({ label: 'Speakers', value: speakerLabel });
+    }
+
+    const sourceLabel = getSourceLabel(entry.source);
+    if (sourceLabel && sourceLabel !== 'Unknown') {
+        metaItems.push({ label: 'Source', value: sourceLabel });
+    }
+
+    if (entry.participantName) {
+        metaItems.push({ label: 'Recorded By', value: entry.participantName });
+    }
+
+    if (entry.filename) {
+        metaItems.push({ label: 'File Name', value: entry.filename });
+    }
+
+    if (entry.language) {
+        metaItems.push({ label: 'Language', value: entry.language.toUpperCase() });
+    }
+
+    if (typeof entry.wordCount === 'number' && entry.wordCount > 0) {
+        metaItems.push({ label: 'Word Count', value: entry.wordCount.toLocaleString() });
+    }
+
+    if (typeof entry.confidence === 'number' && entry.confidence > 0) {
+        metaItems.push({ label: 'Confidence', value: `${Math.round(entry.confidence * 100)}%` });
+    }
+
+    if (metaItems.length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'transcription-preview__empty';
+        placeholder.textContent = 'No metadata is available for this recording yet.';
+        metaContainer.appendChild(placeholder);
+    } else {
+        metaItems.forEach(item => {
+            const metaItem = document.createElement('div');
+            metaItem.className = 'transcription-preview__meta-item';
+
+            const label = document.createElement('span');
+            label.className = 'transcription-preview__meta-label';
+            label.textContent = item.label;
+
+            const value = document.createElement('span');
+            value.className = 'transcription-preview__meta-value';
+            value.textContent = item.value;
+
+            metaItem.append(label, value);
+            metaContainer.appendChild(metaItem);
+        });
+    }
+
+    segmentsContainer.innerHTML = '';
+
+    if (entry.consolidatedSegments && entry.consolidatedSegments.length > 0) {
+        entry.consolidatedSegments.forEach(segment => {
+            const segmentCard = document.createElement('article');
+            segmentCard.className = 'transcription-preview__segment';
+
+            const header = document.createElement('div');
+            header.className = 'transcription-preview__segment-header';
+
+            const speaker = document.createElement('p');
+            speaker.className = 'transcription-preview__speaker';
+            speaker.textContent = `Speaker ${(segment.speaker ?? 0) + 1}`;
+
+            header.appendChild(speaker);
+
+            const timeRange = formatTimestampRange(segment.startTime, segment.endTime);
+            if (timeRange) {
+                const timestamp = document.createElement('span');
+                timestamp.className = 'transcription-preview__timestamp';
+                timestamp.textContent = timeRange;
+                header.appendChild(timestamp);
+            }
+
+            const text = document.createElement('p');
+            text.className = 'transcription-preview__text';
+            text.textContent =
+                (typeof segment.consolidatedText === 'string' && segment.consolidatedText) ||
+                (typeof segment.transcript === 'string' && segment.transcript) ||
+                (typeof segment.text === 'string' && segment.text) ||
+                'No transcript text available for this segment.';
+
+            segmentCard.append(header, text);
+            segmentsContainer.appendChild(segmentCard);
+        });
+    } else {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'transcription-preview__empty';
+        emptyState.textContent = 'No speaker segments are available for this transcription yet.';
+        segmentsContainer.appendChild(emptyState);
+    }
+
+    if (entry.transcriptText && entry.transcriptText.trim()) {
+        fullTextContent.textContent = entry.transcriptText.trim();
+        showElement(fullTextSection);
+    } else {
+        fullTextContent.textContent = '';
+        hideElement(fullTextSection);
+    }
 }
 
 // Refresh transcriptions by reloading the data
@@ -3451,8 +3648,11 @@ async function loadSessionDashboard(sessionId) {
     updateSessionLanguageIndicator(session.language || 'en');
     
     // Load tables if available
-    if (session.tables && session.tables.length > 0) {
+    const hasRealTables = Array.isArray(session.tables) && session.tables.some(table => table && (table.id || table.session_id));
+
+    if (hasRealTables) {
         displayTables(session.tables);
+        loadSessionRecordings(sessionId);
     } else {
         // Generate mock tables for display
         const mockTables = [];
@@ -3471,8 +3671,15 @@ async function loadSessionDashboard(sessionId) {
         }
         session.tables = mockTables;
         displayTables(mockTables);
+
+        renderRecordingList([], {
+            listId: 'sessionRecordingsList',
+            emptyStateId: 'sessionRecordingsEmpty',
+            badgeId: 'sessionRecordingCountBadge',
+            context: 'session'
+        });
     }
-    
+
     // Setup QR codes section
     setupQRCodesSection(session);
     
@@ -3484,251 +3691,173 @@ async function loadSessionDashboard(sessionId) {
 
 function displayTables(tables) {
     const tablesGrid = document.getElementById('tablesGrid');
-    
+
     if (!tablesGrid) {
         console.error('Tables grid container not found');
         return;
     }
-    
+
+    tablesGrid.innerHTML = '';
+
     if (!tables || tables.length === 0) {
-        tablesGrid.innerHTML = `
-            <div style="
-                grid-column: 1 / -1;
-                text-align: center;
-                padding: 60px 20px;
-                color: #666;
-                background: #f8f9fa;
-                border-radius: 12px;
-                border: 2px dashed #ddd;
-            ">
-                <div style="font-size: 48px; margin-bottom: 16px;">📢</div>
-                <h3 style="margin: 0 0 12px 0; color: #333; font-size: 20px;">No Tables Yet</h3>
-                <p style="margin: 0 0 24px 0; font-size: 14px;">Create your first table to start the World Café session</p>
-                <button onclick="showCreateTable()" style="
-                    padding: 12px 24px;
-                    background: #007bff;
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                ">
-                    <span style="font-size: 16px;">➕</span>
-                    Create Table
-                </button>
-            </div>
+        const emptyState = document.createElement('div');
+        emptyState.className = 'table-card table-card--empty';
+        emptyState.innerHTML = `
+            <div class="table-card__empty-icon" aria-hidden="true">📢</div>
+            <h3 class="table-card__empty-title">No tables yet</h3>
+            <p class="table-card__empty-description">Create your first table to start the World Café session.</p>
+            <button type="button" class="btn btn-primary btn-sm table-card__empty-action" onclick="showCreateTable()">
+                ➕ Create Table
+            </button>
         `;
+        tablesGrid.appendChild(emptyState);
         return;
     }
-    
-    tablesGrid.innerHTML = tables.map(table => {
-        const status = table.status || 'waiting';
+
+    tables.forEach(table => {
+        const participantCount = table.participant_count || (Array.isArray(table.participants) ? table.participants.filter(Boolean).length : 0);
+        const maxSize = table.max_size || 5;
         const recordingCount = table.recording_count || 0;
         const transcriptionCount = table.transcription_count || 0;
-        const maxSize = table.max_size || 5;
-        
-        // Status-based styling
-        const statusColors = {
-            active: { bg: '#28a745', text: 'Active' },
-            waiting: { bg: '#ffc107', text: 'Waiting' },
-            closed: { bg: '#6c757d', text: 'Closed' },
-            full: { bg: '#dc3545', text: 'Full' }
-        };
-        const statusStyle = statusColors[status] || statusColors.waiting;
-        
-        return `
-            <div onclick="showTableInterface(${table.id || table.table_number})" style="
-                background: white;
-                border: 2px solid #e0e0e0;
-                border-radius: 12px;
-                padding: 24px;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                position: relative;
-            " 
-            onmouseover="this.style.borderColor='#007bff'; this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(0,123,255,0.15)'"
-            onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)'">
-                
-                <!-- Table Header -->
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    padding-bottom: 16px;
-                    border-bottom: 1px solid #f0f0f0;
-                ">
-                    <h4 style="
-                        margin: 0;
-                        font-size: 18px;
-                        font-weight: 600;
-                        color: #333;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    ">
-                        <span style="font-size: 20px;">📢</span>
-                        ${table.name || `Table ${table.table_number}`}
-                    </h4>
-                    <span style="
-                        background: ${statusStyle.bg};
-                        color: white;
-                        padding: 4px 12px;
-                        border-radius: 16px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                    ">${statusStyle.text}</span>
-                </div>
-                
-                <!-- Real-time Status Indicators -->
-                <div style="
-                    display: flex;
-                    gap: 8px;
-                    margin-bottom: 16px;
-                ">
-                    <div class="connection-indicator" id="connection-${table.id}" style="
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                        padding: 4px 8px;
-                        background: #f8f9fa;
-                        border-radius: 12px;
-                        font-size: 11px;
-                        font-weight: 500;
-                        border: 1px solid #dee2e6;
-                    ">
-                        <span class="indicator-dot offline"></span>
-                        <span class="indicator-text">No clients</span>
-                    </div>
-                    <div class="recording-indicator" id="recording-${table.id}" style="
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                        padding: 4px 8px;
-                        background: #f8f9fa;
-                        border-radius: 12px;
-                        font-size: 11px;
-                        font-weight: 500;
-                        border: 1px solid #dee2e6;
-                    ">
-                        <span class="indicator-dot idle"></span>
-                        <span class="indicator-text">Idle</span>
-                    </div>
-                </div>
-                
-                <!-- Table Actions -->
-                <div style="
-                    margin-bottom: 20px;
-                    background: #f0f8ff;
-                    border: 1px solid #b3d9ff;
-                    border-radius: 6px;
-                    overflow: hidden;
-                ">
-                    <div style="font-size: 11px; color: #666; padding: 8px 12px 4px; text-align: center;">Table Actions</div>
-                    
-                    <!-- Action Buttons Row -->
-                    <div style="
-                        display: flex;
-                        background: #e8f4ff;
-                    ">
-                        <button onclick="copyTableCode('${currentSession ? currentSession.id : 'session-id'}/table/${table.table_number}', event)" style="
-                            flex: 1;
-                            padding: 8px 6px;
-                            font-size: 10px;
-                            font-weight: 600;
-                            color: #0056b3;
-                            background: transparent;
-                            border: none;
-                            cursor: pointer;
-                            transition: all 0.2s ease;
-                            border-right: 1px solid #b3d9ff;
-                        "
-                        onmouseover="this.style.background='#d1ecf1'"
-                        onmouseout="this.style.background='transparent'"
-                        title="Copy table code"
-                        >📋 Copy Code</button>
-                        
-                        <button onclick="copyTableLink('${currentSession ? currentSession.id : 'session-id'}', '${table.table_number}', event)" style="
-                            flex: 1;
-                            padding: 8px 6px;
-                            font-size: 10px;
-                            font-weight: 600;
-                            color: #0056b3;
-                            background: transparent;
-                            border: none;
-                            cursor: pointer;
-                            transition: all 0.2s ease;
-                            border-right: 1px solid #b3d9ff;
-                        "
-                        onmouseover="this.style.background='#d1ecf1'"
-                        onmouseout="this.style.background='transparent'"
-                        title="Copy table link"
-                        >🔗 Copy Link</button>
-                        
-                        <button onclick="showTableQR('${currentSession ? currentSession.id : 'session-id'}', '${table.table_number}', event)" style="
-                            flex: 1;
-                            padding: 8px 6px;
-                            font-size: 10px;
-                            font-weight: 600;
-                            color: #0056b3;
-                            background: transparent;
-                            border: none;
-                            cursor: pointer;
-                            transition: all 0.2s ease;
-                        "
-                        onmouseover="this.style.background='#d1ecf1'"
-                        onmouseout="this.style.background='transparent'"
-                        title="Show QR code for this table"
-                        >📱 QR Code</button>
-                    </div>
-                </div>
-                
-                <!-- Table Stats -->
-                <div style="
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 16px;
-                    text-align: center;
-                ">
-                    
-                    <div style="
-                        padding: 12px;
-                        background: #f8f9fa;
-                        border-radius: 8px;
-                    ">
-                        <div style="font-size: 20px; margin-bottom: 4px;">🎤</div>
-                        <div style="font-size: 16px; font-weight: 600; color: #333;">${recordingCount}</div>
-                        <div style="font-size: 11px; color: #666;">recordings</div>
-                    </div>
-                    
-                    <div style="
-                        padding: 12px;
-                        background: #f8f9fa;
-                        border-radius: 8px;
-                    ">
-                        <div style="font-size: 20px; margin-bottom: 4px;">📝</div>
-                        <div style="font-size: 16px; font-weight: 600; color: #333;">${transcriptionCount}</div>
-                        <div style="font-size: 11px; color: #666;">transcripts</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
+        const status = (table.status || 'waiting').toString().toLowerCase();
+
+        const card = document.createElement('article');
+        card.className = 'table-card';
+        card.dataset.tableId = table.id || table.table_number;
+        card.dataset.tableNumber = table.table_number;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `Open ${table.name || `Table ${table.table_number}`}`);
+        card.addEventListener('click', () => showTableInterface(table.id || table.table_number));
+        card.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                showTableInterface(table.id || table.table_number);
+            }
+        });
+
+        const header = document.createElement('header');
+        header.className = 'table-card__header';
+
+        const heading = document.createElement('div');
+        heading.className = 'table-card__heading';
+
+        const icon = document.createElement('span');
+        icon.className = 'table-card-icon';
+        icon.textContent = table.icon || '🪑';
+
+        const title = document.createElement('h3');
+        title.className = 'table-card-title';
+        title.textContent = table.name || `Table ${table.table_number}`;
+
+        heading.append(icon, title);
+        header.appendChild(heading);
+
+        const statusBadge = document.createElement('span');
+        statusBadge.className = `badge ${getTableStatusVariant(status)}`;
+        statusBadge.textContent = formatStatusLabel(status);
+        header.appendChild(statusBadge);
+
+        card.appendChild(header);
+
+        const meta = document.createElement('div');
+        meta.className = 'table-card__meta';
+        meta.appendChild(createMetaItem(`${participantCount}/${maxSize} participants`));
+        if (table.facilitator_name) {
+            meta.appendChild(createMetaItem(`Facilitator: ${table.facilitator_name}`));
+        }
+        card.appendChild(meta);
+
+        const stats = document.createElement('div');
+        stats.className = 'table-card-stats';
+        stats.appendChild(createTableStat('👥', 'Participants', `${participantCount}/${maxSize}`, 'participants'));
+        stats.appendChild(createTableStat('🎙️', 'Recordings', recordingCount, 'recordings'));
+        stats.appendChild(createTableStat('📝', 'Transcriptions', transcriptionCount, 'transcriptions'));
+        card.appendChild(stats);
+
+        tablesGrid.appendChild(card);
+    });
+}
+
+function createMetaItem(text) {
+    const item = document.createElement('span');
+    item.className = 'table-card__meta-item';
+    item.textContent = text;
+    return item;
+}
+
+function createTableStat(icon, label, value, key) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-card-stat';
+    if (key) {
+        wrapper.dataset.stat = key;
+    }
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'table-card-stat__label';
+    labelEl.innerHTML = `${icon} ${label}`;
+
+    const valueEl = document.createElement('span');
+    valueEl.className = 'table-card-stat__value';
+    valueEl.textContent = value;
+
+    wrapper.append(labelEl, valueEl);
+    return wrapper;
+}
+
+function formatStatusLabel(status) {
+    if (!status && status !== 0) {
+        return 'Unknown';
+    }
+
+    const normalized = status
+        .toString()
+        .replace(/[_-]+/g, ' ')
+        .trim()
+        .toLowerCase();
+
+    if (!normalized) {
+        return 'Unknown';
+    }
+
+    return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getTableStatusVariant(status) {
+    const statusMap = {
+        active: 'badge-success',
+        recording: 'badge-success',
+        running: 'badge-success',
+        waiting: 'badge-neutral',
+        ready: 'badge-neutral',
+        idle: 'badge-neutral',
+        paused: 'badge-warning',
+        full: 'badge-warning',
+        completed: 'badge-neutral',
+        closed: 'badge-neutral',
+        error: 'badge-error',
+        failed: 'badge-error'
+    };
+
+    return statusMap[status] || 'badge-neutral';
+}
+
+function matchesTableCard(card, tableId) {
+    if (!card) return false;
+    const datasetId = card.dataset.tableId;
+    const datasetNumber = card.dataset.tableNumber;
+    const target = String(tableId);
+    return String(datasetId) === target || String(datasetNumber) === target;
 }
 
 // Toggle functions for isolated sections
 function toggleQRCodesSection() {
     const qrSection = document.getElementById('qrCodesSection');
-    if (qrSection.style.display === 'none' || !qrSection.style.display) {
-        qrSection.style.display = 'block';
+    if (!qrSection) return;
+    if (qrSection.classList.contains('is-hidden') || qrSection.hasAttribute('hidden') || qrSection.style.display === 'none') {
+        showElement(qrSection);
     } else {
-        qrSection.style.display = 'none';
+        hideElement(qrSection);
     }
 }
 
@@ -3750,7 +3879,7 @@ function setupQRCodesSection(session) {
 }
 
 function showQRCodes() {
-    document.getElementById('qrCodesSection').style.display = 'block';
+    showElement(document.getElementById('qrCodesSection'));
     populateQRCodesGrid();
     document.getElementById('showQRCodesBtn').textContent = '✅ QR Codes Shown';
     
@@ -3759,7 +3888,7 @@ function showQRCodes() {
 }
 
 function hideQRCodes() {
-    document.getElementById('qrCodesSection').style.display = 'none';
+    hideElement(document.getElementById('qrCodesSection'));
     document.getElementById('showQRCodesBtn').textContent = '📱 QR Codes';
 }
 
@@ -4113,32 +4242,6 @@ function printQRCodes() {
     }, 1000);
 }
 
-// Mobile QR Scanner functionality
-function showQRScanner() {
-    if (!isMobile) {
-        console.log('QR scanning works best on mobile devices');
-    }
-    
-    document.getElementById('mobileScanner').style.display = 'flex';
-    startCamera();
-}
-
-function closeQRScanner() {
-    document.getElementById('mobileScanner').style.display = 'none';
-    stopCamera();
-}
-
-function showManualJoin() {
-    document.getElementById('mobileScanner').style.display = 'none';
-    document.getElementById('manualJoinModal').style.display = 'flex';
-    document.getElementById('manualCode').focus();
-}
-
-function closeManualJoin() {
-    document.getElementById('manualJoinModal').style.display = 'none';
-    document.getElementById('manualCode').value = '';
-}
-
 async function submitManualJoin() {
     console.log('[DEBUG] submitManualJoin called');
     const codeInput = document.getElementById('manualCode');
@@ -4218,65 +4321,6 @@ async function submitManualJoin() {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;
     }
-}
-
-async function startCamera() {
-    try {
-        const video = document.getElementById('qrVideo');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } // Use back camera if available
-        });
-        video.srcObject = stream;
-        video.play();
-        
-        // Start QR code detection (simplified - in production use a QR code library)
-        detectQRCode(video);
-    } catch (error) {
-        console.error('Camera access denied:', error);
-        console.error('Camera access is required for QR scanning');
-        showManualJoin();
-    }
-}
-
-function stopCamera() {
-    const video = document.getElementById('qrVideo');
-    if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
-    }
-}
-
-function detectQRCode(video) {
-    // Create a canvas to capture video frames
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    const scanFrame = () => {
-        if (document.getElementById('mobileScanner').style.display === 'none') {
-            return; // Stop scanning if scanner is closed
-        }
-        
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Simple QR code detection using pattern recognition
-            // This looks for QR code-like patterns in the video frame
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const qrResult = detectQRPattern(imageData);
-            
-            if (qrResult) {
-                handleQRCodeDetected(qrResult);
-                return;
-            }
-        }
-        
-        // Continue scanning
-        setTimeout(scanFrame, 300); // Scan every 300ms for better performance
-    };
-    
-    scanFrame();
 }
 
 // Real QR code detection using jsQR library
@@ -4650,24 +4694,53 @@ function setupTableInterface() {
     if (currentSession) {
         const sessionTitleHeader = document.getElementById('sessionTitleHeader');
         const sessionDescriptionHeader = document.getElementById('sessionDescriptionHeader');
-        
+
         if (sessionTitleHeader) {
             sessionTitleHeader.textContent = currentSession.title || 'Session';
         }
-        
+
         if (sessionDescriptionHeader) {
-            if (currentSession.description && currentSession.description.trim()) {
+            const hasDescription = Boolean(currentSession.description && currentSession.description.trim());
+
+            if (hasDescription) {
                 sessionDescriptionHeader.textContent = currentSession.description;
                 sessionDescriptionHeader.style.display = 'block';
+                sessionDescriptionHeader.removeAttribute('hidden');
             } else {
+                sessionDescriptionHeader.textContent = '';
                 sessionDescriptionHeader.style.display = 'none';
+                sessionDescriptionHeader.setAttribute('hidden', '');
             }
         }
     }
-    
+
     document.getElementById('tableTitle').textContent = currentTable.name || `Table ${currentTable.table_number}`;
-    document.getElementById('tableStatus').textContent = currentTable.status || 'waiting';
-    document.getElementById('tableStatus').className = `status-badge ${currentTable.status || 'waiting'}`;
+
+    const tableStatusElement = document.getElementById('tableStatus');
+    if (tableStatusElement) {
+        const rawStatus = (currentTable.status || 'waiting').toString().toLowerCase();
+        const normalizedStatus = rawStatus.replace(/[_-]+/g, ' ');
+        const slugStatus = normalizedStatus.replace(/\s+/g, '-');
+        const formattedStatus = normalizedStatus.replace(/\b\w/g, char => char.toUpperCase());
+        const statusVariantMap = {
+            waiting: 'badge-neutral',
+            ready: 'badge-neutral',
+            active: 'badge-success',
+            recording: 'badge-success',
+            running: 'badge-success',
+            paused: 'badge-warning',
+            error: 'badge-error',
+            failed: 'badge-error',
+            completed: 'badge-neutral',
+            closed: 'badge-neutral',
+            'in-progress': 'badge-success'
+        };
+
+        const variant = statusVariantMap[rawStatus] || statusVariantMap[slugStatus] || 'badge-neutral';
+
+        tableStatusElement.textContent = formattedStatus;
+        tableStatusElement.className = `badge ${variant}`;
+    }
     
     // Update table code display
     if (currentSession && currentTable) {
@@ -4676,13 +4749,230 @@ function setupTableInterface() {
             tableCodeValue.textContent = `${currentSession.id}/table/${currentTable.table_number}`;
         }
     }
-    
+
     // Join functionality has been removed from the interface
-    
+
     // Participants functionality removed
-    
+
+    renderTableLobby();
+    renderFacilitatorControls();
+
+    // Refresh roster details in the background to capture latest participants and activity
+    refreshTableRoster();
+
     // Load existing transcriptions
     loadExistingTranscriptions();
+}
+
+function getTableParticipants(table) {
+    if (!table) return [];
+
+    if (Array.isArray(table.participants)) {
+        return table.participants.filter(Boolean);
+    }
+
+    if (Array.isArray(table.active_participants)) {
+        return table.active_participants.filter(Boolean);
+    }
+
+    if (Array.isArray(table.clients)) {
+        return table.clients.filter(Boolean);
+    }
+
+    return [];
+}
+
+function getParticipantInitials(name) {
+    if (!name || typeof name !== 'string') {
+        return 'P';
+    }
+
+    const trimmed = name.trim();
+    if (!trimmed) return 'P';
+
+    const parts = trimmed.split(/\s+/).slice(0, 2);
+    const initials = parts.map(part => part.charAt(0)).join('');
+    return initials ? initials.toUpperCase() : trimmed.charAt(0).toUpperCase();
+}
+
+function renderTableLobby() {
+    const lobbyCard = document.getElementById('tableLobbyCard');
+    if (!lobbyCard || !currentTable) return;
+
+    const sessionTitleEl = document.getElementById('tableLobbySessionTitle');
+    if (sessionTitleEl) {
+        sessionTitleEl.textContent = currentSession?.title || 'Session';
+    }
+
+    const tableNameEl = document.getElementById('tableLobbyTableName');
+    if (tableNameEl) {
+        const fallbackName = currentTable.table_number ? `Table ${currentTable.table_number}` : 'Table';
+        tableNameEl.textContent = currentTable.name || fallbackName;
+    }
+
+    const facilitatorEl = document.getElementById('tableLobbyFacilitator');
+    if (facilitatorEl) {
+        facilitatorEl.textContent = currentTable.facilitator_name || 'Unassigned';
+    }
+
+    const participants = getTableParticipants(currentTable);
+    const participantCount = typeof currentTable.participant_count === 'number'
+        ? currentTable.participant_count
+        : participants.length;
+    const maxSize = currentTable.max_size || currentTable.maxSize || currentTable.capacity || 5;
+
+    const capacityEl = document.getElementById('tableLobbyCapacity');
+    if (capacityEl) {
+        capacityEl.textContent = `${participantCount}/${maxSize}`;
+    }
+
+    const statusEl = document.getElementById('tableLobbyStatus');
+    if (statusEl) {
+        const rawStatus = (currentTable.status || 'waiting').toString().toLowerCase();
+        statusEl.textContent = formatStatusLabel(rawStatus);
+        statusEl.className = `badge ${getTableStatusVariant(rawStatus)}`;
+    }
+
+    const promptEl = document.getElementById('tableLobbyPrompt');
+    if (promptEl) {
+        const prompt = currentTable.prompt || currentTable.topic || currentTable.description || currentSession?.description;
+        if (prompt && typeof prompt === 'string' && prompt.trim()) {
+            promptEl.textContent = prompt.trim();
+        } else {
+            promptEl.textContent = 'Share the conversation prompt and welcome guests as they arrive.';
+        }
+    }
+
+    const updatedEl = document.getElementById('tableLobbyUpdated');
+    if (updatedEl) {
+        const timestamp = currentTable.updated_at || currentTable.last_activity_at || currentSession?.updated_at;
+        updatedEl.textContent = timestamp ? `Updated ${formatRelativeTime(timestamp)}` : 'Updated moments ago';
+    }
+
+    const participantsList = document.getElementById('tableLobbyParticipants');
+    if (participantsList) {
+        participantsList.innerHTML = '';
+
+        if (participants.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'table-lobby__empty';
+            emptyItem.textContent = 'No participants have joined this table yet.';
+            participantsList.appendChild(emptyItem);
+        } else {
+            participants.forEach((participant, index) => {
+                const safeName = (participant && (participant.name || participant.display_name)) || `Guest ${index + 1}`;
+
+                const item = document.createElement('li');
+                item.className = 'table-lobby__participant';
+
+                const initial = document.createElement('span');
+                initial.className = 'table-lobby__participant-initial';
+                initial.textContent = getParticipantInitials(safeName);
+
+                const details = document.createElement('div');
+                details.className = 'table-lobby__participant-details';
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'table-lobby__participant-name';
+                nameEl.textContent = safeName;
+
+                const metaEl = document.createElement('span');
+                metaEl.className = 'table-lobby__participant-meta';
+
+                if (participant && participant.is_facilitator) {
+                    metaEl.textContent = 'Facilitator';
+                } else if (participant && participant.role) {
+                    metaEl.textContent = participant.role;
+                } else if (participant && participant.joined_at) {
+                    metaEl.textContent = `Joined ${formatRelativeTime(participant.joined_at)}`;
+                } else if (participant && participant.email) {
+                    metaEl.textContent = participant.email;
+                } else {
+                    metaEl.textContent = 'Participant';
+                }
+
+                details.append(nameEl, metaEl);
+                item.append(initial, details);
+                participantsList.appendChild(item);
+            });
+        }
+    }
+}
+
+function renderFacilitatorControls(overrides = {}) {
+    const controlsCard = document.getElementById('facilitatorControlsCard');
+    if (!controlsCard || !currentTable) return;
+
+    const participants = getTableParticipants(currentTable);
+    const participantCount = typeof currentTable.participant_count === 'number'
+        ? currentTable.participant_count
+        : participants.length;
+    const maxSize = currentTable.max_size || currentTable.maxSize || currentTable.capacity || 5;
+
+    const statusValue = document.getElementById('facilitatorStatusValue');
+    if (statusValue) {
+        const rawStatus = (currentTable.status || 'waiting').toString().toLowerCase();
+        statusValue.textContent = formatStatusLabel(rawStatus);
+    }
+
+    const participantsValue = document.getElementById('facilitatorParticipantsValue');
+    if (participantsValue) {
+        participantsValue.textContent = `${participantCount}/${maxSize}`;
+    }
+
+    const recordingsValue = document.getElementById('facilitatorRecordingsValue');
+    if (recordingsValue) {
+        const recordingCount = typeof overrides.recordingCount === 'number'
+            ? overrides.recordingCount
+            : (currentTable.recording_count || 0);
+        recordingsValue.textContent = recordingCount;
+    }
+
+    const updatedValue = document.getElementById('facilitatorUpdatedValue');
+    if (updatedValue) {
+        const timestamp = currentTable.updated_at || currentTable.last_activity_at || currentSession?.updated_at;
+        updatedValue.textContent = timestamp ? formatRelativeTime(timestamp) : 'moments ago';
+    }
+
+    const note = document.getElementById('facilitatorNote');
+    if (note) {
+        const facilitatorName = currentTable.facilitator_name;
+        if (facilitatorName) {
+            note.textContent = `${facilitatorName} can manage recordings and live transcription using the controls on the left.`;
+        } else {
+            note.textContent = 'Assign a facilitator to coordinate recordings and guide the discussion.';
+        }
+    }
+}
+
+async function refreshTableRoster() {
+    if (!currentSession || !currentTable) return;
+
+    try {
+        const response = await fetch(`/api/sessions/${currentSession.id}/tables/${currentTable.table_number}`);
+        if (!response.ok) {
+            renderTableLobby();
+            renderFacilitatorControls();
+            return;
+        }
+
+        const tableDetails = await response.json();
+        currentTable = { ...currentTable, ...tableDetails };
+
+        if (currentSession && Array.isArray(currentSession.tables)) {
+            currentSession.tables = currentSession.tables.map((table) => {
+                if (!table) return table;
+                const matchesId = table.id && tableDetails.id && table.id === tableDetails.id;
+                const matchesNumber = table.table_number && tableDetails.table_number && table.table_number === tableDetails.table_number;
+                return matchesId || matchesNumber ? { ...table, ...tableDetails } : table;
+            });
+        }
+
+        renderTableLobby();
+        renderFacilitatorControls();
+    } catch (error) {
+        console.warn('Failed to refresh table roster:', error);
+    }
 }
 
 // Recording functionality
@@ -4709,11 +4999,11 @@ async function startRecording() {
         // Update UI (if elements exist)
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
-        const audioVisualization = document.getElementById('audioVisualization');
+        const audioWaveContainer = document.getElementById('audioWaveContainer');
         
-        if (startRecordingBtn) startRecordingBtn.style.display = 'none';
-        if (stopRecordingBtn) stopRecordingBtn.style.display = 'block';
-        if (audioVisualization) audioVisualization.style.display = 'block';
+        hideElement(startRecordingBtn);
+        showElement(stopRecordingBtn);
+        showElement(audioWaveContainer);
         
         // Update status
         updateRecordingStatus({ status: 'recording', timestamp: new Date() });
@@ -4753,11 +5043,11 @@ function stopRecording() {
         // Update UI (if elements exist)
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
-        const audioVisualization = document.getElementById('audioVisualization');
+        const audioWaveContainer = document.getElementById('audioWaveContainer');
         
-        if (startRecordingBtn) startRecordingBtn.style.display = 'block';
-        if (stopRecordingBtn) stopRecordingBtn.style.display = 'none';
-        if (audioVisualization) audioVisualization.style.display = 'none';
+        showElement(startRecordingBtn);
+        hideElement(stopRecordingBtn);
+        hideElement(audioWaveContainer);
         
         // Notify other clients
         socket.emit('recording-stopped', {
@@ -4891,8 +5181,8 @@ async function startLiveTranscription() {
             // Update UI
             const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
             const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'none';
-            if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'block';
+            hideElement(liveTranscriptionBtn);
+            showElement(stopLiveTranscriptionBtn);
             
             showToast('Live transcription started - speak now!', 'success');
         };
@@ -4963,8 +5253,8 @@ async function startLiveTranscription() {
             // Update UI
             const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
             const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'block';
-            if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'none';
+            showElement(liveTranscriptionBtn);
+            hideElement(stopLiveTranscriptionBtn);
         }
 
     } catch (error) {
@@ -5034,8 +5324,8 @@ async function stopLiveTranscription() {
         const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
         const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
         
-        if (liveTranscriptionBtn) liveTranscriptionBtn.style.display = 'block';
-        if (stopLiveTranscriptionBtn) stopLiveTranscriptionBtn.style.display = 'none';
+        showElement(liveTranscriptionBtn);
+        hideElement(stopLiveTranscriptionBtn);
         
         console.log('Live transcription stopped');
         showToast('Live transcription stopped and audio saved', 'info');
@@ -5447,10 +5737,10 @@ function updateTableTranscriptionCount(tableId) {
     // Update the table card's transcription count
     const tableCards = document.querySelectorAll('.table-card');
     tableCards.forEach(card => {
-        if (card.onclick.toString().includes(tableId)) {
-            const transcriptStat = card.querySelector('.stat-item:last-child span:last-child');
+        if (matchesTableCard(card, tableId)) {
+            const transcriptStat = card.querySelector('.table-card-stat[data-stat="transcriptions"] .table-card-stat__value');
             if (transcriptStat) {
-                const currentCount = parseInt(transcriptStat.textContent) || 0;
+                const currentCount = parseInt(transcriptStat.textContent, 10) || 0;
                 transcriptStat.textContent = currentCount + 1;
             }
         }
@@ -5461,11 +5751,10 @@ function updateTableRecordingCount(tableId) {
     // Update the table card's recording count (🎤 icon)
     const tableCards = document.querySelectorAll('.table-card');
     tableCards.forEach(card => {
-        if (card.onclick.toString().includes(tableId)) {
-            // Find the recording stat (🎤 icon - second stat-item)
-            const recordingStat = card.querySelector('.stat-item:nth-child(2) span:last-child');
+        if (matchesTableCard(card, tableId)) {
+            const recordingStat = card.querySelector('.table-card-stat[data-stat="recordings"] .table-card-stat__value');
             if (recordingStat) {
-                const currentCount = parseInt(recordingStat.textContent) || 0;
+                const currentCount = parseInt(recordingStat.textContent, 10) || 0;
                 recordingStat.textContent = currentCount + 1;
             }
         }
@@ -5475,7 +5764,7 @@ function updateTableRecordingCount(tableId) {
 // Audio Player Functions
 async function loadTableRecordings() {
     if (!currentSession || !currentTable) return;
-    
+
     try {
         const response = await fetch(`/api/sessions/${currentSession.id}/tables/${currentTable.table_number}/recordings`);
         if (response.ok) {
@@ -5487,141 +5776,393 @@ async function loadTableRecordings() {
     }
 }
 
-function displayTableRecordings(recordings) {
-    const recordingsList = document.getElementById('recordingsList');
-    const noRecordingsMessage = document.getElementById('noRecordingsMessage');
-    const recordingCountBadge = document.getElementById('recordingCountBadge');
-    
-    if (!recordingsList) return;
-    
-    // Update badge count
-    if (recordingCountBadge) {
-        recordingCountBadge.textContent = recordings.length;
-    }
-    
-    if (recordings.length === 0) {
-        recordingsList.style.display = 'none';
-        noRecordingsMessage.style.display = 'block';
+async function loadSessionRecordings(sessionId = currentSession?.id) {
+    const recordingsList = document.getElementById('sessionRecordingsList');
+    const emptyState = document.getElementById('sessionRecordingsEmpty');
+
+    if (!recordingsList || !emptyState || !sessionId) {
         return;
     }
-    
-    noRecordingsMessage.style.display = 'none';
-    recordingsList.style.display = 'block';
-    recordingsList.innerHTML = '';
-    
-    recordings.forEach((recording, index) => {
-        const recordingItem = document.createElement('div');
-        recordingItem.style.cssText = `
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        `;
-        
-        const createdAt = new Date(recording.created_at).toLocaleString();
-        const createdDate = new Date(recording.created_at).toLocaleDateString();
-        const duration = recording.duration_seconds ? `${Math.round(recording.duration_seconds)}s` : '';
-        const fileSize = recording.file_size ? formatFileSize(recording.file_size) : '';
-        
-        // Create informative title: SessionName - TableName - Date
-        const sessionName = currentSession?.title || 'Session';
-        const tableName = currentTable?.name || `Table ${currentTable?.table_number || ''}`;
-        const informativeTitle = `${sessionName} - ${tableName} - ${createdDate}`;
-        
-        // Check if media file has been deleted
-        const isFileDeleted = recording.status === 'file_deleted' || !recording.file_path;
-        const statusColor = isFileDeleted ? '#dc3545' : '#28a745';
-        const statusText = isFileDeleted ? 'Media File Deleted' : recording.status;
 
-        recordingItem.innerHTML = `
-            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 12px;">
-                <div>
-                    <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #333;">
-                        ${isFileDeleted ? '📄' : '🎙️'} ${informativeTitle} ${isFileDeleted ? '(Transcription Only)' : ''}
-                    </h4>
-                    <div style="font-size: 12px; color: #666;">
-                        ${createdAt} ${duration && !isFileDeleted ? `• ${duration}` : ''} ${fileSize && !isFileDeleted ? `• ${fileSize}` : ''}
-                    </div>
-                </div>
-                <div style="font-size: 12px; padding: 4px 8px; background: ${statusColor}; border-radius: 12px; color: white;">
-                    ${statusText}
-                </div>
-            </div>
-            
-            ${isFileDeleted ? 
-                `<div style="
-                    width: 100%; 
-                    padding: 20px; 
-                    margin-bottom: 8px; 
-                    background: #f8f9fa; 
-                    border: 2px dashed #dee2e6; 
-                    border-radius: 8px; 
-                    text-align: center; 
-                    color: #6c757d;
-                ">
-                    📄 Media file has been deleted<br>
-                    <small>Transcription data is still available</small>
-                </div>` 
-                : 
-                `<audio controls style="width: 100%; margin-bottom: 8px;" preload="metadata">
-                    <source src="/recordings/${recording.filename}" type="${recording.mime_type || 'audio/wav'}">
-                    <source src="/recordings/${recording.filename}" type="audio/wav">
-                    <source src="/recordings/${recording.filename}" type="audio/webm">
-                    Your browser does not support the audio element.
-                </audio>`
+    try {
+        let sessionData = null;
+
+        if (currentSession && currentSession.id === sessionId && Array.isArray(currentSession.tables)) {
+            sessionData = currentSession;
+        } else {
+            const sessionResponse = await fetch(`/api/sessions/${sessionId}`);
+            if (!sessionResponse.ok) {
+                throw new Error('Failed to load session metadata');
             }
-            
-            <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
-                ${!isFileDeleted ? 
-                    `<button onclick="reprocessRecording('${recording.id}', '${recording.filename}')" style="
-                        padding: 6px 12px;
-                        background: #ffc107;
-                        border: 1px solid #ffc107;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        cursor: pointer;
-                        color: #212529;
-                        transition: all 0.2s;
-                    " onmouseover="this.style.background='#e0a800'" onmouseout="this.style.background='#ffc107'">🔄 Reprocess</button>
-                    <button onclick="downloadRecording('${recording.filename}')" style="
-                        padding: 6px 12px;
-                        background: #f8f9fa;
-                        border: 1px solid #dee2e6;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        cursor: pointer;
-                        color: #6c757d;
-                        transition: all 0.2s;
-                    " onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'">📥 Download</button>
-                    <button onclick="deleteMediaFile('${recording.id}')" style="
-                        padding: 6px 12px;
-                        background: #fd7e14;
-                        border: 1px solid #fd7e14;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        cursor: pointer;
-                        color: white;
-                        transition: all 0.2s;
-                    " onmouseover="this.style.background='#e8690b'" onmouseout="this.style.background='#fd7e14'">🗑️ Delete File</button>` 
-                    : ''
+            sessionData = await sessionResponse.json();
+
+            if (currentSession && currentSession.id === sessionId) {
+                currentSession = { ...currentSession, ...sessionData };
+            }
+        }
+
+        const tables = Array.isArray(sessionData.tables) ? sessionData.tables : [];
+
+        if (tables.length === 0) {
+            renderRecordingList([], {
+                listId: 'sessionRecordingsList',
+                emptyStateId: 'sessionRecordingsEmpty',
+                badgeId: 'sessionRecordingCountBadge',
+                context: 'session'
+            });
+            return;
+        }
+
+        const aggregatedRecordings = [];
+
+        for (const table of tables) {
+            if (!table || !table.table_number) continue;
+
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/tables/${table.table_number}/recordings`);
+                if (!response.ok) {
+                    continue;
                 }
-                <button onclick="deleteRecordingComplete('${recording.id}')" style="
-                    padding: 6px 12px;
-                    background: #dc3545;
-                    border: 1px solid #dc3545;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    color: white;
-                    transition: all 0.2s;
-                " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">${isFileDeleted ? '🗑️ Delete Transcription' : '🗑️ Delete All'}</button>
-            </div>
-        `;
-        
-        recordingsList.appendChild(recordingItem);
+
+                const tableRecordings = await response.json();
+                tableRecordings.forEach((recording) => {
+                    aggregatedRecordings.push({
+                        ...recording,
+                        tableDisplayName: table.name || `Table ${table.table_number}`,
+                        table_number: table.table_number,
+                        sessionTitle: sessionData.title
+                    });
+                });
+            } catch (error) {
+                console.warn(`Error loading recordings for table ${table.table_number}:`, error);
+            }
+        }
+
+        renderRecordingList(aggregatedRecordings, {
+            listId: 'sessionRecordingsList',
+            emptyStateId: 'sessionRecordingsEmpty',
+            badgeId: 'sessionRecordingCountBadge',
+            context: 'session'
+        });
+    } catch (error) {
+        console.error('Error loading session recordings:', error);
+        renderRecordingList([], {
+            listId: 'sessionRecordingsList',
+            emptyStateId: 'sessionRecordingsEmpty',
+            badgeId: 'sessionRecordingCountBadge',
+            context: 'session'
+        });
+    }
+}
+
+function displayTableRecordings(recordings) {
+    const safeRecordings = Array.isArray(recordings) ? recordings : [];
+
+    renderRecordingList(safeRecordings, {
+        listId: 'tableRecordingsList',
+        emptyStateId: 'tableRecordingsEmpty',
+        badgeId: 'tableRecordingCountBadge',
+        context: 'table'
     });
+
+    if (currentTable) {
+        currentTable.recording_count = safeRecordings.length;
+    }
+
+    renderFacilitatorControls({ recordingCount: safeRecordings.length });
+}
+
+function renderRecordingList(recordings, { listId, emptyStateId, badgeId, context }) {
+    const listElement = document.getElementById(listId);
+    const emptyStateElement = document.getElementById(emptyStateId);
+    const badgeElement = badgeId ? document.getElementById(badgeId) : null;
+
+    if (!listElement || !emptyStateElement) {
+        return;
+    }
+
+    const safeRecordings = Array.isArray(recordings) ? [...recordings] : [];
+
+    if (badgeElement) {
+        badgeElement.textContent = safeRecordings.length;
+    }
+
+    if (safeRecordings.length === 0) {
+        hideElement(listElement);
+        showElement(emptyStateElement);
+        return;
+    }
+
+    hideElement(emptyStateElement);
+    listElement.innerHTML = '';
+    showElement(listElement);
+
+    safeRecordings
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .forEach((recording) => {
+            const card = createRecordingCard(recording, context);
+            listElement.appendChild(card);
+        });
+}
+
+function createRecordingCard(recording, context = 'table') {
+    const isFileDeleted = recording.status === 'file_deleted' || !recording.file_path;
+
+    const card = document.createElement('article');
+    card.className = 'recording-card';
+    if (recording.id) {
+        card.dataset.recordingId = recording.id;
+    }
+
+    const header = document.createElement('header');
+    header.className = 'recording-card__header';
+
+    const heading = document.createElement('div');
+    heading.className = 'recording-card__heading';
+
+    const title = document.createElement('h3');
+    title.className = 'recording-card__title';
+
+    const titleIcon = document.createElement('span');
+    titleIcon.className = 'recording-card__icon';
+    titleIcon.setAttribute('aria-hidden', 'true');
+    titleIcon.textContent = isFileDeleted ? '📄' : '🎙️';
+
+    const titleText = document.createElement('span');
+    titleText.textContent = formatRecordingTitle(recording, context);
+
+    title.append(titleIcon, titleText);
+    heading.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'recording-card__meta';
+
+    if (recording.created_at) {
+        meta.appendChild(createRecordingMetaItem(new Date(recording.created_at).toLocaleString()));
+    }
+
+    if (context === 'session' && recording.tableDisplayName) {
+        meta.appendChild(createRecordingMetaItem(recording.tableDisplayName));
+    } else if (context === 'table' && currentTable) {
+        meta.appendChild(createRecordingMetaItem(currentTable.name || `Table ${currentTable.table_number || ''}`));
+    }
+
+    const durationSeconds = parseFloat(recording.duration_seconds);
+    if (!Number.isNaN(durationSeconds) && durationSeconds > 0) {
+        meta.appendChild(createRecordingMetaItem(formatDuration(durationSeconds)));
+    }
+
+    if (recording.file_size && !isFileDeleted) {
+        meta.appendChild(createRecordingMetaItem(formatFileSize(recording.file_size)));
+    }
+
+    heading.appendChild(meta);
+    header.appendChild(heading);
+
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `recording-card__status badge ${getRecordingStatusVariant(recording.status, isFileDeleted)}`;
+    statusBadge.textContent = formatStatusLabel(recording.status || (isFileDeleted ? 'file_deleted' : 'ready'));
+    header.appendChild(statusBadge);
+
+    card.appendChild(header);
+
+    if (isFileDeleted) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'recording-card__placeholder';
+        placeholder.textContent = 'Media file removed. Transcription remains available.';
+        card.appendChild(placeholder);
+    } else {
+        const player = document.createElement('audio');
+        player.className = 'recording-card__player';
+        player.controls = true;
+        player.preload = 'metadata';
+
+        const primarySource = document.createElement('source');
+        primarySource.src = `/recordings/${recording.filename}`;
+        primarySource.type = recording.mime_type || 'audio/wav';
+        player.appendChild(primarySource);
+
+        if (!recording.mime_type || recording.mime_type !== 'audio/wav') {
+            const fallbackSource = document.createElement('source');
+            fallbackSource.src = `/recordings/${recording.filename}`;
+            fallbackSource.type = 'audio/wav';
+            player.appendChild(fallbackSource);
+        }
+
+        player.appendChild(document.createTextNode('Your browser does not support the audio element.'));
+        card.appendChild(player);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'recording-card__actions';
+
+    if (!isFileDeleted) {
+        actions.appendChild(createRecordingAction('🔄 Reprocess', 'btn-secondary', () => reprocessRecording(recording.id, recording.filename)));
+        actions.appendChild(createRecordingAction('📥 Download', 'btn-secondary', () => downloadRecording(recording.filename)));
+        actions.appendChild(createRecordingAction('🗑️ Delete File', 'btn-secondary', () => deleteMediaFile(recording.id, { context })));
+    }
+
+    actions.appendChild(createRecordingAction(isFileDeleted ? '🗑️ Delete Transcription' : '🗑️ Delete All', 'btn-danger', () => deleteRecordingComplete(recording.id, { context })));
+
+    card.appendChild(actions);
+    return card;
+}
+
+function formatRecordingTitle(recording, context) {
+    const parts = [];
+    const sessionTitle = recording.sessionTitle || currentSession?.title;
+    if (sessionTitle && context === 'session') {
+        parts.push(sessionTitle);
+    }
+
+    const tableDisplay = recording.tableDisplayName || recording.table_name || (recording.table_number ? `Table ${recording.table_number}` : null);
+    if (tableDisplay) {
+        parts.push(tableDisplay);
+    } else if (context === 'table' && currentTable) {
+        parts.push(currentTable.name || `Table ${currentTable.table_number || ''}`);
+    }
+
+    if (recording.created_at) {
+        parts.push(new Date(recording.created_at).toLocaleDateString());
+    }
+
+    if (parts.length === 0 && sessionTitle) {
+        parts.push(sessionTitle);
+    }
+
+    return parts.join(' • ');
+}
+
+function createRecordingMetaItem(text) {
+    const item = document.createElement('span');
+    item.className = 'recording-card__meta-item';
+    item.textContent = text;
+    return item;
+}
+
+function createRecordingAction(label, variantClass, handler) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn ${variantClass} btn-sm`;
+    button.innerHTML = label;
+    button.addEventListener('click', handler);
+    return button;
+}
+
+function getRecordingStatusVariant(status, isFileDeleted) {
+    if (isFileDeleted || status === 'file_deleted') {
+        return 'badge-warning';
+    }
+
+    const normalized = (status || '').toString().toLowerCase();
+    const map = {
+        completed: 'badge-success',
+        ready: 'badge-success',
+        processed: 'badge-success',
+        transcribed: 'badge-success',
+        processing: 'badge-warning',
+        pending: 'badge-warning',
+        uploading: 'badge-warning',
+        saving: 'badge-warning',
+        failed: 'badge-error',
+        error: 'badge-error'
+    };
+
+    return map[normalized] || 'badge-neutral';
+}
+
+function formatDateTime(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    const datePart = date.toLocaleDateString();
+    const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} · ${timePart}`;
+}
+
+function formatTimestampRange(start, end) {
+    const formatPart = value => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+            return null;
+        }
+
+        const totalSeconds = Math.max(0, Math.floor(value));
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    };
+
+    const startLabel = formatPart(start);
+    const endLabel = formatPart(end);
+
+    if (startLabel && endLabel) {
+        return `${startLabel} – ${endLabel}`;
+    }
+    return startLabel || endLabel;
+}
+
+function formatRelativeTime(value) {
+    if (!value) return 'moments ago';
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return 'moments ago';
+    }
+
+    const diff = Date.now() - date.getTime();
+    if (diff < 0) {
+        return date.toLocaleString();
+    }
+
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (diff < minute) {
+        return 'moments ago';
+    }
+
+    if (diff < hour) {
+        const minutes = Math.floor(diff / minute);
+        return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    }
+
+    if (diff < day) {
+        const hours = Math.floor(diff / hour);
+        return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+    }
+
+    if (diff < day * 7) {
+        const days = Math.floor(diff / day);
+        return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatDuration(seconds) {
+    const totalSeconds = Math.round(seconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+
+    if (minutes > 0) {
+        return `${minutes}m${remainingSeconds > 0 ? ` ${remainingSeconds}s` : ''}`;
+    }
+
+    return `${remainingSeconds}s`;
+}
+
+function refreshRecordingContexts(context = 'all') {
+    const target = context || 'all';
+
+    if ((target === 'all' || target === 'table') && document.getElementById('tableRecordingsList')) {
+        loadTableRecordings();
+    }
+
+    if ((target === 'all' || target === 'session') && document.getElementById('sessionRecordingsList')) {
+        loadSessionRecordings();
+    }
 }
 
 function formatFileSize(bytes) {
@@ -5677,11 +6218,11 @@ async function reprocessRecording(recordingId, filename) {
 }
 
 // Delete media file only (keep transcription)
-async function deleteMediaFile(recordingId) {
+async function deleteMediaFile(recordingId, options = {}) {
     if (!confirm('Delete the media file only? This will keep the transcription for reference but remove the audio file.')) {
         return;
     }
-    
+
     try {
         showToast('Deleting media file...', 'info');
         
@@ -5696,9 +6237,10 @@ async function deleteMediaFile(recordingId) {
         
         showToast('Media file deleted successfully. Transcription preserved.', 'success');
         
-        // Refresh the recordings list
+        const targetContext = options.context || 'all';
+
         setTimeout(() => {
-            loadTableRecordings();
+            refreshRecordingContexts(targetContext);
         }, 500);
         
     } catch (error) {
@@ -5708,11 +6250,11 @@ async function deleteMediaFile(recordingId) {
 }
 
 // Delete recording completely (media file + transcription)
-async function deleteRecordingComplete(recordingId) {
+async function deleteRecordingComplete(recordingId, options = {}) {
     if (!confirm('Delete this recording completely? This will permanently remove both the media file and all associated transcriptions. This action cannot be undone.')) {
         return;
     }
-    
+
     try {
         showToast('Deleting recording and transcriptions...', 'info');
         
@@ -5727,9 +6269,10 @@ async function deleteRecordingComplete(recordingId) {
         
         showToast('Recording and transcriptions deleted successfully.', 'success');
         
-        // Refresh the recordings list and transcriptions
+        const targetContext = options.context || 'all';
+
         setTimeout(() => {
-            loadTableRecordings();
+            refreshRecordingContexts(targetContext);
             loadExistingTranscriptions();
         }, 500);
         
@@ -5794,8 +6337,22 @@ async function adminLogin() {
         });
         
         if (response.ok) {
-            document.getElementById('adminLogin').style.display = 'none';
-            document.getElementById('adminPanel').style.display = 'block';
+            const loginContainer = document.getElementById('adminLogin');
+            const adminPanel = document.getElementById('adminPanel');
+
+            if (loginContainer) {
+                loginContainer.classList.add('is-hidden');
+            }
+
+            if (adminPanel) {
+                adminPanel.classList.remove('is-hidden');
+            }
+
+            loadAdminSessions();
+            loadAdminStats();
+            loadSettingsData();
+            loadPlatformStats();
+
             console.log('Admin access granted');
         } else {
             const error = await response.json();
@@ -5835,6 +6392,8 @@ function showAdminTab(tabName) {
         loadAdminStats();
     } else if (tabName === 'stats') {
         loadPlatformStats();
+    } else if (tabName === 'settings') {
+        loadSettingsData();
     }
 }
 
@@ -5953,7 +6512,7 @@ function promptSessionAction(action, sessionId) {
     confirmBtn.className = `btn ${confirmBtnClasses[action]}`;
     confirmBtn.textContent = `${action.charAt(0).toUpperCase() + action.slice(1)} Session`;
     
-    document.getElementById('sessionActionModal').style.display = 'flex';
+    showElement(document.getElementById('sessionActionModal'));
 }
 
 async function confirmSessionAction() {
@@ -6010,7 +6569,7 @@ async function confirmSessionAction() {
 }
 
 function closeSessionActionModal() {
-    document.getElementById('sessionActionModal').style.display = 'none';
+    hideElement(document.getElementById('sessionActionModal'));
     pendingSessionAction = null;
 }
 
@@ -6040,7 +6599,7 @@ async function viewSessionHistory(sessionId) {
             }).join('');
         }
         
-        document.getElementById('sessionHistoryModal').style.display = 'flex';
+        showElement(document.getElementById('sessionHistoryModal'));
     } catch (error) {
         console.error('Error loading session history:', error);
         console.error('Error loading history');
@@ -6048,7 +6607,7 @@ async function viewSessionHistory(sessionId) {
 }
 
 function closeSessionHistory() {
-    document.getElementById('sessionHistoryModal').style.display = 'none';
+    hideElement(document.getElementById('sessionHistoryModal'));
 }
 
 async function loadPlatformStats() {
@@ -6436,7 +6995,7 @@ async function uploadMediaFile(file) {
     if (uploadFileName) uploadFileName.textContent = file.name;
     if (uploadStatus) uploadStatus.textContent = 'Preparing...';
     if (uploadProgressBar) uploadProgressBar.style.width = '0%';
-    if (uploadProgress) uploadProgress.style.display = 'block';
+    showElement(uploadProgress);
     
     try {
         const xhr = new XMLHttpRequest();
@@ -6491,7 +7050,7 @@ async function uploadMediaFile(file) {
         
         // Hide upload progress after 3 seconds
         setTimeout(() => {
-            if (uploadProgress) uploadProgress.style.display = 'none';
+            hideElement(uploadProgress);
         }, 3000);
         
     } catch (error) {
@@ -6501,7 +7060,7 @@ async function uploadMediaFile(file) {
         
         // Hide upload progress after 5 seconds
         setTimeout(() => {
-            if (uploadProgress) uploadProgress.style.display = 'none';
+        hideElement(uploadProgress);
         }, 5000);
     }
 }
@@ -6661,10 +7220,17 @@ async function loadPlatformProtectionSettings() {
             const enabledCheckbox = document.getElementById('platformPasswordEnabled');
             const passwordInput = document.getElementById('platformPassword');
             const passwordRow = document.getElementById('platformPasswordRow');
-            
-            enabledCheckbox.checked = settings.enabled;
-            passwordInput.value = settings.password || 'testtesttest';
-            passwordRow.style.display = settings.enabled ? 'block' : 'none';
+
+            if (enabledCheckbox) {
+                enabledCheckbox.checked = settings.enabled;
+            }
+
+            if (passwordInput) {
+                passwordInput.value = settings.password || 'testtesttest';
+            }
+            if (passwordRow) {
+                passwordRow.classList.toggle('is-hidden', !settings.enabled);
+            }
         }
     } catch (error) {
         console.error('Error loading platform protection settings:', error);
@@ -6728,14 +7294,13 @@ async function loadSettingsData() {
             platformToggle.addEventListener('change', function() {
                 const passwordRow = document.getElementById('platformPasswordRow');
                 const passwordInput = document.getElementById('platformPassword');
-                if (this.checked) {
-                    passwordRow.style.display = 'block';
-                    // Set default password if empty
-                    if (!passwordInput.value.trim()) {
-                        passwordInput.value = 'testtesttest';
-                    }
-                } else {
-                    passwordRow.style.display = 'none';
+                if (!passwordRow) return;
+
+                const shouldShow = this.checked;
+                passwordRow.classList.toggle('is-hidden', !shouldShow);
+
+                if (shouldShow && passwordInput && !passwordInput.value.trim()) {
+                    passwordInput.value = 'testtesttest';
                 }
             });
         }
@@ -6787,19 +7352,23 @@ function updateSystemHealthStatus(status) {
 
 // Modal functions for the simplified interface
 function showAudioRecording() {
-    document.getElementById('audioRecordingModal').style.display = 'flex';
+    const modal = document.getElementById('audioRecordingModal');
+    hideElement(document.getElementById('uploadMediaModal'));
+    showElement(modal);
 }
 
 function hideAudioRecording() {
-    document.getElementById('audioRecordingModal').style.display = 'none';
+    hideElement(document.getElementById('audioRecordingModal'));
 }
 
 function showUploadMedia() {
-    document.getElementById('uploadMediaModal').style.display = 'flex';
+    const modal = document.getElementById('uploadMediaModal');
+    hideElement(document.getElementById('audioRecordingModal'));
+    showElement(modal);
 }
 
 function hideUploadMedia() {
-    document.getElementById('uploadMediaModal').style.display = 'none';
+    hideElement(document.getElementById('uploadMediaModal'));
 }
 
 function selectMediaFile() {
@@ -6815,8 +7384,8 @@ function updateLiveTranscriptionDisplay(transcript) {
     if (!displayDiv || !emptyState) return;
     
     // Hide empty state and show transcription
-    emptyState.style.display = 'none';
-    displayDiv.style.display = 'block';
+    hideElement(emptyState);
+    showElement(displayDiv);
     
     // Create a new transcript entry
     const entry = document.createElement('div');
@@ -6851,11 +7420,11 @@ function resetLiveTranscriptionDisplay() {
     
     if (displayDiv) {
         displayDiv.innerHTML = '';
-        displayDiv.style.display = 'none';
+        hideElement(displayDiv);
     }
     
     if (emptyState) {
-        emptyState.style.display = 'block';
+        showElement(emptyState);
     }
     
     if (counter) {

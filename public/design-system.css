@@ -7,41 +7,41 @@
 /* ===== DESIGN TOKENS ===== */
 :root {
   /* Color System - Unified Professional Theme */
-  --primary-50: #f0f4ff;
-  --primary-100: #e0e9ff;
-  --primary-200: #c7d7fe;
-  --primary-300: #a5bffc;
-  --primary-400: #8098f8;
-  --primary-500: #667eea;
-  --primary-600: #5a67d8;
-  --primary-700: #4c51bf;
-  --primary-800: #434190;
-  --primary-900: #3c366b;
+  --primary-50: #f8ede6;
+  --primary-100: #f1d9cc;
+  --primary-200: #e3b79a;
+  --primary-300: #d4986f;
+  --primary-400: #c6774b;
+  --primary-500: #b06134;
+  --primary-600: #8c4a24;
+  --primary-700: #6f3a1c;
+  --primary-800: #512a15;
+  --primary-900: #361b0e;
   
-  --secondary-50: #faf5ff;
-  --secondary-100: #f3e8ff;
-  --secondary-200: #e9d5ff;
-  --secondary-300: #d8b4fe;
-  --secondary-400: #c084fc;
-  --secondary-500: #a855f7;
-  --secondary-600: #9333ea;
-  --secondary-700: #7c2d12;
-  --secondary-800: #764ba2;
-  --secondary-900: #581c87;
+  --secondary-50: #fdf6e9;
+  --secondary-100: #f9e7c7;
+  --secondary-200: #f4d5a0;
+  --secondary-300: #efc078;
+  --secondary-400: #e9aa57;
+  --secondary-500: #e29537;
+  --secondary-600: #c77e2a;
+  --secondary-700: #a66521;
+  --secondary-800: #85501a;
+  --secondary-900: #633a12;
   
   /* Neutral Colors */
   --neutral-0: #ffffff;
-  --neutral-50: #fafafa;
-  --neutral-100: #f4f4f5;
-  --neutral-200: #e4e4e7;
-  --neutral-300: #d4d4d8;
-  --neutral-400: #a1a1aa;
-  --neutral-500: #71717a;
-  --neutral-600: #52525b;
-  --neutral-700: #3f3f46;
-  --neutral-800: #27272a;
-  --neutral-900: #18181b;
-  --neutral-950: #09090b;
+  --neutral-50: #f8f6f4;
+  --neutral-100: #ede7e3;
+  --neutral-200: #d9cec6;
+  --neutral-300: #c4b4ab;
+  --neutral-400: #a68f85;
+  --neutral-500: #8d776e;
+  --neutral-600: #705d55;
+  --neutral-700: #564641;
+  --neutral-800: #3c2f2b;
+  --neutral-900: #231a17;
+  --neutral-950: #150f0d;
   
   /* Semantic Colors */
   --success-50: #f0fdf4;
@@ -62,11 +62,11 @@
   --warning-600: #d97706;
   --warning-700: #b45309;
   
-  --info-50: #eff6ff;
+  --info-50: #f0f7ff;
   --info-100: #dbeafe;
-  --info-500: #3b82f6;
-  --info-600: #2563eb;
-  --info-700: #1d4ed8;
+  --info-500: #3282ce;
+  --info-600: #2563a8;
+  --info-700: #1e4f85;
   
   /* Typography Scale */
   --text-xs: 0.75rem;      /* 12px */
@@ -176,9 +176,9 @@
   --glass-backdrop: blur(20px);
   
   /* Focus Ring */
-  --focus-ring: 0 0 0 3px rgb(66 153 225 / 0.5);
+  --focus-ring: 0 0 0 3px rgba(176, 97, 52, 0.4);
   --focus-ring-error: 0 0 0 3px rgb(239 68 68 / 0.5);
-  --focus-ring-success: 0 0 0 3px rgb(34 197 94 / 0.5);
+  --focus-ring-success: 0 0 0 3px rgba(34, 197, 94, 0.4);
 }
 
 /* ===== RESET & BASE STYLES ===== */
