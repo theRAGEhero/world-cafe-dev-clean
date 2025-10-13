@@ -10,6 +10,8 @@ node_modules/
 uploads/*
 transcriptions/*
 backend/qr-codes/*
+backend/public/qr-codes/*
+backend/logs/
 public/qr-codes/*
 !*/.gitkeep
 

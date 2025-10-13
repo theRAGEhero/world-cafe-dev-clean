@@ -16,6 +16,14 @@ let mobileMenuOpen = false;
 const transcriptionRegistry = new Map();
 let transcriptionPreviewEscapeHandler = null;
 let lastFocusedTranscriptionCard = null;
+let activeTableQrModal = null;
+let previousFocusBeforeQrModal = null;
+let qrModalEscHandler = null;
+
+// Lightweight session metrics cache used to keep counters accurate
+const tableTranscriptionCounts = new Map();
+const tableRecordingCounts = new Map();
+const tableParticipantSnapshots = new Map();
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -142,6 +150,28 @@ function hideElement(element) {
     element.setAttribute('hidden', '');
     element.style.removeProperty('display');
 }
+
+function applyToElements(ids, callback) {
+    if (!Array.isArray(ids)) return;
+    ids.forEach((id) => {
+        const el = typeof id === 'string' ? document.getElementById(id) : id;
+        if (el) {
+            callback(el);
+        }
+    });
+}
+
+const LIVE_TRANSCRIPTION_UI_IDS = {
+    startButtons: ['liveTranscriptionBtn', 'sessionLiveTranscriptionBtn'],
+    stopButtons: ['stopLiveTranscriptionBtn', 'sessionStopLiveTranscriptionBtn'],
+    counters: ['liveTranscriptionCount', 'sessionLiveTranscriptionCount'],
+    contentContainers: ['liveTranscriptionContent', 'sessionLiveTranscriptionContent'],
+    displayContainers: ['transcriptionDisplay', 'sessionTranscriptionDisplay'],
+    emptyStates: ['emptyTranscriptionState', 'sessionEmptyTranscriptionState'],
+    audioWaveContainer: 'audioWaveContainer',
+    audioWave: 'audioWave',
+    audioLevel: 'audioLevel'
+};
 
 // Setup swipe gestures
 function setupSwipeGestures() {
@@ -275,14 +305,14 @@ function updateConnectionStatus(status) {
 }
 
 // Load existing transcriptions with diarization
-async function loadExistingTranscriptions() {
+async function loadExistingTranscriptions(options = {}) {
     if (!currentSession || !currentTable) return;
     
     try {
         const response = await fetch(`/api/sessions/${currentSession.id}/tables/${currentTable.table_number}/transcriptions`);
         if (response.ok) {
             const transcriptions = await response.json();
-            displayExistingTranscriptions(transcriptions);
+            displayExistingTranscriptions(transcriptions, options);
         }
     } catch (error) {
         console.error('Error loading existing transcriptions:', error);
@@ -310,52 +340,45 @@ function getSourceLabel(source) {
 }
 
 // Display existing transcriptions with speaker diarization
-function displayExistingTranscriptions(transcriptions) {
+function displayExistingTranscriptions(transcriptions, options = {}) {
     // Get the single transcription container
     const liveTranscriptionContent = document.getElementById('liveTranscriptionContent');
-    
-    // Clear transcription content when switching tables to show only current table's transcriptions
+    const transcriptionDisplay = document.getElementById('transcriptionDisplay');
+    const emptyState = document.getElementById('emptyTranscriptionState');
+
+    if (transcriptionDisplay) {
+        transcriptionDisplay.innerHTML = '';
+        showElement(transcriptionDisplay);
+    }
+
+    if (emptyState) {
+        hideElement(emptyState);
+    }
+
     if (liveTranscriptionContent) {
-        liveTranscriptionContent.innerHTML = '';
-        console.log('📝 Cleared transcription content for table switch');
+        liveTranscriptionContent.scrollTop = 0;
+        console.log('📝 Cleared transcription display for table switch');
     }
     
-    transcriptions.forEach((transcription, index) => {
+    const filteredTranscriptions = prioritizeTranscriptions(transcriptions);
+
+    const totalFiltered = filteredTranscriptions.length;
+
+    filteredTranscriptions.forEach((transcription, index) => {
         const transcriptItem = document.createElement('div');
         transcriptItem.className = 'transcript-item';
         
-        // Parse speaker segments
-        let speakers = [];
-        try {
-            // Check for speaker_segments first (from API)
-            if (transcription.speaker_segments) {
-                if (typeof transcription.speaker_segments === 'string') {
-                    speakers = JSON.parse(transcription.speaker_segments);
-                } else if (Array.isArray(transcription.speaker_segments)) {
-                    speakers = transcription.speaker_segments;
-                }
-                console.log('📝 Upload Media - Parsed speaker segments:', speakers.length, 'segments for transcription:', transcription.id);
-                console.log('📝 First segment example:', speakers[0]);
-            }
-            // Fallback to speakers field (legacy)
-            else if (transcription.speakers) {
-                if (typeof transcription.speakers === 'string') {
-                    speakers = JSON.parse(transcription.speakers);
-                } else if (Array.isArray(transcription.speakers)) {
-                    speakers = transcription.speakers;
-                }
-                console.log('📝 Upload Media - Using legacy speakers field:', speakers.length, 'segments');
-            }
-            else {
-                console.log('📝 Upload Media - No speaker segments found for transcription:', transcription.id);
-            }
-        } catch (e) {
-            console.error('Error parsing speaker segments:', e);
-            speakers = [];
-        }
+        const speakers = parseSpeakerSegments(transcription);
         
         const createdAt = new Date(transcription.created_at).toLocaleString();
-        const confidence = transcription.confidence ? `${(transcription.confidence * 100).toFixed(1)}% confidence` : '';
+        const confidenceScore = typeof transcription.confidence === 'number'
+            ? transcription.confidence
+            : typeof transcription.confidence_score === 'number'
+                ? transcription.confidence_score
+                : null;
+        const confidence = confidenceScore != null
+            ? `${(confidenceScore * 100).toFixed(1)}% confidence`
+            : '';
         
         if (speakers && speakers.length > 0) {
             // Consolidate consecutive speaker segments
@@ -372,7 +395,7 @@ function displayExistingTranscriptions(transcriptions) {
             const sourceLabel = getSourceLabel(transcription.source);
             
             metaDiv.innerHTML = `
-                <span><strong>Recording ${transcriptions.length - index}</strong></span>
+                <span><strong>Recording ${totalFiltered - index}</strong></span>
                 <span><strong>Source:</strong> ${sourceLabel}</span>
                 <span>${createdAt}</span>
                 <span>${confidence}</span>
@@ -390,7 +413,7 @@ function displayExistingTranscriptions(transcriptions) {
         }
         
         // Route all transcriptions to the single live transcription container
-        let targetContainer = liveTranscriptionContent;
+        let targetContainer = transcriptionDisplay || liveTranscriptionContent;
         
         if (targetContainer) {
             // Check if there are active live chat bubbles to avoid duplication
@@ -409,18 +432,281 @@ function displayExistingTranscriptions(transcriptions) {
     });
     
     // Add empty message if no content is displayed
-    if (liveTranscriptionContent) {
-        const existingBubbles = liveTranscriptionContent.querySelectorAll('.chat-bubble');
-        const existingTranscripts = liveTranscriptionContent.querySelectorAll('.transcript-item');
-        if (existingBubbles.length === 0 && existingTranscripts.length === 0 && liveTranscriptionContent.innerHTML.trim() === '') {
+    if (transcriptionDisplay || liveTranscriptionContent) {
+        const container = transcriptionDisplay || liveTranscriptionContent;
+        const existingBubbles = container.querySelectorAll('.chat-bubble');
+        const existingTranscripts = container.querySelectorAll('.transcript-item');
+        if (existingBubbles.length === 0 && existingTranscripts.length === 0 && container.innerHTML.trim() === '') {
             const emptyMessage = '<p style="color: #666; font-style: italic; text-align: center; padding: 2rem;">No transcriptions available yet.</p>';
-            liveTranscriptionContent.innerHTML = emptyMessage;
+            container.innerHTML = emptyMessage;
         }
     }
     
     // Update tab counts
     if (typeof updateTranscriptionTabCounts === 'function') {
         updateTranscriptionTabCounts();
+    }
+}
+
+function prioritizeTranscriptions(transcriptions = []) {
+    if (!Array.isArray(transcriptions)) {
+        return [];
+    }
+
+    const prioritized = new Map();
+
+    transcriptions.forEach((entry) => {
+        if (!entry) return;
+
+        const key = entry.recording_id || `transcription-${entry.id}`;
+        const parsedSegments = parseSpeakerSegments(entry);
+        const hasDiarization = parsedSegments.length > 0;
+        const createdAt = new Date(entry.updated_at || entry.created_at || 0).getTime();
+
+        const existing = prioritized.get(key);
+        if (!existing) {
+            prioritized.set(key, { item: entry, createdAt, hasDiarization, segments: parsedSegments });
+            return;
+        }
+
+        const shouldReplace = (!existing.hasDiarization && hasDiarization)
+            || (existing.hasDiarization === hasDiarization && createdAt > existing.createdAt);
+
+        if (shouldReplace) {
+            prioritized.set(key, { item: entry, createdAt, hasDiarization, segments: parsedSegments });
+        }
+    });
+
+    return Array.from(prioritized.values())
+        .map(({ item, segments }) => {
+            if (segments.length && typeof item.speaker_segments === 'string') {
+                item.__parsedSpeakerSegments = segments;
+            }
+            return item;
+        })
+        .sort((a, b) => {
+            const dateA = new Date(a.created_at || a.updated_at || 0).getTime();
+            const dateB = new Date(b.created_at || b.updated_at || 0).getTime();
+            return dateB - dateA;
+        });
+}
+
+function parseSpeakerSegments(transcription) {
+    if (!transcription) {
+        return [];
+    }
+
+    if (Array.isArray(transcription.__parsedSpeakerSegments)) {
+        return transcription.__parsedSpeakerSegments;
+    }
+
+    const rawSegments = transcription.speaker_segments;
+
+    if (Array.isArray(rawSegments)) {
+        return rawSegments;
+    }
+
+    if (typeof rawSegments === 'string') {
+        try {
+            const parsed = JSON.parse(rawSegments);
+            if (Array.isArray(parsed)) {
+                transcription.__parsedSpeakerSegments = parsed;
+                return parsed;
+            }
+        } catch (error) {
+            console.warn('Unable to parse speaker segments JSON:', error);
+        }
+    }
+
+    const legacySegments = transcription.speakers;
+    if (Array.isArray(legacySegments)) {
+        transcription.__parsedSpeakerSegments = legacySegments;
+        return legacySegments;
+    }
+
+    if (typeof legacySegments === 'string') {
+        try {
+            const parsedLegacy = JSON.parse(legacySegments);
+            if (Array.isArray(parsedLegacy)) {
+                transcription.__parsedSpeakerSegments = parsedLegacy;
+                return parsedLegacy;
+            }
+        } catch (error) {
+            console.warn('Unable to parse legacy speakers JSON:', error);
+        }
+    }
+
+    return [];
+}
+
+function syncTableCardStat(statKey, tableNumber, value) {
+    const normalizedKey = String(statKey).toLowerCase();
+    const normalizedTable = String(tableNumber);
+    const escapedTable = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+        ? CSS.escape(normalizedTable)
+        : normalizedTable.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    const card = document.querySelector(`.table-card[data-table-number="${escapedTable}"]`);
+    if (!card) {
+        return;
+    }
+
+    const valueEl = card.querySelector(`.table-session-card__stat[data-stat="${normalizedKey}"] .table-session-card__stat-value`);
+    if (!valueEl) {
+        return;
+    }
+
+    valueEl.textContent = value;
+}
+
+function updateSessionSummaryIndicators() {
+    const activeTableIds = new Set();
+    tableParticipantSnapshots.forEach((_, key) => activeTableIds.add(key));
+    tableTranscriptionCounts.forEach((_, key) => activeTableIds.add(key));
+    tableRecordingCounts.forEach((_, key) => activeTableIds.add(key));
+
+    const activeTableCount = activeTableIds.size || currentSession?.tables?.length || currentSession?.table_count || 0;
+    const totalTranscriptions = Array.from(tableTranscriptionCounts.values())
+        .reduce((sum, value) => sum + (Number.isFinite(Number(value)) ? Number(value) : 0), 0);
+    const totalRecordings = Array.from(tableRecordingCounts.values())
+        .reduce((sum, value) => sum + (Number.isFinite(Number(value)) ? Number(value) : 0), 0);
+
+    const uniqueSpeakers = new Set();
+    let aggregateParticipants = 0;
+
+    tableParticipantSnapshots.forEach((snapshot) => {
+        aggregateParticipants += snapshot.count;
+        snapshot.identifiers.forEach((id) => {
+            if (id) {
+                uniqueSpeakers.add(String(id).trim().toLowerCase());
+            }
+        });
+    });
+
+    const totalSpeakers = uniqueSpeakers.size || aggregateParticipants || currentSession?.total_participants || 0;
+
+    const activeTableElement = document.getElementById('activeTableCount');
+    if (activeTableElement) {
+        activeTableElement.textContent = activeTableCount;
+    }
+
+    const totalTranscriptionsElement = document.getElementById('totalTranscriptions');
+    if (totalTranscriptionsElement) {
+        totalTranscriptionsElement.textContent = totalTranscriptions;
+    }
+
+    const totalSpeakersElement = document.getElementById('totalSpeakers');
+    if (totalSpeakersElement) {
+        totalSpeakersElement.textContent = totalSpeakers;
+    }
+
+    const recordingCountElement = document.getElementById('recordingCount');
+    if (recordingCountElement) {
+        recordingCountElement.textContent = totalRecordings;
+    }
+
+    if (currentSession) {
+        currentSession.active_tables = activeTableCount;
+        currentSession.total_transcriptions = totalTranscriptions;
+        currentSession.total_participants = totalSpeakers;
+        currentSession.total_recordings = totalRecordings;
+    }
+}
+
+function normalizeCount(candidates = []) {
+    for (const candidate of candidates) {
+        if (candidate === null || candidate === undefined) continue;
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric) && numeric >= 0) {
+            return numeric;
+        }
+    }
+    return 0;
+}
+
+function participantIdentifierFromSnapshot(participant) {
+    if (!participant) {
+        return null;
+    }
+
+    if (typeof participant === 'string') {
+        return participant;
+    }
+
+    return participant.id
+        || participant.participant_id
+        || participant.uuid
+        || participant.email
+        || participant.name
+        || null;
+}
+
+function resolveTableNumber(tableIdentifier) {
+    const identifier = String(tableIdentifier);
+
+    if (currentSession && Array.isArray(currentSession.tables)) {
+        const exactMatch = currentSession.tables.find((table) =>
+            String(table.id) === identifier || String(table.table_number) === identifier
+        );
+
+        if (exactMatch && exactMatch.table_number != null) {
+            return exactMatch.table_number;
+        }
+    }
+
+    return identifier;
+}
+
+function updateSessionTableSnapshot(tableIdentifier, updates = {}) {
+    if (!currentSession || !Array.isArray(currentSession.tables)) {
+        return;
+    }
+
+    const identifier = String(tableIdentifier);
+
+    const targetTable = currentSession.tables.find((table) =>
+        String(table.id) === identifier || String(table.table_number) === identifier
+    );
+
+    if (targetTable) {
+        Object.assign(targetTable, updates);
+    }
+}
+
+async function refreshTableTranscriptionStats(sessionId, tableIdentifier) {
+    if (!sessionId || tableIdentifier == null) {
+        return;
+    }
+
+    const resolvedNumber = resolveTableNumber(tableIdentifier);
+
+    try {
+        const response = await fetch(`/api/sessions/${sessionId}/tables/${resolvedNumber}/transcriptions`);
+        if (!response.ok) {
+            throw new Error(`Failed to refresh transcriptions for table ${resolvedNumber}`);
+        }
+
+        const transcriptions = await response.json();
+        const prioritized = prioritizeTranscriptions(transcriptions);
+        const totalForTable = prioritized.length;
+
+        tableTranscriptionCounts.set(String(resolvedNumber), totalForTable);
+        syncTableCardStat('transcriptions', resolvedNumber, totalForTable);
+        updateSessionSummaryIndicators();
+
+        updateSessionTableSnapshot(resolvedNumber, {
+            transcription_count: totalForTable
+        });
+
+        if (
+            currentTable &&
+            (String(currentTable.id) === String(tableIdentifier) ||
+                String(currentTable.table_number) === String(resolvedNumber))
+        ) {
+            displayExistingTranscriptions(transcriptions, { syncTableStats: false });
+        }
+
+    } catch (error) {
+        console.error('Failed to refresh table transcription stats:', error);
     }
 }
 
@@ -497,8 +783,17 @@ function initializeSocket() {
     
     socket.on('transcription-completed', (data) => {
         console.log('📝 Received transcription-completed event:', data);
-        displayTranscription(data);
-        updateTableTranscriptionCount(data.tableId);
+
+        const isReprocessUpdate = data?.source === 'reprocess';
+
+        if (isReprocessUpdate) {
+            const sessionIdForRefresh = data.sessionId || currentSession?.id;
+            refreshTableTranscriptionStats(sessionIdForRefresh, data.tableId);
+        } else {
+            displayTranscription(data);
+            updateTableTranscriptionCount(data.tableId);
+        }
+
         // Refresh recordings list to show new recording
         loadTableRecordings();
     });
@@ -562,6 +857,16 @@ function initializeSocket() {
             });
         }
     });
+
+    if (options.syncTableStats) {
+        const tableNumber = currentTable?.table_number;
+        if (tableNumber != null) {
+            const totalForTable = filteredTranscriptions.length;
+            tableTranscriptionCounts.set(String(tableNumber), totalForTable);
+            syncTableCardStat('transcriptions', tableNumber, totalForTable);
+            updateSessionSummaryIndicators();
+        }
+    }
 }
 
 // Handle reprocess status updates
@@ -673,8 +978,12 @@ function setupEventListeners() {
     safeSetEventListener('mediaFileInput', 'onchange', handleMediaFileUpload);
     
     // Live transcription controls
-    safeSetEventListener('liveTranscriptionBtn', 'onclick', startLiveTranscription);
-    safeSetEventListener('stopLiveTranscriptionBtn', 'onclick', stopLiveTranscription);
+    ['liveTranscriptionBtn', 'sessionLiveTranscriptionBtn'].forEach((id) => {
+        safeSetEventListener(id, 'onclick', startLiveTranscription);
+    });
+    ['stopLiveTranscriptionBtn', 'sessionStopLiveTranscriptionBtn'].forEach((id) => {
+        safeSetEventListener(id, 'onclick', stopLiveTranscription);
+    });
     
     // QR Code functionality
     safeSetEventListener('showQRCodesBtn', 'onclick', showQRCodes);
@@ -808,6 +1117,7 @@ function showScreen(screenId) {
         'tableInterface': 'Table Interface',
         'sessionListScreen': 'Active Sessions',
         'adminDashboard': 'Admin Dashboard',
+        'allTranscriptionsScreen': 'Session Transcriptions',
     };
     
     document.title = titles[screenId] || 'World Café Platform';
@@ -2792,25 +3102,7 @@ async function viewAllTranscriptions(sessionId) {
         displayAwesomeTranscriptions(transcriptions, session);
         
         console.log('Showing isolated transcriptions screen...');
-        // Hide all other screens
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.remove('active');
-            screen.style.display = 'none';
-        });
-        
-        // Hide isolated join screen if it's showing
-        const joinScreen = document.getElementById('joinSessionScreen');
-        if (joinScreen) {
-            joinScreen.style.display = 'none';
-        }
-        
-        // Show the completely isolated transcriptions screen
-        const transcriptionsScreen = document.getElementById('allTranscriptionsScreen');
-        if (transcriptionsScreen) {
-            transcriptionsScreen.style.display = 'block';
-            console.log('Transcriptions screen activated with isolated styles');
-        }
-        
+        showScreen('allTranscriptionsScreen');
         console.log('viewAllTranscriptions completed successfully');
         
     } catch (error) {
@@ -3580,7 +3872,21 @@ async function loadSessionDashboard(sessionId) {
     // Update dashboard title and stats
     document.getElementById('dashboardTitle').textContent = session.title;
     document.getElementById('sessionCodeValue').textContent = session.id; // Session code is the session ID
-    document.getElementById('activeTableCount').textContent = session.active_tables || session.tableCount || 0;
+
+    const tablesForSession = Array.isArray(session.tables) ? session.tables : [];
+    const activeTableCount = tablesForSession.length
+        || session.active_tables
+        || session.tableCount
+        || session.table_count
+        || 0;
+    const initialTranscriptionsTotal = Number(session.total_transcriptions) || 0;
+    const initialParticipantsTotal = Number(session.total_participants) || 0;
+    const initialRecordingsTotal = Number(session.total_recordings) || 0;
+
+    document.getElementById('activeTableCount').textContent = activeTableCount;
+    document.getElementById('totalTranscriptions').textContent = initialTranscriptionsTotal;
+    document.getElementById('totalSpeakers').textContent = initialParticipantsTotal;
+    document.getElementById('recordingCount').textContent = initialRecordingsTotal;
     
     // Get actual recording count and duration from recordings
     try {
@@ -3699,6 +4005,10 @@ function displayTables(tables) {
 
     tablesGrid.innerHTML = '';
 
+    tableParticipantSnapshots.clear();
+    tableRecordingCounts.clear();
+    tableTranscriptionCounts.clear();
+
     if (!tables || tables.length === 0) {
         const emptyState = document.createElement('div');
         emptyState.className = 'table-card table-card--empty';
@@ -3711,18 +4021,65 @@ function displayTables(tables) {
             </button>
         `;
         tablesGrid.appendChild(emptyState);
+        updateSessionSummaryIndicators();
         return;
     }
 
+    const createStatBlock = (key, icon, label, value) => {
+        const stat = document.createElement('div');
+        stat.className = 'table-session-card__stat';
+        stat.dataset.stat = key;
+
+        const labelRow = document.createElement('span');
+        labelRow.className = 'table-session-card__stat-label';
+
+        const iconEl = document.createElement('span');
+        iconEl.className = 'table-session-card__stat-icon';
+        iconEl.setAttribute('aria-hidden', 'true');
+        iconEl.textContent = icon;
+
+        const labelText = document.createElement('span');
+        labelText.className = 'table-session-card__stat-label-text';
+        labelText.textContent = label;
+
+        labelRow.append(iconEl, labelText);
+
+        const valueEl = document.createElement('span');
+        valueEl.className = 'table-session-card__stat-value';
+        valueEl.textContent = value;
+
+        stat.append(labelRow, valueEl);
+        return stat;
+    };
+
     tables.forEach(table => {
-        const participantCount = table.participant_count || (Array.isArray(table.participants) ? table.participants.filter(Boolean).length : 0);
-        const maxSize = table.max_size || 5;
-        const recordingCount = table.recording_count || 0;
-        const transcriptionCount = table.transcription_count || 0;
-        const status = (table.status || 'waiting').toString().toLowerCase();
+        const participantList = Array.isArray(table.participants) ? table.participants.filter(Boolean) : [];
+        const participantCount = typeof table.participant_count === 'number'
+            ? table.participant_count
+            : participantList.length;
+        const maxSize = table.max_size || table.maxSize || table.capacity || 5;
+        const recordingCount = normalizeCount([
+            table.recording_count,
+            table.recordingCount,
+            Array.isArray(table.recordings) ? table.recordings.length : null
+        ]);
+        const transcriptionCount = normalizeCount([
+            table.transcription_count,
+            table.transcriptionCount,
+            Array.isArray(table.transcriptions) ? table.transcriptions.length : null
+        ]);
+        const rawStatus = (table.status || 'waiting').toString().toLowerCase();
+        const formattedStatus = formatStatusLabel(rawStatus);
+        const statusVariant = getTableStatusVariant(rawStatus);
+        const facilitatorName = table.facilitator_name || table.host_name || 'Unassigned';
+        const sessionIdForTable = currentSession?.id || table.session_id || table.sessionId || '';
+        const tableCode = sessionIdForTable ? `${sessionIdForTable}/table/${table.table_number}` : `Table ${table.table_number}`;
+        const updatedTimestamp = table.updated_at || table.last_activity_at || table.last_update || table.modified_at;
+        const updatedText = updatedTimestamp ? `Updated ${formatRelativeTime(updatedTimestamp)}` : 'Updated moments ago';
+        const promptText = [table.prompt, table.topic, table.description].find(entry => typeof entry === 'string' && entry.trim());
 
         const card = document.createElement('article');
-        card.className = 'table-card';
+        card.className = 'table-card table-card--session';
         card.dataset.tableId = table.id || table.table_number;
         card.dataset.tableNumber = table.table_number;
         card.setAttribute('role', 'button');
@@ -3737,72 +4094,148 @@ function displayTables(tables) {
         });
 
         const header = document.createElement('header');
-        header.className = 'table-card__header';
+        header.className = 'table-session-card__header';
 
-        const heading = document.createElement('div');
-        heading.className = 'table-card__heading';
+        const titleGroup = document.createElement('div');
+        titleGroup.className = 'table-session-card__title-group';
 
         const icon = document.createElement('span');
-        icon.className = 'table-card-icon';
+        icon.className = 'table-session-card__icon';
         icon.textContent = table.icon || '🪑';
 
+        const titleTextGroup = document.createElement('div');
+        titleTextGroup.className = 'table-session-card__title-text';
+
         const title = document.createElement('h3');
-        title.className = 'table-card-title';
+        title.className = 'table-session-card__title';
         title.textContent = table.name || `Table ${table.table_number}`;
 
-        heading.append(icon, title);
-        header.appendChild(heading);
+        const subtitle = document.createElement('p');
+        subtitle.className = 'table-session-card__subtitle';
+        const participantSummary = `${participantCount}/${maxSize} participants`;
+        subtitle.textContent = facilitatorName ? `${participantSummary} · Facilitator: ${facilitatorName}` : participantSummary;
+
+        titleTextGroup.append(title, subtitle);
+        titleGroup.append(icon, titleTextGroup);
 
         const statusBadge = document.createElement('span');
-        statusBadge.className = `badge ${getTableStatusVariant(status)}`;
-        statusBadge.textContent = formatStatusLabel(status);
-        header.appendChild(statusBadge);
+        statusBadge.className = `badge ${statusVariant}`;
+        statusBadge.textContent = formattedStatus;
 
+        header.append(titleGroup, statusBadge);
         card.appendChild(header);
 
-        const meta = document.createElement('div');
-        meta.className = 'table-card__meta';
-        meta.appendChild(createMetaItem(`${participantCount}/${maxSize} participants`));
-        if (table.facilitator_name) {
-            meta.appendChild(createMetaItem(`Facilitator: ${table.facilitator_name}`));
+        if (promptText) {
+            const prompt = document.createElement('p');
+            prompt.className = 'table-session-card__prompt';
+            prompt.textContent = promptText.trim();
+            card.appendChild(prompt);
         }
-        card.appendChild(meta);
+
+        const codeSection = document.createElement('div');
+        codeSection.className = 'table-session-card__code';
+
+        const codeLabel = document.createElement('span');
+        codeLabel.className = 'table-session-card__code-label';
+        codeLabel.textContent = 'Table Code';
+
+        const codeButton = document.createElement('button');
+        codeButton.type = 'button';
+        codeButton.className = 'table-session-card__code-value';
+        codeButton.textContent = tableCode;
+        codeButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            copyTableCode(tableCode, event);
+        });
+        codeButton.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                copyTableCode(tableCode, event);
+            }
+        });
+
+        const codeActions = document.createElement('div');
+        codeActions.className = 'table-session-card__code-actions';
+
+        const copyCodeBtn = document.createElement('button');
+        copyCodeBtn.type = 'button';
+        copyCodeBtn.className = 'btn btn-secondary btn-sm';
+        copyCodeBtn.textContent = '📋 Copy Code';
+        copyCodeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            copyTableCode(tableCode, event);
+        });
+
+        const copyLinkBtn = document.createElement('button');
+        copyLinkBtn.type = 'button';
+        copyLinkBtn.className = 'btn btn-secondary btn-sm';
+        copyLinkBtn.textContent = '🔗 Copy Link';
+        copyLinkBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            copyTableLink(sessionIdForTable, table.table_number, event);
+        });
+
+        const qrCodeBtn = document.createElement('button');
+        qrCodeBtn.type = 'button';
+        qrCodeBtn.className = 'btn btn-secondary btn-sm';
+        qrCodeBtn.textContent = '📱 QR Code';
+        qrCodeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            showTableQRCode(sessionIdForTable, table.table_number, table.name);
+        });
+
+        if (!sessionIdForTable) {
+            copyLinkBtn.disabled = true;
+            copyLinkBtn.classList.add('is-disabled');
+            copyLinkBtn.setAttribute('aria-disabled', 'true');
+            copyLinkBtn.title = 'Session identifier unavailable for this table';
+
+            qrCodeBtn.disabled = true;
+            qrCodeBtn.classList.add('is-disabled');
+            qrCodeBtn.setAttribute('aria-disabled', 'true');
+            qrCodeBtn.title = 'Session identifier unavailable for this table';
+        }
+
+        codeActions.append(copyCodeBtn, copyLinkBtn, qrCodeBtn);
+        codeSection.append(codeLabel, codeButton, codeActions);
+        card.appendChild(codeSection);
 
         const stats = document.createElement('div');
-        stats.className = 'table-card-stats';
-        stats.appendChild(createTableStat('👥', 'Participants', `${participantCount}/${maxSize}`, 'participants'));
-        stats.appendChild(createTableStat('🎙️', 'Recordings', recordingCount, 'recordings'));
-        stats.appendChild(createTableStat('📝', 'Transcriptions', transcriptionCount, 'transcriptions'));
+        stats.className = 'table-session-card__stats';
+        stats.append(
+            createStatBlock('participants', '👥', 'Participants', `${participantCount}/${maxSize}`),
+            createStatBlock('recordings', '🎙️', 'Recordings', recordingCount),
+            createStatBlock('transcriptions', '📝', 'Transcriptions', transcriptionCount)
+        );
         card.appendChild(stats);
 
+        const footer = document.createElement('footer');
+        footer.className = 'table-session-card__footer';
+
+        const updated = document.createElement('span');
+        updated.className = 'table-session-card__updated';
+        updated.textContent = updatedText;
+
+        const openHint = document.createElement('span');
+        openHint.className = 'table-session-card__action-hint';
+        openHint.innerHTML = 'Open table <span aria-hidden="true">→</span>';
+
+        footer.append(updated, openHint);
+        card.appendChild(footer);
+
         tablesGrid.appendChild(card);
+
+        tableParticipantSnapshots.set(String(table.table_number), {
+            count: participantCount,
+            max: maxSize,
+            identifiers: participantList.map(participantIdentifierFromSnapshot)
+        });
+        tableRecordingCounts.set(String(table.table_number), Number(recordingCount) || 0);
+        tableTranscriptionCounts.set(String(table.table_number), Number(transcriptionCount) || 0);
     });
-}
 
-function createMetaItem(text) {
-    const item = document.createElement('span');
-    item.className = 'table-card__meta-item';
-    item.textContent = text;
-    return item;
-}
-
-function createTableStat(icon, label, value, key) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'table-card-stat';
-    if (key) {
-        wrapper.dataset.stat = key;
-    }
-
-    const labelEl = document.createElement('span');
-    labelEl.className = 'table-card-stat__label';
-    labelEl.innerHTML = `${icon} ${label}`;
-
-    const valueEl = document.createElement('span');
-    valueEl.className = 'table-card-stat__value';
-    valueEl.textContent = value;
-
-    wrapper.append(labelEl, valueEl);
-    return wrapper;
+    updateSessionSummaryIndicators();
 }
 
 function formatStatusLabel(status) {
@@ -3848,6 +4281,16 @@ function matchesTableCard(card, tableId) {
     const datasetNumber = card.dataset.tableNumber;
     const target = String(tableId);
     return String(datasetId) === target || String(datasetNumber) === target;
+}
+
+function findTableCardElement(tableId) {
+    const cards = document.querySelectorAll('.table-card');
+    for (const card of cards) {
+        if (matchesTableCard(card, tableId)) {
+            return card;
+        }
+    }
+    return null;
 }
 
 // Toggle functions for isolated sections
@@ -3904,7 +4347,7 @@ function populateQRCodesGrid() {
             <h4>Session QR Code</h4>
             <p>Join this World Café session</p>
             <div class="qr-code-image">
-                <img src="/api/qr/session/${currentSession.id}" 
+                <img src="/api/qr/session/${currentSession.id}?ts=${Date.now()}" 
                      alt="Session QR Code" 
                      onerror="this.parentElement.innerHTML='<div style=&quot;color: #666; padding: 2rem;&quot;>QR Code<br/>Not Available</div>'">
             </div>
@@ -3924,7 +4367,7 @@ function populateQRCodesGrid() {
                     <h4>Table ${tableNumber}</h4>
                     <p>Join Table ${tableNumber} directly</p>
                     <div class="qr-code-image">
-                        <img src="/api/qr/table/${currentSession.id}/${tableNumber}" 
+                        <img src="/api/qr/table/${currentSession.id}/${tableNumber}?ts=${Date.now()}" 
                              alt="Table ${tableNumber} QR Code"
                              onerror="this.parentElement.innerHTML='<div style=&quot;color: #666; padding: 2rem;&quot;>QR Code<br/>Not Available</div>'">
                     </div>
@@ -3982,195 +4425,187 @@ function copyQRLink(type, sessionId, tableNumber = null) {
     });
 }
 
-function showTableQR(sessionId, tableNumber, event) {
-    event.stopPropagation();
-    
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 10000;
-        backdrop-filter: blur(5px);
-    `;
-    
-    modal.innerHTML = `
-        <div style="
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            max-width: 400px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-        ">
-            <div style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-            ">
-                <h3 style="margin: 0; color: #333; font-size: 18px;">Table ${tableNumber} QR Code</h3>
-                <button onclick="this.closest('[style*=position]').remove()" style="
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: #666;
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                " onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">×</button>
+function showTableQRCode(sessionId, tableNumber, tableName = '') {
+    if (!sessionId || !tableNumber) {
+        return;
+    }
+
+    closeTableQRCodeModal();
+
+    previousFocusBeforeQrModal = document.activeElement;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tableQrModal';
+    overlay.className = 'qr-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+
+    const titleId = `tableQrTitle-${sessionId}-${tableNumber}`;
+    overlay.setAttribute('aria-labelledby', titleId);
+
+    const friendlyName = typeof tableName === 'string' && tableName.trim() ? tableName.trim() : `Table ${tableNumber}`;
+    const description = `Share this QR to let participants join ${friendlyName}.`;
+
+    const content = document.createElement('div');
+    content.className = 'qr-modal__content';
+    content.innerHTML = `
+        <header class="qr-modal__header">
+            <h2 class="qr-modal__title" id="${titleId}">${friendlyName} QR Code</h2>
+            <button type="button" class="qr-modal__close" data-action="close-qr-modal" aria-label="Close QR code dialog">✕</button>
+        </header>
+        <div class="qr-modal__body">
+            <div class="qr-modal__image">
+                <img src="/api/qr/table/${sessionId}/${tableNumber}?ts=${Date.now()}" alt="QR code for ${friendlyName}" onerror="const container = this.closest('.qr-modal__image'); if (container) { container.innerHTML = '<span class=\'qr-modal__image-fallback\'>QR code not available</span>'; }">
             </div>
-            
-            <div style="
-                background: #f8f9fa;
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 20px;
-            ">
-                <img src="/api/qr/table/${sessionId}/${tableNumber}" 
-                     alt="Table ${tableNumber} QR Code"
-                     style="max-width: 200px; width: 100%; height: auto;"
-                     onerror="this.parentElement.innerHTML='<div style=&quot;color: #666; padding: 2rem;&quot;>QR Code<br/>Not Available</div>'">
-            </div>
-            
-            <p style="
-                margin: 0;
-                color: #666;
-                font-size: 14px;
-                line-height: 1.4;
-            ">
-                Scan this QR code to join Table ${tableNumber} directly
-            </p>
+            <p class="qr-modal__description">${description}</p>
         </div>
     `;
-    
-    modal.onclick = function(e) {
-        if (e.target === modal) {
-            modal.remove();
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    activeTableQrModal = overlay;
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+            closeTableQRCodeModal();
+        }
+    });
+
+    const closeBtn = overlay.querySelector('[data-action="close-qr-modal"]');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeTableQRCodeModal);
+        closeBtn.focus();
+    }
+
+    qrModalEscHandler = (event) => {
+        if (event.key === 'Escape') {
+            closeTableQRCodeModal();
         }
     };
-    
-    document.body.appendChild(modal);
+    document.addEventListener('keydown', qrModalEscHandler);
+}
+
+function closeTableQRCodeModal() {
+    if (!activeTableQrModal) {
+        return;
+    }
+
+    if (qrModalEscHandler) {
+        document.removeEventListener('keydown', qrModalEscHandler);
+        qrModalEscHandler = null;
+    }
+
+    activeTableQrModal.remove();
+    activeTableQrModal = null;
+
+    if (previousFocusBeforeQrModal && typeof previousFocusBeforeQrModal.focus === 'function') {
+        previousFocusBeforeQrModal.focus();
+    }
+    previousFocusBeforeQrModal = null;
+}
+
+function copyTextToClipboard(text, {
+    success,
+    fallback,
+    error
+} = {}) {
+    const fallbackCopy = () => {
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'absolute';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, textArea.value.length);
+            const succeeded = document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            if (succeeded) {
+                if (fallback) {
+                    showToast(fallback, 'info');
+                } else if (success) {
+                    showToast(success, 'success');
+                }
+
+                console.log('Clipboard fallback copy succeeded');
+                return true;
+            }
+
+            throw new Error('document.execCommand("copy") returned false');
+        } catch (fallbackErr) {
+            console.error('Fallback clipboard copy failed:', fallbackErr);
+            if (error) {
+                showToast(error, 'error');
+            }
+            return false;
+        }
+    };
+
+    try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            return navigator.clipboard.writeText(text).then(() => {
+                if (success) {
+                    showToast(success, 'success');
+                }
+                console.log('Clipboard API copy succeeded');
+                return true;
+            }).catch(err => {
+                console.warn('navigator.clipboard.writeText failed, using fallback:', err);
+                return fallbackCopy();
+            });
+        }
+    } catch (err) {
+        console.warn('Clipboard API threw synchronously, using fallback:', err);
+    }
+
+    return Promise.resolve(fallbackCopy());
 }
 
 function copyTableCode(tableCode, event) {
-    // Prevent card click when copying
-    event.stopPropagation();
-    
-    navigator.clipboard.writeText(tableCode).then(() => {
-        showToast('Table code copied to clipboard!', 'success');
-        console.log('Table code copied:', tableCode);
-    }).catch(err => {
-        console.error('Failed to copy table code:', err);
-        showToast('Failed to copy table code. Please copy manually.', 'error');
-        
-        // Fallback - select text for manual copy
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = tableCode;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            showToast('Table code selected for copying', 'info');
-        } catch (fallbackErr) {
-            console.error('Fallback copy also failed:', fallbackErr);
-        }
+    event?.stopPropagation?.();
+
+    return copyTextToClipboard(tableCode, {
+        success: 'Table code copied to clipboard!',
+        fallback: 'Table code copied. Paste if needed.',
+        error: 'Unable to copy table code. Please copy manually.',
     });
 }
 
 function copyTableLink(sessionId, tableNumber, event) {
-    // Prevent card click when copying
-    event.stopPropagation();
-    
+    event?.stopPropagation?.();
+
     const baseUrl = window.location.origin;
     const link = `${baseUrl}/?session=${sessionId}&table=${tableNumber}`;
-    
-    navigator.clipboard.writeText(link).then(() => {
-        showToast('Table join link copied to clipboard!', 'success');
-        console.log('Table link copied:', link);
-    }).catch(err => {
-        console.error('Failed to copy table link:', err);
-        showToast('Failed to copy table link. Please copy manually.', 'error');
-        
-        // Fallback - select text for manual copy
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = link;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            showToast('Table link selected for copying', 'info');
-        } catch (fallbackErr) {
-            console.error('Fallback copy also failed:', fallbackErr);
-        }
+
+    return copyTextToClipboard(link, {
+        success: 'Table join link copied to clipboard!',
+        fallback: 'Table link copied. Paste if needed.',
+        error: 'Unable to copy table link. Please copy manually.',
     });
 }
 
 function copySessionCode(sessionId, event) {
-    // Prevent card click when copying
-    event.stopPropagation();
-    
-    navigator.clipboard.writeText(sessionId).then(() => {
-        showToast('Session ID copied to clipboard!', 'success');
-        console.log('Session ID copied:', sessionId);
-    }).catch(err => {
-        console.error('Failed to copy session ID:', err);
-        showToast('Failed to copy session ID. Please copy manually.', 'error');
-        
-        // Fallback - select text for manual copy
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = sessionId;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            showToast('Session ID selected for copying', 'info');
-        } catch (fallbackErr) {
-            console.error('Fallback copy also failed:', fallbackErr);
-        }
+    event?.stopPropagation?.();
+
+    return copyTextToClipboard(sessionId, {
+        success: 'Session ID copied to clipboard!',
+        fallback: 'Session ID copied. Paste if needed.',
+        error: 'Unable to copy session ID. Please copy manually.',
     });
 }
 
 function copySessionLink(sessionId, event) {
-    // Prevent card click when copying
-    event.stopPropagation();
-    
+    event?.stopPropagation?.();
+
     const baseUrl = window.location.origin;
     const link = `${baseUrl}/?session=${sessionId}`;
-    
-    navigator.clipboard.writeText(link).then(() => {
-        showToast('Session join link copied to clipboard!', 'success');
-        console.log('Session link copied:', link);
-    }).catch(err => {
-        console.error('Failed to copy session link:', err);
-        showToast('Failed to copy session link. Please copy manually.', 'error');
-        
-        // Fallback - select text for manual copy
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = link;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            showToast('Session link selected for copying', 'info');
-        } catch (fallbackErr) {
-            console.error('Fallback copy also failed:', fallbackErr);
-        }
+
+    return copyTextToClipboard(link, {
+        success: 'Session join link copied to clipboard!',
+        fallback: 'Session link copied. Paste if needed.',
+        error: 'Unable to copy session link. Please copy manually.',
     });
 }
 
@@ -4195,6 +4630,7 @@ function downloadAllQRCodes() {
 
 function printQRCodes() {
     const printWindow = window.open('', '_blank');
+    const timestamp = Date.now();
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -4215,7 +4651,7 @@ function printQRCodes() {
             <div class="qr-page">
                 <div class="qr-item">
                     <h3>Session QR Code</h3>
-                    <img src="/api/qr/session/${currentSession.id}" alt="Session QR">
+                    <img src="/api/qr/session/${currentSession.id}?ts=${timestamp}" alt="Session QR">
                     <p>Join this World Café session</p>
                 </div>
                 ${currentSession.tables ? currentSession.tables.map(table => {
@@ -4223,7 +4659,7 @@ function printQRCodes() {
                     return `
                         <div class="qr-item">
                             <h3>Table ${tableNumber}</h3>
-                            <img src="/api/qr/table/${currentSession.id}/${tableNumber}" alt="Table ${tableNumber} QR">
+                            <img src="/api/qr/table/${currentSession.id}/${tableNumber}?ts=${timestamp + tableNumber}" alt="Table ${tableNumber} QR">
                             <p>Join Table ${tableNumber} directly</p>
                         </div>
                     `;
@@ -4740,8 +5176,18 @@ function setupTableInterface() {
 
         tableStatusElement.textContent = formattedStatus;
         tableStatusElement.className = `badge ${variant}`;
+
+        const heroStatusValue = document.getElementById('tableHeroStatus');
+        if (heroStatusValue) {
+            heroStatusValue.textContent = formattedStatus;
+        }
+
+        const heroStatusCard = document.getElementById('tableHeroStatusCard');
+        if (heroStatusCard) {
+            heroStatusCard.dataset.status = slugStatus || rawStatus;
+        }
     }
-    
+
     // Update table code display
     if (currentSession && currentTable) {
         const tableCodeValue = document.getElementById('tableCodeValue');
@@ -4762,6 +5208,9 @@ function setupTableInterface() {
 
     // Load existing transcriptions
     loadExistingTranscriptions();
+
+    // Load table-specific recordings so media library is always in sync
+    loadTableRecordings();
 }
 
 function getTableParticipants(table) {
@@ -4910,9 +5359,23 @@ function renderFacilitatorControls(overrides = {}) {
     const maxSize = currentTable.max_size || currentTable.maxSize || currentTable.capacity || 5;
 
     const statusValue = document.getElementById('facilitatorStatusValue');
+    const rawStatus = (currentTable.status || 'waiting').toString().toLowerCase();
+    const normalizedStatus = rawStatus.replace(/[_-]+/g, ' ');
+    const slugStatus = normalizedStatus.replace(/\s+/g, '-');
+    const readableStatus = formatStatusLabel(rawStatus);
+
     if (statusValue) {
-        const rawStatus = (currentTable.status || 'waiting').toString().toLowerCase();
-        statusValue.textContent = formatStatusLabel(rawStatus);
+        statusValue.textContent = readableStatus;
+    }
+
+    const heroStatusValue = document.getElementById('tableHeroStatus');
+    if (heroStatusValue) {
+        heroStatusValue.textContent = readableStatus;
+    }
+
+    const heroStatusCard = document.getElementById('tableHeroStatusCard');
+    if (heroStatusCard) {
+        heroStatusCard.dataset.status = slugStatus || rawStatus;
     }
 
     const participantsValue = document.getElementById('facilitatorParticipantsValue');
@@ -4920,18 +5383,36 @@ function renderFacilitatorControls(overrides = {}) {
         participantsValue.textContent = `${participantCount}/${maxSize}`;
     }
 
+    const heroParticipantsValue = document.getElementById('tableHeroParticipants');
+    if (heroParticipantsValue) {
+        heroParticipantsValue.textContent = `${participantCount}/${maxSize}`;
+    }
+
     const recordingsValue = document.getElementById('facilitatorRecordingsValue');
+    const recordingCount = typeof overrides.recordingCount === 'number'
+        ? overrides.recordingCount
+        : (currentTable.recording_count || 0);
+
     if (recordingsValue) {
-        const recordingCount = typeof overrides.recordingCount === 'number'
-            ? overrides.recordingCount
-            : (currentTable.recording_count || 0);
         recordingsValue.textContent = recordingCount;
     }
 
+    const heroRecordingsValue = document.getElementById('tableHeroRecordings');
+    if (heroRecordingsValue) {
+        heroRecordingsValue.textContent = recordingCount;
+    }
+
     const updatedValue = document.getElementById('facilitatorUpdatedValue');
+    const timestamp = currentTable.updated_at || currentTable.last_activity_at || currentSession?.updated_at;
+    const updatedText = timestamp ? formatRelativeTime(timestamp) : 'moments ago';
+
     if (updatedValue) {
-        const timestamp = currentTable.updated_at || currentTable.last_activity_at || currentSession?.updated_at;
-        updatedValue.textContent = timestamp ? formatRelativeTime(timestamp) : 'moments ago';
+        updatedValue.textContent = updatedText;
+    }
+
+    const heroUpdatedValue = document.getElementById('tableHeroUpdated');
+    if (heroUpdatedValue) {
+        heroUpdatedValue.textContent = updatedText;
     }
 
     const note = document.getElementById('facilitatorNote');
@@ -5070,43 +5551,66 @@ let currentLiveBubble = null;
 
 function displayLiveTranscriptionWord(speaker, word) {
     console.log(`🎯 displayLiveTranscriptionWord called: speaker=${speaker}, word="${word}"`);
-    
-    const targetContainer = document.getElementById('liveTranscriptionContent');
+
+    const targetContainer = document.getElementById('liveTranscriptionContent') || document.getElementById('sessionLiveTranscriptionContent');
     if (!targetContainer) {
-        console.error('❌ liveTranscriptionContent container not found!');
+        console.error('❌ live transcription container not found!');
         return;
     }
-    
-    console.log('✅ Found liveTranscriptionContent container');
-    
-    if (currentLiveSpeaker !== speaker) {
-        console.log(`🔄 Switching to speaker ${speaker} (was ${currentLiveSpeaker})`);
-        currentLiveSpeaker = speaker;
-        currentLiveBubble = createLiveChatBubble(speaker, targetContainer);
+
+    console.log(`✅ Found live transcription container (${targetContainer.id})`);
+
+    const isTableContext = targetContainer.id === 'liveTranscriptionContent';
+    const displayId = isTableContext ? 'transcriptionDisplay' : 'sessionTranscriptionDisplay';
+    const emptyStateId = isTableContext ? 'emptyTranscriptionState' : 'sessionEmptyTranscriptionState';
+    const displayDiv = document.getElementById(displayId);
+    const emptyState = document.getElementById(emptyStateId);
+
+    if (emptyState) {
+        hideElement(emptyState);
     }
-    
-    if (currentLiveBubble) {
-        const textElement = currentLiveBubble.querySelector('.bubble-text');
-        if (textElement) {
-            const oldText = textElement.textContent;
-            textElement.textContent += `${word} `;
-            console.log(`📝 Updated bubble text: "${oldText}" → "${textElement.textContent}"`);
-            targetContainer.scrollTop = targetContainer.scrollHeight; // Auto-scroll to bottom
-            
-            // Store word with speaker info for persistence
-            if (!window.currentLiveWords) window.currentLiveWords = [];
-            console.log(`💾 Adding word to save queue: Speaker ${speaker} - "${word}"`);
-            window.currentLiveWords.push({
-                speaker: speaker,
-                word: word,
-                timestamp: Date.now()
-            });
+    if (displayDiv) {
+        showElement(displayDiv);
+    }
+
+    if (isTableContext) {
+        if (currentLiveSpeaker !== speaker) {
+            console.log(`🔄 Switching to speaker ${speaker} (was ${currentLiveSpeaker})`);
+            currentLiveSpeaker = speaker;
+            currentLiveBubble = createLiveChatBubble(speaker, targetContainer);
+        }
+
+        if (currentLiveBubble) {
+            const textElement = currentLiveBubble.querySelector('.bubble-text');
+            if (textElement) {
+                const oldText = textElement.textContent;
+                textElement.textContent += `${word} `;
+                console.log(`📝 Updated bubble text: "${oldText}" → "${textElement.textContent}"`);
+                targetContainer.scrollTop = targetContainer.scrollHeight; // Auto-scroll to bottom
+            } else {
+                console.error('❌ bubble-text element not found in bubble!');
+            }
         } else {
-            console.error('❌ bubble-text element not found in bubble!');
+            console.error('❌ currentLiveBubble is null!');
         }
     } else {
-        console.error('❌ currentLiveBubble is null!');
+        // Simple text append for dashboard summary
+        const container = displayDiv || targetContainer;
+        const paragraph = document.createElement('p');
+        paragraph.textContent = `Speaker ${speaker}: ${word}`;
+        paragraph.className = 'transcription-line';
+        container.appendChild(paragraph);
+        container.scrollTop = container.scrollHeight;
     }
+
+    // Store word with speaker info for persistence
+    if (!window.currentLiveWords) window.currentLiveWords = [];
+    console.log(`💾 Adding word to save queue: Speaker ${speaker} - "${word}"`);
+    window.currentLiveWords.push({
+        speaker: speaker,
+        word: word,
+        timestamp: Date.now()
+    });
 }
 
 function createLiveChatBubble(speaker, container) {
@@ -5179,10 +5683,8 @@ async function startLiveTranscription() {
             recordingStartTime = Date.now();
             
             // Update UI
-            const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
-            const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            hideElement(liveTranscriptionBtn);
-            showElement(stopLiveTranscriptionBtn);
+            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, hideElement);
+            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, showElement);
             
             showToast('Live transcription started - speak now!', 'success');
         };
@@ -5251,10 +5753,8 @@ async function startLiveTranscription() {
             isRecording = false;
             
             // Update UI
-            const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
-            const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-            showElement(liveTranscriptionBtn);
-            hideElement(stopLiveTranscriptionBtn);
+            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, showElement);
+            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, hideElement);
         }
 
     } catch (error) {
@@ -5321,11 +5821,8 @@ async function stopLiveTranscription() {
         }
         
         // Update UI for live transcription interface
-        const liveTranscriptionBtn = document.getElementById('liveTranscriptionBtn');
-        const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
-        
-        showElement(liveTranscriptionBtn);
-        hideElement(stopLiveTranscriptionBtn);
+        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, showElement);
+        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, hideElement);
         
         console.log('Live transcription stopped');
         showToast('Live transcription stopped and audio saved', 'info');
@@ -5733,31 +6230,53 @@ function displayTranscription(data) {
 }
 
 
-function updateTableTranscriptionCount(tableId) {
-    // Update the table card's transcription count
-    const tableCards = document.querySelectorAll('.table-card');
-    tableCards.forEach(card => {
-        if (matchesTableCard(card, tableId)) {
-            const transcriptStat = card.querySelector('.table-card-stat[data-stat="transcriptions"] .table-card-stat__value');
-            if (transcriptStat) {
-                const currentCount = parseInt(transcriptStat.textContent, 10) || 0;
-                transcriptStat.textContent = currentCount + 1;
-            }
-        }
+function updateTableTranscriptionCount(tableId, options = {}) {
+    const card = findTableCardElement(tableId);
+    if (!card) {
+        return;
+    }
+
+    const tableNumber = card.dataset.tableNumber || resolveTableNumber(tableId);
+    const transcriptStat = card.querySelector('.table-session-card__stat[data-stat="transcriptions"] .table-session-card__stat-value');
+    if (!transcriptStat) {
+        return;
+    }
+
+    const nextCount = typeof options.newCount === 'number'
+        ? options.newCount
+        : (parseInt(transcriptStat.textContent, 10) || 0) + 1;
+
+    transcriptStat.textContent = nextCount;
+
+    tableTranscriptionCounts.set(String(tableNumber), nextCount);
+    updateSessionSummaryIndicators();
+    updateSessionTableSnapshot(tableNumber, {
+        transcription_count: nextCount
     });
 }
 
-function updateTableRecordingCount(tableId) {
-    // Update the table card's recording count (🎤 icon)
-    const tableCards = document.querySelectorAll('.table-card');
-    tableCards.forEach(card => {
-        if (matchesTableCard(card, tableId)) {
-            const recordingStat = card.querySelector('.table-card-stat[data-stat="recordings"] .table-card-stat__value');
-            if (recordingStat) {
-                const currentCount = parseInt(recordingStat.textContent, 10) || 0;
-                recordingStat.textContent = currentCount + 1;
-            }
-        }
+function updateTableRecordingCount(tableId, options = {}) {
+    const card = findTableCardElement(tableId);
+    if (!card) {
+        return;
+    }
+
+    const tableNumber = card.dataset.tableNumber || resolveTableNumber(tableId);
+    const recordingStat = card.querySelector('.table-session-card__stat[data-stat="recordings"] .table-session-card__stat-value');
+    if (!recordingStat) {
+        return;
+    }
+
+    const nextCount = typeof options.newCount === 'number'
+        ? options.newCount
+        : (parseInt(recordingStat.textContent, 10) || 0) + 1;
+
+    recordingStat.textContent = nextCount;
+
+    tableRecordingCounts.set(String(tableNumber), nextCount);
+    updateSessionSummaryIndicators();
+    updateSessionTableSnapshot(tableNumber, {
+        recording_count: nextCount
     });
 }
 
@@ -5825,6 +6344,13 @@ async function loadSessionRecordings(sessionId = currentSession?.id) {
                 }
 
                 const tableRecordings = await response.json();
+                const safeLength = Array.isArray(tableRecordings) ? tableRecordings.length : 0;
+
+                tableRecordingCounts.set(String(table.table_number), safeLength);
+                updateSessionTableSnapshot(table.table_number, {
+                    recording_count: safeLength
+                });
+
                 tableRecordings.forEach((recording) => {
                     aggregatedRecordings.push({
                         ...recording,
@@ -5844,6 +6370,8 @@ async function loadSessionRecordings(sessionId = currentSession?.id) {
             badgeId: 'sessionRecordingCountBadge',
             context: 'session'
         });
+
+        updateSessionSummaryIndicators();
     } catch (error) {
         console.error('Error loading session recordings:', error);
         renderRecordingList([], {
@@ -5867,6 +6395,11 @@ function displayTableRecordings(recordings) {
 
     if (currentTable) {
         currentTable.recording_count = safeRecordings.length;
+        tableRecordingCounts.set(String(currentTable.table_number), safeRecordings.length);
+        updateSessionTableSnapshot(currentTable.table_number, {
+            recording_count: safeRecordings.length
+        });
+        updateSessionSummaryIndicators();
     }
 
     renderFacilitatorControls({ recordingCount: safeRecordings.length });
@@ -7378,64 +7911,71 @@ function selectMediaFile() {
 
 // Update the transcription display when live transcription is active
 function updateLiveTranscriptionDisplay(transcript) {
-    const displayDiv = document.getElementById('transcriptionDisplay');
-    const emptyState = document.getElementById('emptyTranscriptionState');
-    
-    if (!displayDiv || !emptyState) return;
-    
-    // Hide empty state and show transcription
-    hideElement(emptyState);
-    showElement(displayDiv);
-    
-    // Create a new transcript entry
-    const entry = document.createElement('div');
-    entry.style.cssText = 'margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;';
-    
-    const timestamp = new Date().toLocaleTimeString();
-    entry.innerHTML = `
-        <div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">${timestamp}</div>
-        <div style="color: #333; line-height: 1.4;">${transcript}</div>
-    `;
-    
-    // Add to display
-    displayDiv.appendChild(entry);
-    
-    // Scroll to bottom
-    displayDiv.scrollTop = displayDiv.scrollHeight;
-    
-    // Update counter
-    const counter = document.getElementById('liveTranscriptionCount');
-    if (counter) {
+    const displayIds = LIVE_TRANSCRIPTION_UI_IDS.displayContainers;
+    const emptyStateIds = LIVE_TRANSCRIPTION_UI_IDS.emptyStates;
+
+    displayIds.forEach((displayId, index) => {
+        const displayDiv = document.getElementById(displayId);
+        const emptyState = document.getElementById(emptyStateIds[index]);
+
+        if (!displayDiv) return;
+
+        if (emptyState) {
+            hideElement(emptyState);
+        }
+        showElement(displayDiv);
+
+        const entry = document.createElement('div');
+        entry.style.cssText = 'margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;';
+
+        const timestamp = new Date().toLocaleTimeString();
+        entry.innerHTML = `
+            <div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">${timestamp}</div>
+            <div style="color: #333; line-height: 1.4;">${transcript}</div>
+        `;
+
+        displayDiv.appendChild(entry);
+        displayDiv.scrollTop = displayDiv.scrollHeight;
+    });
+
+    applyToElements(LIVE_TRANSCRIPTION_UI_IDS.counters, (counter) => {
         const currentCount = parseInt(counter.textContent) || 0;
         counter.textContent = currentCount + 1;
-    }
+    });
 }
 
 // Reset transcription display
 function resetLiveTranscriptionDisplay() {
-    const displayDiv = document.getElementById('transcriptionDisplay');
-    const emptyState = document.getElementById('emptyTranscriptionState');
-    const counter = document.getElementById('liveTranscriptionCount');
-    const liveTranscriptionContent = document.getElementById('liveTranscriptionContent');
-    
-    if (displayDiv) {
-        displayDiv.innerHTML = '';
-        hideElement(displayDiv);
-    }
-    
-    if (emptyState) {
-        showElement(emptyState);
-    }
-    
-    if (counter) {
+    const displayIds = LIVE_TRANSCRIPTION_UI_IDS.displayContainers;
+    const emptyStateIds = LIVE_TRANSCRIPTION_UI_IDS.emptyStates;
+    const contentIds = LIVE_TRANSCRIPTION_UI_IDS.contentContainers;
+
+    displayIds.forEach((id) => {
+        const displayDiv = document.getElementById(id);
+        if (displayDiv) {
+            displayDiv.innerHTML = '';
+            hideElement(displayDiv);
+        }
+    });
+
+    emptyStateIds.forEach((id) => {
+        const emptyState = document.getElementById(id);
+        if (emptyState) {
+            showElement(emptyState);
+        }
+    });
+
+    applyToElements(LIVE_TRANSCRIPTION_UI_IDS.counters, (counter) => {
         counter.textContent = '0';
-    }
-    
-    // Clear live transcription content container
-    if (liveTranscriptionContent) {
-        liveTranscriptionContent.innerHTML = '';
-    }
-    
+    });
+
+    contentIds.forEach((id) => {
+        const container = document.getElementById(id);
+        if (container) {
+            container.scrollTop = 0;
+        }
+    });
+
     // Reset interim bubble reference
     currentInterimBubble = null;
     
@@ -7456,14 +7996,28 @@ let currentInterimBubble = null;
 function displayLiveTranscriptionResult(transcript, isFinal) {
     console.log(`📝 displayLiveTranscriptionResult called with transcript: "${transcript}", isFinal: ${isFinal}`);
     
-    const targetContainer = document.getElementById('liveTranscriptionContent');
+    const targetContainer = document.getElementById('liveTranscriptionContent') || document.getElementById('sessionLiveTranscriptionContent');
     if (!targetContainer) {
         console.error('❌ liveTranscriptionContent container not found!');
         return;
     }
-    
+
     console.log(`📝 Target container found:`, targetContainer);
-    
+
+    const emptyState = targetContainer.id === 'liveTranscriptionContent'
+        ? document.getElementById('emptyTranscriptionState')
+        : document.getElementById('sessionEmptyTranscriptionState');
+    const displayDiv = targetContainer.id === 'liveTranscriptionContent'
+        ? document.getElementById('transcriptionDisplay')
+        : document.getElementById('sessionTranscriptionDisplay');
+
+    if (emptyState) {
+        hideElement(emptyState);
+    }
+    if (displayDiv) {
+        showElement(displayDiv);
+    }
+
     if (isFinal) {
         // Final transcript - clean up interim bubble only (diarized bubbles already created)
         if (currentInterimBubble) {
@@ -7526,7 +8080,7 @@ let dataArray = null;
 let waveAnimationId = null;
 
 function initializeAudioWave() {
-    const waveContainer = document.getElementById('audioWave');
+    const waveContainer = document.getElementById(LIVE_TRANSCRIPTION_UI_IDS.audioWave);
     if (!waveContainer) return;
     
     // Create wave bars
@@ -7551,8 +8105,9 @@ function startAudioWaveVisualization(stream) {
         dataArray = new Uint8Array(bufferLength);
         
         // Show wave container
-        const waveContainer = document.getElementById('audioWaveContainer');
+        const waveContainer = document.getElementById(LIVE_TRANSCRIPTION_UI_IDS.audioWaveContainer);
         if (waveContainer) {
+            showElement(waveContainer);
             waveContainer.style.display = 'block';
         }
         
@@ -7573,7 +8128,7 @@ function animateWave() {
     const normalizedLevel = Math.min(100, (average / 128) * 100);
     
     // Update audio level display
-    const levelDisplay = document.getElementById('audioLevel');
+    const levelDisplay = document.getElementById(LIVE_TRANSCRIPTION_UI_IDS.audioLevel);
     if (levelDisplay) {
         levelDisplay.textContent = Math.round(normalizedLevel) + '%';
     }
@@ -7608,9 +8163,9 @@ function stopAudioWaveVisualization() {
     }
     
     // Hide wave container
-    const waveContainer = document.getElementById('audioWaveContainer');
+    const waveContainer = document.getElementById(LIVE_TRANSCRIPTION_UI_IDS.audioWaveContainer);
     if (waveContainer) {
-        waveContainer.style.display = 'none';
+        hideElement(waveContainer);
     }
     
     analyser = null;

@@ -1095,16 +1095,31 @@ app.get('/api/qr/:entityType/:entityId', async (req, res) => {
 app.get('/api/qr/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
     
     // Find QR code for this session
-    const qrCode = await QRCode.findActiveByEntity('session', sessionId);
+    let qrCode = await QRCode.findActiveByEntity('session', sessionId);
     
-    if (qrCode) {
-      const filename = `session-${sessionId}.png`;
-      res.redirect(`/qr-codes/${filename}`);
-    } else {
-      res.status(404).json({ error: 'QR code not found' });
+    if (!qrCode) {
+      const session = await Session.findById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      qrCode = await QRCode.createSessionQR(sessionId, baseUrl);
     }
+    
+    let imageBuffer = await QRCode.getImageBuffer(qrCode.id);
+    if (!imageBuffer) {
+      await QRCode.generateQRImage(qrCode.id, qrCode.qr_data, {}, `session-${sessionId}.png`);
+      imageBuffer = await QRCode.getImageBuffer(qrCode.id);
+    }
+
+    if (!imageBuffer) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    res.contentType('image/png');
+    res.send(imageBuffer);
   } catch (error) {
     console.error('Error serving session QR:', error);
     res.status(500).json({ error: error.message });
@@ -1114,6 +1129,7 @@ app.get('/api/qr/session/:sessionId', async (req, res) => {
 app.get('/api/qr/table/:sessionId/:tableNumber', async (req, res) => {
   try {
     const { sessionId, tableNumber } = req.params;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
     
     // Find table by session and table number
     const table = await db.queryOne(
@@ -1126,14 +1142,24 @@ app.get('/api/qr/table/:sessionId/:tableNumber', async (req, res) => {
     }
     
     // Find QR code for this table
-    const qrCode = await QRCode.findActiveByEntity('table', table.id.toString());
-    
-    if (qrCode) {
-      const filename = `table-${sessionId}-${tableNumber}.png`;
-      res.redirect(`/qr-codes/${filename}`);
-    } else {
-      res.status(404).json({ error: 'QR code not found' });
+    let qrCode = await QRCode.findActiveByEntity('table', table.id.toString());
+
+    if (!qrCode) {
+      qrCode = await QRCode.createTableQR(table.id, sessionId, baseUrl, parseInt(tableNumber));
     }
+
+    let imageBuffer = await QRCode.getImageBuffer(qrCode.id);
+    if (!imageBuffer) {
+      await QRCode.generateQRImage(qrCode.id, qrCode.qr_data, {}, `table-${sessionId}-${tableNumber}.png`);
+      imageBuffer = await QRCode.getImageBuffer(qrCode.id);
+    }
+
+    if (!imageBuffer) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    res.contentType('image/png');
+    res.send(imageBuffer);
   } catch (error) {
     console.error('Error serving table QR:', error);
     res.status(500).json({ error: error.message });

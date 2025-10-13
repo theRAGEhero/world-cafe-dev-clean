@@ -365,16 +365,21 @@
                                 <header class="card__header">
                                     <h2 class="card__title">Live Transcription</h2>
                                     <div class="card__header-actions">
-                                        <button type="button" id="liveTranscriptionBtn" class="btn btn-primary">Start Live Transcription</button>
-                                        <button type="button" id="stopLiveTranscriptionBtn" class="btn btn-secondary">Stop</button>
-                                        <span class="badge badge-primary" id="liveTranscriptionCount">0</span>
+                                        <button type="button" id="sessionLiveTranscriptionBtn" class="btn btn-primary">Start Live Transcription</button>
+                                        <button type="button" id="sessionStopLiveTranscriptionBtn" class="btn btn-secondary is-hidden">Stop</button>
+                                        <span class="badge badge-primary" id="sessionLiveTranscriptionCount">0</span>
                                     </div>
                                 </header>
-                            <div id="liveTranscriptionContent" class="transcription-scroll">
-                                <div id="liveTranscript" class="transcription-stream">
-                                    <p class="helper-text helper-text--muted">Live transcription will appear here once started.</p>
+                                <div id="sessionLiveTranscriptionContent" class="transcription-scroll">
+                                    <div id="sessionTranscriptionDisplay" hidden></div>
+                                    <div id="sessionEmptyTranscriptionState" class="empty-state">
+                                        <div class="empty-state__icon">🎙️</div>
+                                        <h5 class="empty-state__title">Ready for Live Transcription</h5>
+                                        <p class="empty-state__description">Start recording to see real-time speech-to-text transcription.</p>
+                                        <p class="empty-state__meta">Transcription updates will appear here as they stream in.</p>
+                                    </div>
+                                    <div id="liveTranscript" class="transcription-stream is-hidden" hidden></div>
                                 </div>
-                            </div>
                             </section>
                         </div>
                     </div>
@@ -400,6 +405,24 @@
                         <div class="screen-panel__actions table-interface__status">
                             <span id="tableStatus" class="badge badge-primary">Ready</span>
                         </div>
+                        <div class="table-interface__hero-meta" role="group" aria-label="Table quick stats">
+                            <div class="table-hero-card" data-type="participants">
+                                <span class="table-hero-label">Participants</span>
+                                <span class="table-hero-value" id="tableHeroParticipants">0/0</span>
+                            </div>
+                            <div class="table-hero-card" data-type="recordings">
+                                <span class="table-hero-label">Recordings</span>
+                                <span class="table-hero-value" id="tableHeroRecordings">0</span>
+                            </div>
+                            <div class="table-hero-card" data-type="status" id="tableHeroStatusCard" data-status="ready">
+                                <span class="table-hero-label">Status</span>
+                                <span class="table-hero-value" id="tableHeroStatus">Ready</span>
+                            </div>
+                            <div class="table-hero-card" data-type="updated">
+                                <span class="table-hero-label">Updated</span>
+                                <span class="table-hero-value" id="tableHeroUpdated">moments ago</span>
+                            </div>
+                        </div>
                     </header>
                     <main class="screen-panel__body table-interface__body" role="main">
                         <div class="table-interface__grid">
@@ -407,13 +430,13 @@
                                 <section class="card table-interface__card">
                                     <header class="card__header">
                                         <h2 class="card__title">Live Transcription Controls</h2>
-                                        <div class="card__header-actions">
-                                            <button type="button" id="liveTranscriptionBtn" class="btn btn-primary">Start Live Transcription</button>
-                                            <button type="button" id="stopLiveTranscriptionBtn" class="btn btn-secondary is-hidden">Stop</button>
-                                            <span class="badge badge-primary" id="liveTranscriptionCount">0</span>
-                                        </div>
+                                        <span class="badge badge-primary" id="liveTranscriptionCount">0</span>
                                     </header>
                                     <div class="card-body table-interface__controls">
+                                        <div class="live-transcription__actions">
+                                            <button type="button" id="liveTranscriptionBtn" class="btn btn-primary btn-lg">Start Live Transcription</button>
+                                            <button type="button" id="stopLiveTranscriptionBtn" class="btn btn-secondary btn-lg is-hidden">Stop</button>
+                                        </div>
                                         <p class="helper-text">Start recording to see real-time speech-to-text transcription.</p>
                                         <div id="audioWaveContainer" class="audio-visualizer is-hidden">
                                             <div class="audio-visualizer__label">🎙️ Listening...</div>
