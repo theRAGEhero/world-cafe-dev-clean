@@ -9,6 +9,11 @@ class DeepgramSTT {
         }
         
         this.deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+        this.defaultModel = process.env.DEEPGRAM_MODEL || 'nova-3-general';
+    }
+
+    getModel(preferredModel) {
+        return preferredModel || process.env.DEEPGRAM_MODEL || this.defaultModel;
     }
 
     async transcribeFile(audioFilePath, options = {}, retries = 2) {
@@ -18,9 +23,15 @@ class DeepgramSTT {
             }
 
             const audioBuffer = fs.readFileSync(audioFilePath);
-            
+            const detectedFormat = this.detectAudioFormat(audioBuffer);
+
+            console.log(`🎧 Detected audio format: ${detectedFormat}`);
+
+            if (detectedFormat === 'unknown') {
+                throw new Error('Audio file appears to be corrupt or uses an unsupported format');
+            }
+
             const defaultOptions = {
-                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
@@ -29,7 +40,10 @@ class DeepgramSTT {
                 paragraphs: true,
                 utt_split: 0.8,
                 multichannel: false,
-                ...options
+                mimetype: this.getMimeTypeForFormat(detectedFormat),
+                ...this.getEncodingHintsForFormat(detectedFormat),
+                ...options,
+                model: this.getModel(options.model)
             };
 
             console.log(`🌍 Backend transcription language: ${defaultOptions.language}`);
@@ -76,10 +90,90 @@ class DeepgramSTT {
         }
     }
 
+    detectAudioFormat(buffer) {
+        if (!buffer || buffer.length < 4) {
+            return 'unknown';
+        }
+
+        const firstFour = buffer.subarray(0, 4);
+        const ascii = firstFour.toString('ascii');
+
+        if (ascii === 'RIFF') {
+            return 'wav';
+        }
+        if (ascii === 'OggS') {
+            return 'ogg';
+        }
+        if (ascii === 'fLaC') {
+            return 'flac';
+        }
+        if (ascii === 'ID3') {
+            return 'mp3';
+        }
+
+        if (firstFour.length === 4) {
+            const signature = firstFour.readUInt32BE(0);
+            if (signature === 0x1A45DFA3) {
+                return 'webm';
+            }
+        }
+
+        if (buffer.length >= 12) {
+            const brand = buffer.subarray(4, 8).toString('ascii');
+            if (brand === 'ftyp') {
+                return 'mp4';
+            }
+        }
+
+        const byte0 = buffer[0];
+        const byte1 = buffer[1];
+        if (byte0 === 0xFF && (byte1 & 0xE0) === 0xE0) {
+            return 'mp3';
+        }
+
+        return 'unknown';
+    }
+
+    getEncodingHintsForFormat(format) {
+        switch (format) {
+            case 'webm':
+            case 'ogg':
+                return { encoding: 'opus', sample_rate: 48000, channels: 1 };
+            case 'wav':
+                return { encoding: 'linear16' };
+            case 'mp3':
+                return { encoding: 'mp3' };
+            case 'mp4':
+                return { encoding: 'aac' };
+            case 'flac':
+                return { encoding: 'flac' };
+            default:
+                return {};
+        }
+    }
+
+    getMimeTypeForFormat(format) {
+        switch (format) {
+            case 'webm':
+                return 'audio/webm';
+            case 'ogg':
+                return 'audio/ogg';
+            case 'wav':
+                return 'audio/wav';
+            case 'mp3':
+                return 'audio/mpeg';
+            case 'mp4':
+                return 'audio/mp4';
+            case 'flac':
+                return 'audio/flac';
+            default:
+                return undefined;
+        }
+    }
+
     async transcribeUrl(audioUrl, options = {}) {
         try {
             const defaultOptions = {
-                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
@@ -88,7 +182,8 @@ class DeepgramSTT {
                 paragraphs: true,
                 utt_split: 0.8,
                 multichannel: false,
-                ...options
+                ...options,
+                model: this.getModel(options.model)
             };
 
             const { result, error } = await this.deepgram.listen.prerecorded.transcribeUrl(
@@ -110,14 +205,14 @@ class DeepgramSTT {
     async startLiveTranscription(options = {}) {
         try {
             const defaultOptions = {
-                model: 'nova-2-general',
                 language: options.language || 'en-US',
                 smart_format: true,
                 punctuate: true,
                 interim_results: true,
                 diarize: true,
                 utterance_end_ms: 1000,
-                ...options
+                ...options,
+                model: this.getModel(options.model)
             };
 
             console.log(`🚀 Starting live transcription with options:`, JSON.stringify(defaultOptions, null, 2));

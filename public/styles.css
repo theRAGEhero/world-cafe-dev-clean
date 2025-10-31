@@ -1528,11 +1528,11 @@ a:focus-visible {
 }
 
 .table-interface__grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: clamp(var(--space-5), 2vw, var(--space-7));
-  align-items: start;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  width: 100%;
+  width: min(1100px, 100%);
+  margin-inline: auto;
 }
 
 .table-interface__column {
@@ -1540,16 +1540,6 @@ a:focus-visible {
   flex-direction: column;
   gap: clamp(var(--space-5), 2vw, var(--space-6));
   width: 100%;
-}
-
-.table-interface__column--secondary {
-  gap: clamp(var(--space-4), 2vw, var(--space-6));
-}
-
-@media (min-width: 1280px) {
-  .table-interface__grid {
-    grid-template-columns: minmax(0, 1.9fr) minmax(0, 1.1fr);
-  }
 }
 
 .table-interface__nav .btn {

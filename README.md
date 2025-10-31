@@ -92,6 +92,7 @@ docker-compose up -d
 1. Sign up at https://deepgram.com
 2. Get your API key from the dashboard
 3. Add to `.env`: `DEEPGRAM_API_KEY=your_key`
+4. Optional: set `DEEPGRAM_MODEL` (for example `nova-2-meeting`) or choose a model from the admin settings panel.
 
 ### Groq (AI Analysis) 
 1. Sign up at https://console.groq.com

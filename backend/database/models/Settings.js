@@ -79,11 +79,11 @@ class Settings {
     try {
       const promises = [];
       
-      if (deepgramKey !== null) {
+      if (deepgramKey !== null && typeof deepgramKey !== 'undefined') {
         promises.push(this.set('deepgram_api_key', deepgramKey, 'Deepgram API key for speech-to-text transcription'));
       }
       
-      if (groqKey !== null) {
+      if (groqKey !== null && typeof groqKey !== 'undefined') {
         promises.push(this.set('groq_api_key', groqKey, 'Groq API key for LLM analysis'));
       }
       
@@ -143,6 +143,33 @@ class Settings {
     }
   }
 
+  async getDeepgramModel(defaultModel = 'nova-2-meeting') {
+    try {
+      const model = await this.get('deepgram_model');
+      return model || defaultModel;
+    } catch (error) {
+      console.error('Error getting Deepgram model:', error);
+      return defaultModel;
+    }
+  }
+
+  async setDeepgramModel(model) {
+    try {
+      if (!model) {
+        return false;
+      }
+
+      return await this.set(
+        'deepgram_model',
+        model,
+        'Preferred Deepgram transcription model'
+      );
+    } catch (error) {
+      console.error('Error setting Deepgram model:', error);
+      return false;
+    }
+  }
+
   async setPlatformPassword(password) {
     try {
       return await this.set('platform_password', password, 'Platform-wide access password');
@@ -170,6 +197,12 @@ class Settings {
       if (apiKeys.deepgram_api_key) {
         process.env.DEEPGRAM_API_KEY = apiKeys.deepgram_api_key;
         console.log('✅ Loaded Deepgram API key from database');
+      }
+
+      const deepgramModel = await this.getDeepgramModel();
+      if (deepgramModel) {
+        process.env.DEEPGRAM_MODEL = deepgramModel;
+        console.log(`✅ Loaded Deepgram model from database: ${deepgramModel}`);
       }
       
       if (apiKeys.groq_api_key) {

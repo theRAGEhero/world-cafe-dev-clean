@@ -17,9 +17,29 @@ const { Session, Table, Recording, Transcription, QRCode, Settings } = require('
 // Services
 const TranscriptionService = require('./transcription');
 const logger = require('./utils/logger');
-const SessionChatService = require('./sessionChatService');
 const PasswordUtils = require('./passwordUtils');
 const { checkTableStructure } = require('./migrate');
+const { LiveTranscriptionEvents } = require('@deepgram/sdk');
+
+const DEFAULT_DEEPGRAM_MODEL = 'nova-3-general';
+const DEEPGRAM_MODELS = [
+  'nova-3-general',
+  'nova-3-meeting',
+  'nova-3-phonecall',
+  'nova-3-voicemail',
+  'nova-2-general',
+  'nova-2-meeting',
+  'nova-2-phonecall',
+  'nova-2-conversationalai',
+  'nova-2-financialservices',
+  'nova-2-voicemail',
+  'nova-2-automotive',
+  'nova-2-medical',
+  'enhanced-general',
+  'enhanced-meeting',
+  'base-general',
+  'base-meeting'
+];
 
 const app = express();
 const server = http.createServer(app);
@@ -119,6 +139,45 @@ async function platformPasswordMiddleware(req, res, next) {
 
 app.use(platformPasswordMiddleware);
 
+function resolveUploadExtension(file) {
+  if (!file) {
+    return '.webm';
+  }
+
+  const mimeType = (file.mimetype || '').toLowerCase();
+  if (mimeType.includes('webm')) {
+    return '.webm';
+  }
+  if (mimeType.includes('ogg')) {
+    return '.ogg';
+  }
+  if (mimeType.includes('mpeg')) {
+    return '.mp3';
+  }
+  if (mimeType.includes('wav')) {
+    return '.wav';
+  }
+  if (mimeType.includes('x-wav')) {
+    return '.wav';
+  }
+  if (mimeType.includes('mp4')) {
+    return '.mp4';
+  }
+  if (mimeType.includes('aac')) {
+    return '.m4a';
+  }
+  if (mimeType.includes('flac')) {
+    return '.flac';
+  }
+
+  const originalExt = path.extname(file.originalname || '');
+  if (originalExt) {
+    return originalExt;
+  }
+
+  return '.webm';
+}
+
 // Storage configuration for audio uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -129,7 +188,8 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${uuidv4()}${path.extname(file.originalname)}`;
+    const extension = resolveUploadExtension(file);
+    const uniqueName = `${Date.now()}-${uuidv4()}${extension}`;
     cb(null, uniqueName);
   }
 });
@@ -152,7 +212,12 @@ const upload = multer({
 
 // Initialize services
 const transcriptionService = new TranscriptionService();
-// Chat service disabled - requires AI services
+// Chat service disabled - requires AI services. Kept as null to avoid runtime reference errors.
+const sessionChatService = null;
+
+if (!process.env.DEEPGRAM_MODEL) {
+  process.env.DEEPGRAM_MODEL = DEFAULT_DEEPGRAM_MODEL;
+}
 
 // Initialize database connection
 async function initializeDatabase() {
@@ -393,7 +458,7 @@ io.on('connection', (socket) => {
   });
   
   // Live transcription WebSocket handlers
-  socket.on('start-live-transcription', async (data) => {
+  socket.on('start-live-transcription', async (data = {}) => {
     try {
       console.log(`🎤 Starting live transcription for table ${data.tableId} in session ${data.sessionId}`);
       console.log(`🔑 Deepgram API Key configured: ${!!process.env.DEEPGRAM_API_KEY}`);
@@ -402,13 +467,36 @@ io.on('connection', (socket) => {
       const DeepgramSTT = require('./transcription');
       const deepgram = new DeepgramSTT();
       
+      const model = data.model || process.env.DEEPGRAM_MODEL || DEFAULT_DEEPGRAM_MODEL;
+      if (!DEEPGRAM_MODELS.includes(model)) {
+        console.warn(`⚠️ Requested Deepgram model "${model}" is not in supported list. Falling back to default.`);
+      }
+
       // Start Deepgram live transcription
       console.log(`🚀 Creating Deepgram live connection with options:`, {
-        language: data.language || 'en-US'
+        language: data.language || 'en-US',
+        model,
+        encoding: 'opus',
+        sample_rate: 48000,
+        channels: 1,
+        smart_format: true,
+        punctuate: true,
+        interim_results: true,
+        diarize: true,
+        utterance_end_ms: 1000
       });
       
       const connection = await deepgram.startLiveTranscription({
-        language: data.language || 'en-US'
+        language: data.language || 'en-US',
+        model,
+        encoding: 'opus',
+        sample_rate: 48000,
+        channels: 1,
+        smart_format: true,
+        punctuate: true,
+        interim_results: true,
+        diarize: true,
+        utterance_end_ms: 1000
       });
       
       console.log(`🔗 Deepgram connection created:`, !!connection);
@@ -418,82 +506,112 @@ io.on('connection', (socket) => {
       socket.deepgramConnection = connection;
       
       // Handle Deepgram results (note: lowercase 'results' for live API)
-      connection.on('results', (data) => {
+      socket.liveTranscriptionWordCache = new Set();
+
+      const handleTranscriptPayload = (rawPayload) => {
         try {
-          console.log('🔍 Raw Deepgram response length:', data.length);
-          const result = JSON.parse(data);
-          console.log('🔍 Parsed Deepgram result type:', result.type || 'unknown');
-          
-          let transcript = '';
-          let isFinal = false;
-          
-          // Try multiple possible Deepgram response formats for live streaming
-          if (result && result.channel && result.channel.alternatives && result.channel.alternatives[0]) {
-            // Format 1: result.channel.alternatives[0].transcript (Deepgram Live API)
-            transcript = result.channel.alternatives[0].transcript;
-            isFinal = result.is_final || false;
-            console.log('📝 Using format 1: channel.alternatives[0]');
-          } else if (result && result.results && result.results.channels && result.results.channels[0] && result.results.channels[0].alternatives && result.results.channels[0].alternatives[0]) {
-            // Format 2: result.results.channels[0].alternatives[0].transcript (Deepgram File API format)
-            transcript = result.results.channels[0].alternatives[0].transcript;
-            isFinal = result.results.is_final || result.is_final || false;
-            console.log('📝 Using format 2: results.channels[0].alternatives[0]');
-          } else if (result && result.alternatives && result.alternatives[0]) {
-            // Format 3: result.alternatives[0].transcript (Alternative format)
-            transcript = result.alternatives[0].transcript;
-            isFinal = result.is_final || false;
-            console.log('📝 Using format 3: alternatives[0]');
+          const payload = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+          if (!payload || typeof payload !== 'object') {
+            console.warn('⚠️ Received unexpected transcript payload type:', typeof rawPayload);
+            return;
           }
-          
-          console.log(`📝 Extracted transcript: "${transcript}", isFinal: ${isFinal}`);
-          
-          if (transcript && transcript.trim()) {
-            // Send real-time transcription to client
-            console.log(`📤 Sending to client: "${transcript}" (${isFinal ? 'final' : 'interim'})`);
+
+          // Support both Live and legacy payload formats
+          const channelAlternative = payload?.channel?.alternatives?.[0]
+            || payload?.results?.channels?.[0]?.alternatives?.[0]
+            || payload?.alternatives?.[0];
+
+          const transcript = channelAlternative?.transcript || '';
+          const incomingWords = Array.isArray(channelAlternative?.words) ? channelAlternative.words : [];
+          const isFinal = Boolean(
+            payload?.is_final
+            ?? payload?.results?.is_final
+            ?? payload?.metadata?.is_final
+          );
+
+          const wordCache = socket.liveTranscriptionWordCache || new Set();
+          const freshWords = incomingWords.filter((word) => {
+            if (!word || typeof word.word !== 'string') {
+              return false;
+            }
+
+            const start = typeof word.start === 'number' ? word.start.toFixed(3) : 'na';
+            const end = typeof word.end === 'number' ? word.end.toFixed(3) : 'na';
+            const key = `${start}-${end}-${word.word}`;
+
+            if (wordCache.has(key)) {
+              return false;
+            }
+
+            wordCache.add(key);
+            return true;
+          });
+
+          socket.liveTranscriptionWordCache = wordCache;
+
+          const hasTranscript = typeof transcript === 'string' && transcript.trim().length > 0;
+
+          if (hasTranscript || freshWords.length > 0) {
+            console.log(`📤 Emitting live transcript payload (${isFinal ? 'final' : 'interim'})`);
             socket.emit('live-transcription-result', {
-              transcript: transcript,
+              transcript: hasTranscript ? transcript : '',
+              words: freshWords,
               is_final: isFinal,
               timestamp: new Date()
             });
-          } else if (transcript === '') {
-            console.log('📝 Empty transcript - likely silence or processing');
           } else {
-            console.log('⚠️ Unexpected Deepgram response format:', JSON.stringify(result, null, 2));
+            console.log('📥 Skipping empty transcript payload from Deepgram');
           }
         } catch (error) {
           console.error('❌ Error processing Deepgram response:', error);
-          console.error('❌ Raw data:', data);
+          console.error('❌ Raw payload:', rawPayload);
         }
-      });
-      
-      connection.on('error', (error) => {
-        console.error('❌ Deepgram live transcription error:', error);
-        socket.emit('live-transcription-error', { error: error.message || error });
-      });
-      
-      connection.on('close', (event) => {
-        console.log('🔌 Deepgram live transcription connection closed');
-        console.log('🔌 Close event details:', event);
-        socket.emit('live-transcription-ended');
-      });
-      
-      connection.on('open', () => {
+      };
+
+      connection.on(LiveTranscriptionEvents.Transcript, handleTranscriptPayload);
+      // Fallback for legacy lowercase event names emitted by older SDK versions
+      connection.on('results', handleTranscriptPayload);
+
+      connection.on(LiveTranscriptionEvents.Open, () => {
         console.log('✅ Deepgram live transcription connection opened successfully');
         socket.emit('live-transcription-started');
       });
-      
-      // Add metadata event listener for connection status
-      connection.on('metadata', (data) => {
+
+      connection.on(LiveTranscriptionEvents.Close, (event) => {
+        console.log('🔌 Deepgram live transcription connection closed');
+        console.log('🔌 Close event details:', event);
+        socket.emit('live-transcription-ended');
+        socket.liveTranscriptionWordCache = new Set();
+      });
+
+      connection.on(LiveTranscriptionEvents.Error, (error) => {
+        console.error('❌ Deepgram live transcription error:', error);
+        socket.emit('live-transcription-error', { error: error.message || error });
+      });
+
+      connection.on(LiveTranscriptionEvents.Metadata, (data) => {
         console.log('📊 Deepgram metadata:', data);
       });
-      
-      // Add warning event listener
+
+      connection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
+        console.log('🛑 Deepgram utterance end:', data?.utterance_id || 'unknown');
+      });
+
+      connection.on(LiveTranscriptionEvents.SpeechStarted, () => {
+        console.log('🎙️ Deepgram detected speech start');
+      });
+
+      connection.on(LiveTranscriptionEvents.Unhandled, (data) => {
+        console.warn('⚠️ Deepgram emitted unhandled event:', data?.type || data);
+      });
+
+      // Legacy warning event
       connection.on('warning', (warning) => {
         console.warn('⚠️ Deepgram warning:', warning);
       });
-      
+
       socket.emit('live-transcription-started');
-      
+
     } catch (error) {
       console.error('❌ Error starting live transcription:', error);
       socket.emit('live-transcription-error', { error: error.message });
@@ -503,8 +621,31 @@ io.on('connection', (socket) => {
   socket.on('live-audio-chunk', (audioData) => {
     // Forward audio chunk to Deepgram
     if (socket.deepgramConnection) {
-      console.log(`🎵 Forwarding audio chunk to Deepgram: ${audioData.byteLength} bytes`);
-      socket.deepgramConnection.send(audioData);
+      try {
+        let payload = audioData;
+
+        if (Buffer.isBuffer(audioData)) {
+          payload = audioData;
+        } else if (audioData instanceof ArrayBuffer) {
+          payload = Buffer.from(audioData);
+        } else if (ArrayBuffer.isView(audioData)) {
+          payload = Buffer.from(audioData.buffer, audioData.byteOffset, audioData.byteLength);
+        } else if (Array.isArray(audioData)) {
+          payload = Buffer.from(audioData);
+        } else if (audioData && audioData.data) {
+          payload = Buffer.from(audioData.data);
+        }
+
+        if (!Buffer.isBuffer(payload)) {
+          console.warn('⚠️ Unable to coerce audio chunk into Buffer, skipping');
+          return;
+        }
+
+        console.log(`🎵 Forwarding audio chunk to Deepgram: ${payload.byteLength} bytes`);
+        socket.deepgramConnection.send(payload);
+      } catch (chunkError) {
+        console.error('❌ Failed to forward audio chunk to Deepgram:', chunkError);
+      }
     } else {
       console.log('⚠️ No Deepgram connection available for audio chunk');
     }
@@ -517,6 +658,8 @@ io.on('connection', (socket) => {
       socket.deepgramConnection.finish();
       socket.deepgramConnection = null;
     }
+
+    socket.liveTranscriptionWordCache = new Set();
     
     socket.emit('live-transcription-stopped');
   });
@@ -1588,6 +1731,7 @@ app.post('/api/recordings/:recordingId/reprocess', async (req, res) => {
         
         // Also emit transcription-completed event for real-time display
         client.emit('transcription-completed', {
+          source: 'reprocess',
           transcription: {
             id: transcription.id,
             transcript: transcriptionService.extractTranscript(transcriptionResult),
@@ -1726,7 +1870,7 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
     }
     
     const { sessionId, tableNumber } = req.params;
-    const { source, skipTranscription } = req.body; // Extract source and skipTranscription flag from request body
+    const { source, skipTranscription, duration } = req.body; // Extract source, skipTranscription flag, and duration from request body
     
     // Find the table
     const table = await Table.findBySessionAndNumber(sessionId, parseInt(tableNumber));
@@ -1744,13 +1888,17 @@ app.post('/api/sessions/:sessionId/tables/:tableNumber/upload-audio', upload.sin
     const fileStats = fs.statSync(audioPath);
     
     // Create recording record
+    const durationSeconds = duration ? parseFloat(duration) : null;
+    const normalizedDuration = Number.isFinite(durationSeconds) ? durationSeconds : null;
+
     const recording = await Recording.create({
       sessionId,
       tableId: table.id,
       filename: req.file.filename,
       filePath: audioPath,
       fileSize: fileStats.size,
-      mimeType: req.file.mimetype
+      mimeType: req.file.mimetype,
+      duration: normalizedDuration || undefined
     });
     
     // If skipTranscription is true, just save the recording without processing
@@ -1946,17 +2094,38 @@ app.get('/api/sessions/:sessionId/all-transcriptions', async (req, res) => {
 });
 
 
+// Public configuration endpoints
+app.get('/api/config/transcription', (req, res) => {
+  res.json({
+    model: process.env.DEEPGRAM_MODEL || DEFAULT_DEEPGRAM_MODEL,
+    available_models: DEEPGRAM_MODELS
+  });
+});
+
+
 
 // Admin settings routes
 app.post('/api/admin/settings/api-keys', async (req, res) => {
   try {
-    const { deepgram_api_key } = req.body;
+    const { deepgram_api_key = null, deepgram_model = null } = req.body || {};
     
     // Save to database (only Deepgram key)
     const settings = new Settings(db);
-    const success = await settings.setApiKeys(deepgram_api_key, null);
+    const apiKeyResult = await settings.setApiKeys(deepgram_api_key, null);
+    let modelResult = true;
+
+    if (deepgram_model !== null && typeof deepgram_model !== 'undefined') {
+      if (!DEEPGRAM_MODELS.includes(deepgram_model)) {
+        return res.status(400).json({ error: 'Unsupported Deepgram model requested' });
+      }
+
+      modelResult = await settings.setDeepgramModel(deepgram_model);
+      if (modelResult) {
+        process.env.DEEPGRAM_MODEL = deepgram_model;
+      }
+    }
     
-    if (!success) {
+    if (!apiKeyResult || !modelResult) {
       return res.status(500).json({ error: 'Failed to save API keys to database' });
     }
     
@@ -1968,7 +2137,8 @@ app.post('/api/admin/settings/api-keys', async (req, res) => {
     res.json({ 
       success: true, 
       message: 'API keys updated and saved to database successfully',
-      deepgram_configured: !!process.env.DEEPGRAM_API_KEY
+      deepgram_configured: !!process.env.DEEPGRAM_API_KEY,
+      deepgram_model: process.env.DEEPGRAM_MODEL || DEFAULT_DEEPGRAM_MODEL
     });
     
   } catch (error) {
@@ -2143,15 +2313,18 @@ app.post('/api/admin/login', async (req, res) => {
 
 app.get('/api/admin/settings/status', async (req, res) => {
   try {
+    const dbHealthy = await db.isHealthy();
     const status = {
       database: {
-        connected: await db.isHealthy(),
-        status: await db.isHealthy() ? 'Connected' : 'Disconnected'
+        connected: dbHealthy,
+        status: dbHealthy ? 'Connected' : 'Disconnected'
       },
       apis: {
         deepgram: {
           configured: !!process.env.DEEPGRAM_API_KEY,
-          status: process.env.DEEPGRAM_API_KEY ? 'Configured' : 'Not Configured'
+          status: process.env.DEEPGRAM_API_KEY ? 'Configured' : 'Not Configured',
+          model: process.env.DEEPGRAM_MODEL || DEFAULT_DEEPGRAM_MODEL,
+          available_models: DEEPGRAM_MODELS
         },
         groq: {
           configured: !!process.env.GROQ_API_KEY,

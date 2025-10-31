@@ -19,11 +19,102 @@ let lastFocusedTranscriptionCard = null;
 let activeTableQrModal = null;
 let previousFocusBeforeQrModal = null;
 let qrModalEscHandler = null;
+let currentInterimBubble = null;
+let liveRecorderMimeType = null;
+let liveRecorderStopResolver = null;
+let showAllTableQRCodes = false;
+
+const DEEPGRAM_MODEL_OPTIONS = [
+    'nova-3-general',
+    'nova-3-meeting',
+    'nova-3-phonecall',
+    'nova-3-voicemail',
+    'nova-2-meeting',
+    'nova-2-general',
+    'nova-2-phonecall',
+    'nova-2-conversationalai',
+    'nova-2-financialservices',
+    'nova-2-voicemail',
+    'nova-2-automotive',
+    'nova-2-medical',
+    'enhanced-general',
+    'enhanced-meeting',
+    'base-general',
+    'base-meeting'
+];
+
+window.deepgramModel = window.deepgramModel || 'nova-3-general';
+let deepgramModelSelectInitialized = false;
+
+const MINIMUM_VALID_AUDIO_BYTES = 4096;
 
 // Lightweight session metrics cache used to keep counters accurate
 const tableTranscriptionCounts = new Map();
 const tableRecordingCounts = new Map();
 const tableParticipantSnapshots = new Map();
+const tableConnectionState = new Map();
+
+function tablesMatch(tableA, tableB) {
+    if (!tableA || !tableB) return false;
+
+    const haveIds = typeof tableA.id !== 'undefined' && typeof tableB.id !== 'undefined';
+    if (haveIds && String(tableA.id) === String(tableB.id)) {
+        return true;
+    }
+
+    const haveNumbers = typeof tableA.table_number !== 'undefined' && typeof tableB.table_number !== 'undefined';
+    if (haveNumbers && String(tableA.table_number) === String(tableB.table_number)) {
+        return true;
+    }
+
+    return false;
+}
+
+async function stopRecordingIfActive(options = {}) {
+    const { silent = false } = options;
+
+    if (!isRecording) {
+        return;
+    }
+
+    try {
+        const tableKeyCandidates = [];
+        if (currentTable?.id) tableKeyCandidates.push(String(currentTable.id));
+        if (currentTable?.table_number) tableKeyCandidates.push(String(currentTable.table_number));
+
+        const connectionInfo = tableKeyCandidates
+            .map((key) => tableConnectionState.get(key))
+            .find(Boolean);
+
+        if (connectionInfo) {
+            console.log('[RecordingGuard] Table connection state before stop:', {
+                tableId: currentTable?.id || currentTable?.table_number,
+                hasClients: connectionInfo.hasClients,
+                clientCount: connectionInfo.clientCount
+            });
+        }
+
+        const liveStreamActive = Boolean(
+            window.liveTranscriptionStream &&
+            window.liveTranscriptionStream.getTracks().some(track => track.readyState === 'live')
+        );
+
+        if (liveStreamActive) {
+            await stopLiveTranscription({ skipEmit: false, silent: true });
+        } else if (mediaRecorder && typeof mediaRecorder.state !== 'undefined' && mediaRecorder.state !== 'inactive') {
+            await stopRecording({ silent: true });
+        } else if (mediaRecorder && typeof mediaRecorder.stop === 'function') {
+            await stopRecording({ silent: true });
+        } else {
+            isRecording = false;
+        }
+    } catch (error) {
+        console.error('Error stopping active recording during table switch:', error);
+        if (!silent) {
+            showToast('Unable to stop the current recording automatically. Please stop it manually.', 'error');
+        }
+    }
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -34,6 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadActiveSessions();
     handleURLParams();
     setupMobileNavigation();
+    initializeDeepgramConfiguration();
 });
 
 // Mobile and touch detection
@@ -162,12 +254,12 @@ function applyToElements(ids, callback) {
 }
 
 const LIVE_TRANSCRIPTION_UI_IDS = {
-    startButtons: ['liveTranscriptionBtn', 'sessionLiveTranscriptionBtn'],
-    stopButtons: ['stopLiveTranscriptionBtn', 'sessionStopLiveTranscriptionBtn'],
-    counters: ['liveTranscriptionCount', 'sessionLiveTranscriptionCount'],
-    contentContainers: ['liveTranscriptionContent', 'sessionLiveTranscriptionContent'],
-    displayContainers: ['transcriptionDisplay', 'sessionTranscriptionDisplay'],
-    emptyStates: ['emptyTranscriptionState', 'sessionEmptyTranscriptionState'],
+    startButtons: ['liveTranscriptionBtn'],
+    stopButtons: ['stopLiveTranscriptionBtn'],
+    counters: ['liveTranscriptionCount'],
+    contentContainers: ['liveTranscriptionContent'],
+    displayContainers: ['transcriptionDisplay'],
+    emptyStates: ['emptyTranscriptionState'],
     audioWaveContainer: 'audioWaveContainer',
     audioWave: 'audioWave',
     audioLevel: 'audioLevel'
@@ -784,7 +876,8 @@ function initializeSocket() {
     socket.on('transcription-completed', (data) => {
         console.log('📝 Received transcription-completed event:', data);
 
-        const isReprocessUpdate = data?.source === 'reprocess';
+        const eventSource = data?.source || data?.transcription?.source;
+        const isReprocessUpdate = eventSource === 'reprocess';
 
         if (isReprocessUpdate) {
             const sessionIdForRefresh = data.sessionId || currentSession?.id;
@@ -817,28 +910,47 @@ function initializeSocket() {
     socket.on('live-transcription-result', (data) => {
         console.log(`📥 Live transcription result received from server:`, data);
         console.log(`📥 Transcript: "${data.transcript}", isFinal: ${data.is_final}, timestamp: ${data.timestamp}`);
-        
-        // Ensure we only process non-empty transcripts
-        if (data.transcript && data.transcript.trim()) {
+
+        const words = Array.isArray(data.words) ? data.words : [];
+
+        if (words.length > 0) {
+            words.forEach(word => {
+                if (!word || typeof word.word !== 'string') return;
+                const speaker = typeof word.speaker === 'number' ? word.speaker : 0;
+                displayLiveTranscriptionWord(speaker, word.word);
+            });
+
+            if (data.is_final) {
+                currentLiveSpeaker = null;
+                currentLiveBubble = null;
+                if (currentInterimBubble) {
+                    currentInterimBubble.remove();
+                    currentInterimBubble = null;
+                }
+            }
+        } else if (data.transcript && data.transcript.trim()) {
+            // Fallback to transcript-based display when word data is unavailable
             displayLiveTranscriptionResult(data.transcript, data.is_final);
         } else {
-            console.log('📥 Skipping empty transcript');
+            console.log('📥 Skipping empty transcript payload');
         }
     });
     
     socket.on('live-transcription-error', (data) => {
         console.error('❌ Live transcription error:', data.error);
         showToast(`Live transcription error: ${data.error}`, 'error');
-        stopLiveTranscription();
+        resetLiveTranscriptionState({ silent: true });
     });
     
     socket.on('live-transcription-ended', () => {
         console.log('🔌 Live transcription connection ended');
+        resetLiveTranscriptionState({ silent: true });
         showToast('Live transcription connection ended', 'info');
     });
     
     socket.on('live-transcription-stopped', () => {
         console.log('🛑 Live transcription stopped');
+        resetLiveTranscriptionState({ silent: true });
     });
 
     // Reprocess status event handlers
@@ -858,15 +970,6 @@ function initializeSocket() {
         }
     });
 
-    if (options.syncTableStats) {
-        const tableNumber = currentTable?.table_number;
-        if (tableNumber != null) {
-            const totalForTable = filteredTranscriptions.length;
-            tableTranscriptionCounts.set(String(tableNumber), totalForTable);
-            syncTableCardStat('transcriptions', tableNumber, totalForTable);
-            updateSessionSummaryIndicators();
-        }
-    }
 }
 
 // Handle reprocess status updates
@@ -978,10 +1081,10 @@ function setupEventListeners() {
     safeSetEventListener('mediaFileInput', 'onchange', handleMediaFileUpload);
     
     // Live transcription controls
-    ['liveTranscriptionBtn', 'sessionLiveTranscriptionBtn'].forEach((id) => {
+    ['liveTranscriptionBtn'].forEach((id) => {
         safeSetEventListener(id, 'onclick', startLiveTranscription);
     });
-    ['stopLiveTranscriptionBtn', 'sessionStopLiveTranscriptionBtn'].forEach((id) => {
+    ['stopLiveTranscriptionBtn'].forEach((id) => {
         safeSetEventListener(id, 'onclick', stopLiveTranscription);
     });
     
@@ -1158,7 +1261,7 @@ function showSessionDashboard() {
     showScreen('sessionDashboard');
 }
 
-function showTableInterface(tableId) {
+async function showTableInterface(tableId) {
     console.log('[DEBUG] showTableInterface called with tableId:', tableId);
     console.log('[DEBUG] Current currentTable before override:', currentTable ? {id: currentTable.id, table_number: currentTable.table_number, name: currentTable.name} : 'null');
     
@@ -1166,11 +1269,15 @@ function showTableInterface(tableId) {
 
     const foundTable = currentSession.tables.find(t => t.id === tableId || t.table_number === tableId);
     console.log('[DEBUG] Found table in showTableInterface:', foundTable ? {id: foundTable.id, table_number: foundTable.table_number, name: foundTable.name} : 'not found');
+    if (!foundTable) return;
+
+    if (!tablesMatch(currentTable, foundTable)) {
+        await stopRecordingIfActive({ silent: true });
+    }
+
     currentTable = foundTable;
 
-    if (!currentTable) return;
-
-    setupTableInterface();
+    await setupTableInterface();
     loadTableRecordings();
     showScreen('tableInterface');
 }
@@ -1874,6 +1981,11 @@ async function joinTableWithDetails(sessionId, tableNumber, participantName) {
         const joinResult = await joinResponse.json();
         console.log(`[DEBUG] Join successful:`, joinResult);
         
+        // Stop any active recording before switching tables
+        if (!tablesMatch(currentTable, table)) {
+            await stopRecordingIfActive({ silent: true });
+        }
+
         // Set current session and table data
         currentSession = session;
         currentTable = table;
@@ -2312,6 +2424,10 @@ async function findAndJoinSessionByCode(sessionCode, participantName) {
             }
         } else if (result.type === 'table_joined') {
             // Directly joined a table
+            if (!tablesMatch(currentTable, result.table)) {
+                await stopRecordingIfActive({ silent: true });
+            }
+
             currentSession = result.session;
             currentTable = result.table;
             socket.emit('join-session', result.session.id);
@@ -2921,18 +3037,6 @@ function populateSessionsListFiltered(sessions = null) {
                         transition: all 0.2s ease;
                     " onmouseover="this.style.background='#5a67d8'" onmouseout="this.style.background='#667eea'">
                         📊 Dashboard
-                    </span>
-                    <span onclick="event.stopPropagation(); viewAllTranscriptions('${session.id}')" style="
-                        background: #28a745;
-                        color: white;
-                        padding: 4px 8px;
-                        border-radius: 6px;
-                        font-size: 10px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                    " onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
-                        📝 Transcriptions
                     </span>
                 </div>
             </div>
@@ -3924,6 +4028,10 @@ async function loadSessionDashboard(sessionId) {
         
         // Update recording count
         document.getElementById('recordingCount').textContent = totalRecordings;
+        const sessionBadge = document.getElementById('sessionRecordingCountBadge');
+        if (sessionBadge) {
+            sessionBadge.textContent = totalRecordings;
+        }
         
         // Update total duration with proper formatting
         const durationElement = document.getElementById('totalRecordingDuration');
@@ -3944,6 +4052,10 @@ async function loadSessionDashboard(sessionId) {
     } catch (error) {
         console.warn('Failed to load recordings for dashboard:', error);
         document.getElementById('recordingCount').textContent = session.total_recordings || 0;
+        const sessionBadge = document.getElementById('sessionRecordingCountBadge');
+        if (sessionBadge) {
+            sessionBadge.textContent = String(session.total_recordings || 0);
+        }
         const durationElement = document.getElementById('totalRecordingDuration');
         if (durationElement) {
             durationElement.textContent = '0m';
@@ -3956,9 +4068,20 @@ async function loadSessionDashboard(sessionId) {
     // Load tables if available
     const hasRealTables = Array.isArray(session.tables) && session.tables.some(table => table && (table.id || table.session_id));
 
+    showAllTableQRCodes = false;
+
+    const sessionRecordingsSection = document.getElementById('sessionRecordingsSection');
+    if (sessionRecordingsSection) {
+        showElement(sessionRecordingsSection);
+        const badgeElement = document.getElementById('sessionRecordingCountBadge');
+        if (badgeElement) {
+            const total = typeof totalRecordings === 'number' ? totalRecordings : (session.total_recordings || 0);
+            badgeElement.textContent = String(total);
+        }
+    }
+
     if (hasRealTables) {
         displayTables(session.tables);
-        loadSessionRecordings(sessionId);
     } else {
         // Generate mock tables for display
         const mockTables = [];
@@ -3977,13 +4100,6 @@ async function loadSessionDashboard(sessionId) {
         }
         session.tables = mockTables;
         displayTables(mockTables);
-
-        renderRecordingList([], {
-            listId: 'sessionRecordingsList',
-            emptyStateId: 'sessionRecordingsEmpty',
-            badgeId: 'sessionRecordingCountBadge',
-            context: 'session'
-        });
     }
 
     // Setup QR codes section
@@ -4360,7 +4476,10 @@ function populateQRCodesGrid() {
     
     // Table QR Codes
     if (currentSession.tables) {
-        currentSession.tables.slice(0, 8).forEach(table => { // Show first 8 tables
+        const tables = currentSession.tables;
+        const tablesToRender = showAllTableQRCodes ? tables : tables.slice(0, 8);
+
+        tablesToRender.forEach(table => {
             const tableNumber = table.table_number || table.id;
             qrHTML += `
                 <div class="qr-card">
@@ -4379,7 +4498,7 @@ function populateQRCodesGrid() {
             `;
         });
         
-        if (currentSession.tables.length > 8) {
+        if (!showAllTableQRCodes && currentSession.tables.length > 8) {
             qrHTML += `
                 <div class="qr-card">
                     <h4>More Tables</h4>
@@ -4391,6 +4510,11 @@ function populateQRCodesGrid() {
     }
     
     qrCodesGrid.innerHTML = qrHTML;
+}
+
+function showAllTableQRs() {
+    showAllTableQRCodes = true;
+    populateQRCodesGrid();
 }
 
 function downloadQR(type, sessionId, tableNumber = null) {
@@ -4861,6 +4985,15 @@ async function joinSpecificTable(sessionId, tableId) {
     showLoading(`Joining Table ${tableId}...`);
     
     try {
+        const targetTableIdentifier = {
+            id: tableId,
+            table_number: parseInt(tableId, 10)
+        };
+
+        if (!tablesMatch(currentTable, targetTableIdentifier)) {
+            await stopRecordingIfActive({ silent: true });
+        }
+
         // Load session data without showing session dashboard
         console.log(`[DEBUG] Loading session data for ${sessionId}...`);
         const response = await fetch(`/api/sessions/${sessionId}`);
@@ -5113,7 +5246,7 @@ function setupTableInterface() {
             sessionId: currentSession.id
         });
     }
-    
+
     // Emit join-table event for client tracking
     if (currentSession && currentTable) {
         socket.emit('join-table', {
@@ -5121,11 +5254,11 @@ function setupTableInterface() {
             sessionId: currentSession.id
         });
         console.log(`[DEBUG] Emitted join-table event for table ${currentTable.id} in session ${currentSession.id}`);
-        
+
         // Update previous table reference
         previousTable = { ...currentTable };
     }
-    
+
     // Update session info in header
     if (currentSession) {
         const sessionTitleHeader = document.getElementById('sessionTitleHeader');
@@ -5199,12 +5332,6 @@ function setupTableInterface() {
     // Join functionality has been removed from the interface
 
     // Participants functionality removed
-
-    renderTableLobby();
-    renderFacilitatorControls();
-
-    // Refresh roster details in the background to capture latest participants and activity
-    refreshTableRoster();
 
     // Load existing transcriptions
     loadExistingTranscriptions();
@@ -5456,11 +5583,265 @@ async function refreshTableRoster() {
     }
 }
 
+function getPreferredMediaRecorderOptions() {
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+        return {};
+    }
+
+    const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/webm',
+        'audio/ogg'
+    ];
+
+    for (const type of preferredTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+            return { mimeType: type };
+        }
+    }
+
+    return {};
+}
+
+function normalizeMimeType(mimeType) {
+    if (!mimeType || typeof mimeType !== 'string') {
+        return 'audio/webm';
+    }
+
+    const lower = mimeType.toLowerCase();
+    if (lower.includes('webm')) {
+        return 'audio/webm';
+    }
+    if (lower.includes('ogg')) {
+        return 'audio/ogg';
+    }
+    if (lower.includes('mpeg')) {
+        return 'audio/mpeg';
+    }
+    if (lower.includes('mp4')) {
+        return 'audio/mp4';
+    }
+    if (lower.includes('wav')) {
+        return 'audio/wav';
+    }
+    if (lower.includes('x-wav')) {
+        return 'audio/wav';
+    }
+    if (lower.includes('flac')) {
+        return 'audio/flac';
+    }
+
+    return 'audio/webm';
+}
+
+function getFileExtensionFromMime(mimeType) {
+    const normalized = normalizeMimeType(mimeType);
+
+    switch (normalized) {
+        case 'audio/webm':
+            return 'webm';
+        case 'audio/ogg':
+            return 'ogg';
+        case 'audio/mpeg':
+            return 'mp3';
+        case 'audio/mp4':
+            return 'm4a';
+        case 'audio/wav':
+            return 'wav';
+        case 'audio/flac':
+            return 'flac';
+        default:
+            return 'webm';
+    }
+}
+
+function createAudioBlobFromChunks(chunks, recorder) {
+    const recorderType = recorder && typeof recorder.mimeType === 'string' ? recorder.mimeType : '';
+    const chunkType = Array.isArray(chunks) && chunks.length > 0 && chunks[0] && typeof chunks[0].type === 'string'
+        ? chunks[0].type
+        : '';
+    const normalizedType = normalizeMimeType(recorderType || chunkType);
+
+    return {
+        blob: new Blob(chunks, { type: normalizedType }),
+        mimeType: normalizedType
+    };
+}
+
+function normalizeAudioBlob(blob) {
+    if (!(blob instanceof Blob)) {
+        return { blob, mimeType: 'audio/webm' };
+    }
+
+    const normalizedType = normalizeMimeType(blob.type);
+    if (blob.type === normalizedType) {
+        return { blob, mimeType: normalizedType };
+    }
+
+    return {
+        blob: blob.slice(0, blob.size, normalizedType),
+        mimeType: normalizedType
+    };
+}
+
+function detectAudioFormatFromBuffer(buffer) {
+    if (!buffer || buffer.byteLength < 4) {
+        return 'unknown';
+    }
+
+    const view = new Uint8Array(buffer);
+    const ascii = String.fromCharCode(...view.slice(0, 4));
+
+    if (ascii === 'RIFF') {
+        return 'wav';
+    }
+    if (ascii === 'OggS') {
+        return 'ogg';
+    }
+    if (ascii === 'fLaC') {
+        return 'flac';
+    }
+    if (ascii.startsWith('ID3')) {
+        return 'mp3';
+    }
+
+    if (buffer.byteLength >= 4) {
+        const headerView = new DataView(buffer, 0, 4);
+        if (headerView.getUint32(0) === 0x1a45dfa3) {
+            return 'webm';
+        }
+    }
+
+    if (buffer.byteLength >= 12) {
+        const brand = String.fromCharCode(...view.slice(4, 8));
+        if (brand === 'ftyp') {
+            return 'mp4';
+        }
+    }
+
+    const byte0 = view[0];
+    const byte1 = view[1];
+    if (byte0 === 0xff && (byte1 & 0xe0) === 0xe0) {
+        return 'mp3';
+    }
+
+    return 'unknown';
+}
+
+async function detectAudioFormatFromBlob(blob) {
+    if (!(blob instanceof Blob)) {
+        return 'unknown';
+    }
+
+    const headerSize = Math.min(blob.size, 64);
+    if (headerSize === 0) {
+        return 'unknown';
+    }
+
+    try {
+        const buffer = await blob.slice(0, headerSize).arrayBuffer();
+        return detectAudioFormatFromBuffer(buffer);
+    } catch (error) {
+        console.warn('Failed to inspect audio blob header:', error);
+        return 'unknown';
+    }
+}
+
+function getAudioFilename(baseName, mimeType) {
+    const safeBase = typeof baseName === 'string' && baseName.trim().length > 0 ? baseName.trim() : 'recording';
+    return `${safeBase}.${getFileExtensionFromMime(mimeType)}`;
+}
+
+function mixToMono(audioBuffer) {
+    const { numberOfChannels, length } = audioBuffer;
+    if (numberOfChannels === 1) {
+        return audioBuffer.getChannelData(0);
+    }
+
+    const result = new Float32Array(length);
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+        const channelData = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            result[i] += channelData[i];
+        }
+    }
+
+    for (let i = 0; i < length; i++) {
+        result[i] /= numberOfChannels;
+    }
+
+    return result;
+}
+
+function floatTo16BitPCM(view, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+        const sample = Math.max(-1, Math.min(1, input[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
+}
+
+function audioBufferToWav(audioBuffer) {
+    const sampleRate = audioBuffer.sampleRate;
+    const channelData = mixToMono(audioBuffer);
+    const samples = channelData.length;
+    const bytesPerSample = 2;
+    const dataSize = samples * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * bytesPerSample, true);
+    view.setUint16(32, bytesPerSample, true);
+    view.setUint16(34, bytesPerSample * 8, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    floatTo16BitPCM(view, 44, channelData);
+    return buffer;
+}
+
+async function convertBlobToWav(blob) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+        throw new Error('Web Audio API is not supported in this browser');
+    }
+
+    const audioContext = new AudioCtx();
+    try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+        const wavBuffer = audioBufferToWav(audioBuffer);
+        return new Blob([wavBuffer], { type: 'audio/wav' });
+    } finally {
+        if (typeof audioContext.close === 'function') {
+            try {
+                await audioContext.close();
+            } catch (closeError) {
+                console.warn('AudioContext close warning:', closeError);
+            }
+        }
+    }
+}
+
 // Recording functionality
 async function startRecording() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder = new MediaRecorder(stream, getPreferredMediaRecorderOptions());
         audioChunks = [];
         
         mediaRecorder.ondataavailable = (event) => {
@@ -5468,8 +5849,9 @@ async function startRecording() {
         };
         
         mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            await uploadAudio(audioBlob);
+            const { blob, mimeType } = createAudioBlobFromChunks(audioChunks, mediaRecorder);
+            const filename = getAudioFilename('recording', mimeType);
+            await uploadAudio(blob, filename);
             stream.getTracks().forEach(track => track.stop());
         };
         
@@ -5516,31 +5898,68 @@ async function startRecording() {
     }
 }
 
-function stopRecording() {
-    if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
-        isRecording = false;
-        
-        // Update UI (if elements exist)
+function stopRecording(options = {}) {
+    const normalizedOptions = (options instanceof Event) ? {} : options;
+    const { silent = false } = normalizedOptions;
+
+    if (!mediaRecorder || !isRecording) {
+        if (!silent) {
+            showToast('No active recording to stop.', 'warning');
+        }
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
         const startRecordingBtn = document.getElementById('startRecordingBtn');
         const stopRecordingBtn = document.getElementById('stopRecordingBtn');
         const audioWaveContainer = document.getElementById('audioWaveContainer');
-        
+
+        const originalOnStop = mediaRecorder.onstop;
+        mediaRecorder.onstop = async (...args) => {
+            try {
+                if (typeof originalOnStop === 'function') {
+                    await originalOnStop(...args);
+                }
+            } catch (error) {
+                console.error('Error finalizing recording:', error);
+                if (!silent) {
+                    showToast('Recording may not have saved correctly. Please check the recordings list.', 'warning');
+                }
+            } finally {
+                mediaRecorder = null;
+                resolve();
+            }
+        };
+
+        try {
+            mediaRecorder.stop();
+        } catch (error) {
+            console.error('Error stopping media recorder:', error);
+            mediaRecorder = null;
+            resolve();
+            return;
+        }
+
+        isRecording = false;
+
+        // Update UI (if elements exist)
         showElement(startRecordingBtn);
         hideElement(stopRecordingBtn);
         hideElement(audioWaveContainer);
-        
+
         // Notify other clients
-        socket.emit('recording-stopped', {
-            sessionId: currentSession.id,
-            tableId: currentTable.id || currentTable.table_number
-        });
-        
+        if (socket && socket.connected && currentSession && currentTable) {
+            socket.emit('recording-stopped', {
+                sessionId: currentSession.id,
+                tableId: currentTable.id || currentTable.table_number
+            });
+        }
+
         console.log('Recording stopped, processing...');
-        showToast('Recording stopped. Processing audio...', 'info');
-    } else {
-        showToast('No active recording to stop.', 'warning');
-    }
+        if (!silent) {
+            showToast('Recording stopped. Processing audio...', 'info');
+        }
+    });
 }
 
 // Live transcription variables
@@ -5552,7 +5971,7 @@ let currentLiveBubble = null;
 function displayLiveTranscriptionWord(speaker, word) {
     console.log(`🎯 displayLiveTranscriptionWord called: speaker=${speaker}, word="${word}"`);
 
-    const targetContainer = document.getElementById('liveTranscriptionContent') || document.getElementById('sessionLiveTranscriptionContent');
+    const targetContainer = document.getElementById('liveTranscriptionContent');
     if (!targetContainer) {
         console.error('❌ live transcription container not found!');
         return;
@@ -5560,11 +5979,8 @@ function displayLiveTranscriptionWord(speaker, word) {
 
     console.log(`✅ Found live transcription container (${targetContainer.id})`);
 
-    const isTableContext = targetContainer.id === 'liveTranscriptionContent';
-    const displayId = isTableContext ? 'transcriptionDisplay' : 'sessionTranscriptionDisplay';
-    const emptyStateId = isTableContext ? 'emptyTranscriptionState' : 'sessionEmptyTranscriptionState';
-    const displayDiv = document.getElementById(displayId);
-    const emptyState = document.getElementById(emptyStateId);
+    const displayDiv = document.getElementById('transcriptionDisplay');
+    const emptyState = document.getElementById('emptyTranscriptionState');
 
     if (emptyState) {
         hideElement(emptyState);
@@ -5573,34 +5989,24 @@ function displayLiveTranscriptionWord(speaker, word) {
         showElement(displayDiv);
     }
 
-    if (isTableContext) {
-        if (currentLiveSpeaker !== speaker) {
-            console.log(`🔄 Switching to speaker ${speaker} (was ${currentLiveSpeaker})`);
-            currentLiveSpeaker = speaker;
-            currentLiveBubble = createLiveChatBubble(speaker, targetContainer);
-        }
+    if (currentLiveSpeaker !== speaker) {
+        console.log(`🔄 Switching to speaker ${speaker} (was ${currentLiveSpeaker})`);
+        currentLiveSpeaker = speaker;
+        currentLiveBubble = createLiveChatBubble(speaker, targetContainer);
+    }
 
-        if (currentLiveBubble) {
-            const textElement = currentLiveBubble.querySelector('.bubble-text');
-            if (textElement) {
-                const oldText = textElement.textContent;
-                textElement.textContent += `${word} `;
-                console.log(`📝 Updated bubble text: "${oldText}" → "${textElement.textContent}"`);
-                targetContainer.scrollTop = targetContainer.scrollHeight; // Auto-scroll to bottom
-            } else {
-                console.error('❌ bubble-text element not found in bubble!');
-            }
+    if (currentLiveBubble) {
+        const textElement = currentLiveBubble.querySelector('.bubble-text');
+        if (textElement) {
+            const oldText = textElement.textContent;
+            textElement.textContent += `${word} `;
+            console.log(`📝 Updated bubble text: "${oldText}" → "${textElement.textContent}"`);
+            targetContainer.scrollTop = targetContainer.scrollHeight; // Auto-scroll to bottom
         } else {
-            console.error('❌ currentLiveBubble is null!');
+            console.error('❌ bubble-text element not found in bubble!');
         }
     } else {
-        // Simple text append for dashboard summary
-        const container = displayDiv || targetContainer;
-        const paragraph = document.createElement('p');
-        paragraph.textContent = `Speaker ${speaker}: ${word}`;
-        paragraph.className = 'transcription-line';
-        container.appendChild(paragraph);
-        container.scrollTop = container.scrollHeight;
+        console.error('❌ currentLiveBubble is null!');
     }
 
     // Store word with speaker info for persistence
@@ -5611,6 +6017,12 @@ function displayLiveTranscriptionWord(speaker, word) {
         word: word,
         timestamp: Date.now()
     });
+
+    try {
+        updateTranscriptionTabCounts();
+    } catch (error) {
+        console.warn('Error updating transcription counts during live stream:', error);
+    }
 }
 
 function createLiveChatBubble(speaker, container) {
@@ -5654,14 +6066,46 @@ async function startLiveTranscription() {
         // Reset transcription display
         resetLiveTranscriptionDisplay();
         
+        if (!socket || !socket.connected) {
+            showToast('Cannot start live transcription while offline. Please reconnect.', 'error');
+            return;
+        }
+
+        if (!currentSession || !currentTable) {
+            showToast('Join a session table before starting live transcription.', 'warning');
+            return;
+        }
+
         // Check if getUserMedia is available
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('getUserMedia is not supported in this environment. Please use HTTPS or a compatible browser.');
         }
         
         // Request microphone access
-        window.liveTranscriptionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(window.liveTranscriptionStream, { mimeType: 'audio/webm' });
+        window.liveTranscriptionStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                sampleRate: 48000
+            }
+        });
+
+        const preferredRecorderOptions = getPreferredMediaRecorderOptions();
+        const recorderOptions = {
+            ...preferredRecorderOptions,
+            audioBitsPerSecond: 128000
+        };
+
+        try {
+            mediaRecorder = new MediaRecorder(
+                window.liveTranscriptionStream,
+                Object.keys(recorderOptions).length > 0 ? recorderOptions : undefined
+            );
+        } catch (recorderError) {
+            console.warn('⚠️ Preferred MediaRecorder options not supported, falling back to defaults:', recorderError);
+            mediaRecorder = new MediaRecorder(window.liveTranscriptionStream);
+        }
+
+        liveRecorderMimeType = mediaRecorder.mimeType || recorderOptions.mimeType || '';
         
         // Array to store audio chunks for saving
         window.liveAudioChunks = [];
@@ -5669,93 +6113,52 @@ async function startLiveTranscription() {
         // Start audio wave visualization
         startAudioWaveVisualization(window.liveTranscriptionStream);
 
-        // Build WebSocket URL with diarization
-        const API_KEY = 'c272ec5c15e5a24c6f4fc2d588e5e47ee4954430'; // Use the API key directly
-        let wsUrl = `wss://api.deepgram.com/v1/listen?model=nova-2-general&language=${currentSession?.language || 'en-US'}&smart_format=true&punctuate=true&diarize=true&interim_results=true`;
-
-        // Connect directly to Deepgram WebSocket
-        window.deepgramSocket = new WebSocket(wsUrl, ['token', API_KEY]);
-
-        window.deepgramSocket.onopen = () => {
-            console.log('🎤 Deepgram WebSocket connected directly');
-            mediaRecorder.start(250); // Collect 250ms of audio at a time
-            isRecording = true;
-            recordingStartTime = Date.now();
-            
-            // Update UI
-            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, hideElement);
-            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, showElement);
-            
-            showToast('Live transcription started - speak now!', 'success');
-        };
-
-        window.deepgramSocket.onmessage = (message) => {
-            try {
-                console.log('🔊 Raw Deepgram message received:', message.data);
-                const data = JSON.parse(message.data);
-                console.log('📋 Parsed Deepgram data:', data);
-                
-                if (data.type === 'Results' && data.channel && data.channel.alternatives) {
-                    const alternative = data.channel.alternatives[0];
-                    const isFinal = data.is_final || false;
-                    console.log('🎯 Alternative data:', alternative, 'isFinal:', isFinal);
-                    
-                    // Only process final results to avoid duplicates from interim results
-                    if (isFinal && alternative.words && alternative.words.length > 0) {
-                        console.log(`📝 Processing ${alternative.words.length} FINAL words`);
-                        for (const wordObj of alternative.words) {
-                            const speaker = wordObj.speaker || 0;
-                            console.log(`👤 Speaker ${speaker}: "${wordObj.word}"`);
-                            displayLiveTranscriptionWord(speaker, wordObj.word);
-                        }
-                    } else if (!isFinal) {
-                        console.log(`🔄 Skipping interim result with ${alternative.words ? alternative.words.length : 0} words`);
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Error processing Deepgram message:', error);
-                console.error('Raw message data:', message.data);
-            }
-        };
-
-        window.deepgramSocket.onclose = (event) => {
-            console.log('🔌 Deepgram WebSocket closed:', event.code, event.reason);
-            cleanup();
-        };
-
-        window.deepgramSocket.onerror = (error) => {
-            console.error('❌ Deepgram WebSocket error:', error);
-            showToast('Live transcription connection failed', 'error');
-            cleanup();
-        };
+        const model = window.deepgramModel || 'nova-2-meeting';
+        socket.emit('start-live-transcription', {
+            sessionId: currentSession?.id,
+            tableId: currentTable?.id,
+            language: currentSession?.language || 'en-US',
+            model
+        });
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
                 // Save audio chunk for file storage
                 window.liveAudioChunks.push(event.data);
-                
-                // Send to Deepgram for real-time transcription
-                if (window.deepgramSocket.readyState === WebSocket.OPEN) {
-                    window.deepgramSocket.send(event.data);
+                if (typeof liveRecorderStopResolver === 'function') {
+                    const resolve = liveRecorderStopResolver;
+                    liveRecorderStopResolver = null;
+                    resolve();
+                }
+
+                // Send to backend for transcription pipeline
+                if (socket && socket.connected) {
+                    event.data.arrayBuffer()
+                        .then(buffer => {
+                            socket.emit('live-audio-chunk', buffer);
+                        })
+                        .catch(error => {
+                            console.error('❌ Error reading audio chunk for live transcription:', error);
+                        });
                 }
             }
         };
 
-        mediaRecorder.onstop = cleanup;
+        mediaRecorder.onerror = (errorEvent) => {
+            console.error('❌ MediaRecorder error:', errorEvent.error || errorEvent.message || errorEvent);
+            showToast('Live transcription encountered a recording error. Stopping...', 'error');
+            stopLiveTranscription({ skipEmit: true, silent: true });
+        };
 
-        function cleanup() {
-            if (window.deepgramSocket && window.deepgramSocket.readyState !== WebSocket.CLOSED) {
-                window.deepgramSocket.close();
-            }
-            if (window.liveTranscriptionStream) {
-                window.liveTranscriptionStream.getTracks().forEach(track => track.stop());
-            }
-            isRecording = false;
-            
-            // Update UI
-            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, showElement);
-            applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, hideElement);
-        }
+        mediaRecorder.start(250); // Collect 250ms of audio at a time
+        isRecording = true;
+        recordingStartTime = Date.now();
+
+        // Update UI
+        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, hideElement);
+        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, showElement);
+
+        showToast(`Live transcription started (${formatDeepgramModelLabel(model)})`, 'success');
 
     } catch (error) {
         console.error('Error starting live transcription:', error);
@@ -5763,80 +6166,158 @@ async function startLiveTranscription() {
             ? 'Microphone access denied. Please allow microphone access and try again.'
             : 'Error starting live transcription. Please try again.';
         showToast(errorMessage, 'error');
-    }
-}
 
-async function stopLiveTranscription() {
-    if (isRecording) {
-        isRecording = false;
-        
-        // Stop MediaRecorder
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        
-        // Close direct Deepgram connection
-        if (window.deepgramSocket && window.deepgramSocket.readyState !== WebSocket.CLOSED) {
-            window.deepgramSocket.close();
-        }
-        
         if (window.liveTranscriptionStream) {
             window.liveTranscriptionStream.getTracks().forEach(track => track.stop());
             window.liveTranscriptionStream = null;
         }
-        
-        // Stop audio wave visualization
-        stopAudioWaveVisualization();
-        
-        // Save the recorded audio if we have chunks
-        // Save live transcription data AND audio for recordings tab
-        console.log('🔍 Checking live words for save:', window.currentLiveWords ? window.currentLiveWords.length : 'undefined/null');
-        if (window.currentLiveWords && window.currentLiveWords.length > 0) {
-            try {
-                console.log('📼 Saving live transcription data with', window.currentLiveWords.length, 'words');
-                console.log('📼 First few words:', window.currentLiveWords.slice(0, 5));
-                await saveLiveTranscriptionData();
-                console.log('✅ Live transcription data saved successfully');
-            } catch (error) {
-                console.error('❌ Error saving live transcription data:', error);
-                console.error('❌ Full error details:', error);
-                showToast('Warning: Live transcription may not persist on reload', 'warning');
-            }
-        } else {
-            console.warn('⚠️ No live words to save - transcription will not persist on reload');
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
         }
-        
-        // Save audio file for recordings tab WITHOUT automatic transcription processing
-        if (window.liveAudioChunks && window.liveAudioChunks.length > 0) {
-            try {
-                console.log('📼 Saving live audio file for recordings tab (no auto-processing)');
-                const audioBlob = new Blob(window.liveAudioChunks, { type: 'audio/webm' });
-                await saveAudioFileOnly(audioBlob);
-                console.log('✅ Live audio file saved for manual reprocessing if needed');
-            } catch (error) {
-                console.error('❌ Error saving live audio file:', error);
-                showToast('Warning: Audio file may not be available in recordings', 'warning');
-            }
-            window.liveAudioChunks = [];
-        }
-        
-        // Update UI for live transcription interface
-        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, showElement);
-        applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, hideElement);
-        
-        console.log('Live transcription stopped');
-        showToast('Live transcription stopped and audio saved', 'info');
-        
-        // Refresh recordings list to show the newly saved audio file
-        setTimeout(() => {
-            loadTableRecordings();
-        }, 1000);
-    } else {
-        showToast('No active live transcription to stop.', 'warning');
     }
 }
 
-async function saveLiveTranscriptionData() {
+async function stopLiveTranscription(options = {}) {
+    const { skipEmit = false, silent = false } = options;
+
+    const recorderActive = mediaRecorder && mediaRecorder.state !== 'inactive';
+    const streamActive = window.liveTranscriptionStream && window.liveTranscriptionStream.getTracks().some(track => track.readyState === 'live');
+
+    if (!isRecording && !recorderActive && !streamActive) {
+        if (!silent) {
+            showToast('No active live transcription to stop.', 'warning');
+        }
+        return;
+    }
+
+    isRecording = false;
+
+    if (!skipEmit && socket && socket.connected) {
+        socket.emit('stop-live-transcription');
+    }
+
+    const recorderRef = mediaRecorder;
+    const initialChunkCount = Array.isArray(window.liveAudioChunks) ? window.liveAudioChunks.length : 0;
+
+    if (recorderRef && recorderRef.state !== 'inactive') {
+        const waitForStop = new Promise((resolve) => {
+            const handleStop = () => {
+                if (typeof recorderRef.removeEventListener === 'function') {
+                    recorderRef.removeEventListener('stop', handleStop);
+                }
+                resolve();
+            };
+
+            if (typeof recorderRef.addEventListener === 'function') {
+                recorderRef.addEventListener('stop', handleStop, { once: true });
+            }
+
+            try {
+                recorderRef.stop();
+            } catch (error) {
+                console.warn('⚠️ MediaRecorder stop warning:', error);
+                if (typeof recorderRef.removeEventListener === 'function') {
+                    recorderRef.removeEventListener('stop', handleStop);
+                }
+                resolve();
+            }
+        });
+
+        let waitForFinalData = null;
+        if (typeof liveRecorderStopResolver !== 'function') {
+            waitForFinalData = new Promise((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (!settled) {
+                        settled = true;
+                        liveRecorderStopResolver = null;
+                        resolve();
+                    }
+                };
+
+                const timeoutId = setTimeout(finish, 1000);
+                liveRecorderStopResolver = () => {
+                    if (Array.isArray(window.liveAudioChunks) && window.liveAudioChunks.length > initialChunkCount) {
+                        clearTimeout(timeoutId);
+                        finish();
+                    }
+                };
+
+                if (Array.isArray(window.liveAudioChunks) && window.liveAudioChunks.length > initialChunkCount) {
+                    clearTimeout(timeoutId);
+                    finish();
+                }
+            });
+        }
+
+        await waitForStop;
+        if (waitForFinalData) {
+            await waitForFinalData;
+        }
+        if (typeof liveRecorderStopResolver === 'function') {
+            liveRecorderStopResolver();
+        }
+    }
+
+    if (window.liveTranscriptionStream) {
+        window.liveTranscriptionStream.getTracks().forEach(track => track.stop());
+        window.liveTranscriptionStream = null;
+    }
+
+    stopAudioWaveVisualization();
+
+    let savedRecordingId = null;
+    let audioSaved = false;
+
+    if (Array.isArray(window.liveAudioChunks) && window.liveAudioChunks.length > 0) {
+        try {
+            const { blob: audioBlob } = createAudioBlobFromChunks(
+                window.liveAudioChunks,
+                recorderRef || { mimeType: liveRecorderMimeType }
+            );
+            const audioSaveResult = await saveAudioFileOnly(audioBlob);
+            if (audioSaveResult) {
+                audioSaved = true;
+                savedRecordingId = audioSaveResult.recording?.id || audioSaveResult.recordingId || null;
+            }
+        } catch (error) {
+            console.error('❌ Error saving live audio file:', error);
+            if (!silent) {
+                showToast('Warning: Audio file may not be available in recordings', 'warning');
+            }
+        }
+    }
+
+    if (window.currentLiveWords && window.currentLiveWords.length > 0) {
+        try {
+            await saveLiveTranscriptionData(savedRecordingId);
+        } catch (error) {
+            console.error('❌ Error saving live transcription data:', error);
+            if (!silent) {
+                showToast('Warning: Live transcription may not persist on reload', 'warning');
+            }
+        }
+    } else {
+        console.warn('⚠️ No live words to save - transcription will not persist on reload');
+    }
+
+    resetLiveTranscriptionState({ silent: true, keepBuffers: false, skipRecorderStop: true });
+
+    if (!silent) {
+        if (audioSaved) {
+            showToast('Live transcription stopped and audio saved', 'info');
+        } else {
+            showToast('Live transcription stopped', 'info');
+        }
+    }
+
+    // Refresh recordings list to show the newly saved audio file
+    setTimeout(() => {
+        loadTableRecordings();
+    }, 1000);
+}
+
+async function saveLiveTranscriptionData(recordingId = null) {
     console.log('🎯 saveLiveTranscriptionData called');
     console.log('🎯 currentLiveWords:', window.currentLiveWords ? window.currentLiveWords.length : 'undefined');
     console.log('🎯 currentSession:', currentSession ? currentSession.id : 'undefined');
@@ -5898,7 +6379,8 @@ async function saveLiveTranscriptionData() {
         source: 'live-transcription',
         speaker_segments: speakerSegments,
         confidence: 0.95,
-        duration_seconds: (Date.now() - recordingStartTime) / 1000
+        duration_seconds: (Date.now() - recordingStartTime) / 1000,
+        recording_id: recordingId || null
     };
     
     const response = await fetch(`/api/transcriptions`, {
@@ -5909,6 +6391,7 @@ async function saveLiveTranscriptionData() {
         body: JSON.stringify({
             sessionId: currentSession.id,
             tableId: currentTable.id,
+            recordingId: transcriptionData.recording_id,
             transcriptText: transcriptionData.transcript_text,
             speakerSegments: transcriptionData.speaker_segments,
             confidenceScore: transcriptionData.confidence,
@@ -5932,30 +6415,89 @@ async function saveAudioFileOnly(audioBlob) {
     if (!currentSession || !currentTable) {
         throw new Error('Missing session or table data for saving audio');
     }
-    
+
+    const { blob, mimeType } = normalizeAudioBlob(audioBlob);
+    const format = await detectAudioFormatFromBlob(blob);
+
+    if (blob.size < MINIMUM_VALID_AUDIO_BYTES) {
+        showToast('Recording too short. Please record at least one second before stopping.', 'warning');
+        return null;
+    }
+
+    let finalBlob = blob;
+    let finalMimeType = mimeType;
+
+    if (!format || format === 'unknown') {
+        console.warn('Captured audio format could not be detected, re-encoding as WAV', {
+            size: blob.size,
+            mimeType
+        });
+        try {
+            finalBlob = await convertBlobToWav(blob);
+            finalMimeType = 'audio/wav';
+        } catch (conversionError) {
+            console.warn('Failed to convert live audio to WAV, using original blob', conversionError);
+        }
+    }
+
+    const fileName = getAudioFilename('live-recording', finalMimeType);
+
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'live-recording.wav');
+    formData.append('audio', finalBlob, fileName);
     formData.append('skipTranscription', 'true'); // Tell backend not to process transcription
-    
+    formData.append('source', 'live-transcription');
+    if (recordingStartTime) {
+        const durationSeconds = Math.max(0, (Date.now() - recordingStartTime) / 1000);
+        formData.append('duration', durationSeconds.toFixed(2));
+    }
+
     const tableNumber = currentTable.table_number || currentTable.id;
-    
+
     const response = await fetch(`/api/sessions/${currentSession.id}/tables/${tableNumber}/upload-audio`, {
         method: 'POST',
         body: formData
     });
-    
+
     if (!response.ok) {
         throw new Error('Failed to save audio file');
     }
-    
+
     const result = await response.json();
     console.log('Audio file saved without transcription processing:', result);
     return result;
 }
 
-async function uploadAudio(audioBlob, source = 'start-recording') {
+async function uploadAudio(audioBlob, filename, source = 'start-recording') {
+    const { blob, mimeType } = normalizeAudioBlob(audioBlob);
+    const format = await detectAudioFormatFromBlob(blob);
+
+    if (blob.size < MINIMUM_VALID_AUDIO_BYTES) {
+        showToast('Recording too short. Please record at least one second before stopping.', 'warning');
+        return;
+    }
+
+    let finalBlob = blob;
+    let finalMimeType = mimeType;
+
+    if (!format || format === 'unknown') {
+        console.warn('Unable to detect audio format for upload, attempting WAV conversion', {
+            size: blob.size,
+            mimeType
+        });
+        try {
+            finalBlob = await convertBlobToWav(blob);
+            finalMimeType = 'audio/wav';
+        } catch (conversionError) {
+            console.warn('WAV conversion failed, using original blob', conversionError);
+        }
+    }
+
+    const fileNameToUse = typeof filename === 'string' && filename.length > 0
+        ? filename
+        : getAudioFilename('recording', finalMimeType);
+
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('audio', finalBlob, fileNameToUse);
     formData.append('source', source);
     
     const tableNumber = currentTable.table_number || currentTable.id;
@@ -6031,6 +6573,8 @@ function updateRecordingStatus(data) {
 
 // Table status indicator functions for session dashboard
 function updateTableConnectionStatus(tableId, hasClients, clientCount) {
+    tableConnectionState.set(String(tableId), { hasClients, clientCount });
+
     const indicator = document.getElementById(`connection-${tableId}`);
     if (indicator) {
         const dot = indicator.querySelector('.indicator-dot');
@@ -6080,6 +6624,12 @@ function updateTableRecordingStatus(tableId, status, timestamp) {
 }
 
 function displayTranscription(data) {
+    const eventSource = data?.source || data?.transcription?.source;
+    if (eventSource === 'reprocess') {
+        console.log('📝 Skipping direct render for reprocess source (handled via reload)');
+        return;
+    }
+
     // Skip audio-only uploads that are just for recordings tab
     if (data.source === 'live-audio') {
         console.log('📼 Skipping transcription display for live-audio source (audio-only upload)');
@@ -6111,11 +6661,8 @@ function displayTranscription(data) {
     
     // Fallback to original element if tabbed container not found
     if (!targetContainer) {
-        targetContainer = document.getElementById('liveTranscript');
-        if (!targetContainer) {
-            console.warn('No transcription display element found');
-            return;
-        }
+        console.warn('No transcription display element found');
+        return;
     }
     
     console.log(`📝 Displaying transcription in ${targetTab} tab from source: ${data.source}`);
@@ -6230,6 +6777,103 @@ function displayTranscription(data) {
 }
 
 
+const TRANSCRIPTION_TAB_CONFIG = {
+    'start-recording': {
+        tabIds: ['startRecordingTab'],
+        contentIds: ['startRecordingContent'],
+        countId: 'startRecordingCount'
+    },
+    'upload-media': {
+        tabIds: ['uploadMediaTab'],
+        contentIds: ['uploadMediaContent'],
+        countId: 'uploadMediaCount'
+    },
+    'live-transcription': {
+        tabIds: ['liveTranscriptionTab'],
+        contentIds: ['liveTranscriptionContent'],
+        countId: 'liveTranscriptionCount'
+    }
+};
+
+function switchTranscriptionTab(tabName) {
+    const config = TRANSCRIPTION_TAB_CONFIG[tabName];
+    if (!config) {
+        return;
+    }
+
+    const tabbedContents = document.querySelectorAll('.transcription-tab-content');
+    if (tabbedContents.length > 0) {
+        tabbedContents.forEach(contentEl => {
+            const shouldShow = config.contentIds && config.contentIds.includes(contentEl.id);
+            contentEl.style.display = shouldShow ? 'block' : 'none';
+        });
+    } else if (config.contentIds) {
+        const allContentIds = new Set();
+        Object.values(TRANSCRIPTION_TAB_CONFIG).forEach(cfg => {
+            (cfg.contentIds || []).forEach(id => allContentIds.add(id));
+        });
+
+        allContentIds.forEach(contentId => {
+            const contentEl = document.getElementById(contentId);
+            if (!contentEl) {
+                return;
+            }
+
+            const shouldShow = config.contentIds && config.contentIds.includes(contentId);
+            contentEl.style.display = shouldShow ? 'block' : 'none';
+        });
+    }
+
+    const allTabIds = new Set();
+    Object.values(TRANSCRIPTION_TAB_CONFIG).forEach(cfg => {
+        (cfg.tabIds || []).forEach(id => allTabIds.add(id));
+    });
+
+    allTabIds.forEach(tabId => {
+        const tabEl = document.getElementById(tabId);
+        if (!tabEl) {
+            return;
+        }
+
+        const isActive = config.tabIds && config.tabIds.includes(tabId);
+        tabEl.classList.toggle('active', isActive);
+        if (isActive) {
+            tabEl.classList.add('active');
+        }
+    });
+}
+
+function updateTranscriptionTabCounts() {
+    Object.values(TRANSCRIPTION_TAB_CONFIG).forEach(cfg => {
+        if (!cfg.countId) {
+            return;
+        }
+
+        const countEl = document.getElementById(cfg.countId);
+        if (!countEl) {
+            return;
+        }
+
+        const selectors = (cfg.contentIds || [])
+            .map(id => `#${id} .chat-bubble`)
+            .join(', ');
+
+        const total = selectors ? document.querySelectorAll(selectors).length : 0;
+        countEl.textContent = String(total);
+    });
+}
+
+function activateRecordingMethodTab(method) {
+    const mapping = {
+        live: 'live-transcription',
+        audio: 'start-recording',
+        upload: 'upload-media'
+    };
+
+    const target = mapping[method] || method;
+    switchTranscriptionTab(target);
+}
+
 function updateTableTranscriptionCount(tableId, options = {}) {
     const card = findTableCardElement(tableId);
     if (!card) {
@@ -6296,6 +6940,11 @@ async function loadTableRecordings() {
 }
 
 async function loadSessionRecordings(sessionId = currentSession?.id) {
+    const recordingsSection = document.getElementById('sessionRecordingsSection');
+    if (!recordingsSection || recordingsSection.dataset.tableOnly === 'true') {
+        return;
+    }
+
     const recordingsList = document.getElementById('sessionRecordingsList');
     const emptyState = document.getElementById('sessionRecordingsEmpty');
 
@@ -6693,7 +7342,8 @@ function refreshRecordingContexts(context = 'all') {
         loadTableRecordings();
     }
 
-    if ((target === 'all' || target === 'session') && document.getElementById('sessionRecordingsList')) {
+    const recordingsSection = document.getElementById('sessionRecordingsSection');
+    if ((target === 'all' || target === 'session') && recordingsSection && recordingsSection.dataset.tableOnly !== 'true' && document.getElementById('sessionRecordingsList')) {
         loadSessionRecordings();
     }
 }
@@ -7612,14 +8262,110 @@ function toggleApiKeyVisibility(inputId) {
     }
 }
 
-async function updateApiKeys() {
-    const deepgramKey = document.getElementById('deepgramApiKey').value;
-    
-    if (!deepgramKey) {
-        alert('Please enter the Deepgram API key.');
+function formatDeepgramModelLabel(model) {
+    if (!model || typeof model !== 'string') {
+        return '';
+    }
+
+    return model
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function initializeDeepgramModelSelect(availableModels = DEEPGRAM_MODEL_OPTIONS) {
+    const select = document.getElementById('deepgramModelSelect');
+    if (!select) {
         return;
     }
-    
+
+    const uniqueModels = Array.from(new Set([
+        ...(Array.isArray(availableModels) && availableModels.length ? availableModels : []),
+        ...DEEPGRAM_MODEL_OPTIONS
+    ]));
+
+    const fallbackValue = window.deepgramModel || 'nova-2-meeting';
+    const currentValue = select.value || fallbackValue;
+
+    select.innerHTML = '';
+
+    uniqueModels.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = formatDeepgramModelLabel(model);
+        select.appendChild(option);
+    });
+
+    if (!uniqueModels.includes(currentValue)) {
+        const option = document.createElement('option');
+        option.value = currentValue;
+        option.textContent = formatDeepgramModelLabel(currentValue);
+        select.appendChild(option);
+    }
+
+    select.value = currentValue;
+    window.deepgramModel = select.value;
+    deepgramModelSelectInitialized = true;
+
+    if (!select.dataset.deepgramModelBound) {
+        select.addEventListener('change', (event) => {
+            window.deepgramModel = event.target.value;
+        });
+        select.dataset.deepgramModelBound = 'true';
+    }
+}
+
+function syncDeepgramModelSelect(newValue) {
+    const select = document.getElementById('deepgramModelSelect');
+    if (!select) {
+        window.deepgramModel = newValue || window.deepgramModel;
+        return;
+    }
+
+    if (!deepgramModelSelectInitialized) {
+        initializeDeepgramModelSelect();
+    }
+
+    if (newValue && select.value !== newValue) {
+        if (![...select.options].some(option => option.value === newValue)) {
+            const option = document.createElement('option');
+            option.value = newValue;
+            option.textContent = formatDeepgramModelLabel(newValue);
+            select.appendChild(option);
+        }
+        select.value = newValue;
+    }
+
+    window.deepgramModel = select.value;
+}
+
+function initializeDeepgramConfiguration() {
+    initializeDeepgramModelSelect();
+
+    fetch('/api/config/transcription')
+        .then(response => response.ok ? response.json() : null)
+        .then(config => {
+            if (!config) {
+                return;
+            }
+
+            if (Array.isArray(config.available_models) && config.available_models.length > 0) {
+                initializeDeepgramModelSelect(config.available_models);
+            }
+
+            if (config.model) {
+                syncDeepgramModelSelect(config.model);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading Deepgram configuration:', error);
+        });
+}
+
+async function updateApiKeys() {
+    const deepgramKeyInput = document.getElementById('deepgramApiKey');
+    const deepgramKey = deepgramKeyInput ? deepgramKeyInput.value.trim() : '';
+    const deepgramModel = document.getElementById('deepgramModelSelect')?.value || window.deepgramModel || 'nova-2-meeting';
+
     showLoading('Updating API keys...');
     
     try {
@@ -7629,7 +8375,8 @@ async function updateApiKeys() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                deepgram_api_key: deepgramKey || null
+                deepgram_api_key: deepgramKey || null,
+                deepgram_model: deepgramModel
             })
         });
         
@@ -7641,7 +8388,12 @@ async function updateApiKeys() {
             updateConfigurationStatus();
             
             // Clear form
-            document.getElementById('deepgramApiKey').value = '';
+            if (deepgramKeyInput) {
+                deepgramKeyInput.value = '';
+            }
+            if (result.deepgram_model) {
+                syncDeepgramModelSelect(result.deepgram_model);
+            }
             
         } else {
             const error = await response.json();
@@ -7815,6 +8567,7 @@ async function savePlatformProtection() {
 
 async function loadSettingsData() {
     try {
+        initializeDeepgramModelSelect();
         // Load current configuration status
         updateConfigurationStatus();
         
@@ -7856,12 +8609,28 @@ function updateConfigurationStatus() {
         .then(status => {
             const deepgramStatus = document.getElementById('deepgramConfigStatus');
             
-            if (status.apis && status.apis.deepgram && status.apis.deepgram.configured) {
-                deepgramStatus.textContent = 'Configured';
-                deepgramStatus.className = 'config-status-badge configured';
-            } else {
+            if (status.apis && status.apis.deepgram) {
+                const deepgramDetails = status.apis.deepgram;
+
+                if (Array.isArray(deepgramDetails.available_models)) {
+                    initializeDeepgramModelSelect(deepgramDetails.available_models);
+                }
+
+                if (deepgramDetails.model) {
+                    syncDeepgramModelSelect(deepgramDetails.model);
+                }
+
+                if (deepgramDetails.configured) {
+                    deepgramStatus.textContent = 'Configured';
+                    deepgramStatus.className = 'config-status-badge configured';
+                } else {
+                    deepgramStatus.textContent = 'Not Configured';
+                    deepgramStatus.className = 'config-status-badge';
+                }
+            } else if (deepgramStatus) {
                 deepgramStatus.textContent = 'Not Configured';
                 deepgramStatus.className = 'config-status-badge';
+                window.deepgramModel = window.deepgramModel || 'nova-2-meeting';
             }
         })
         .catch(error => {
@@ -7991,12 +8760,10 @@ function resetLiveTranscriptionDisplay() {
 }
 
 // Display live transcription results in real-time
-let currentInterimBubble = null;
-
 function displayLiveTranscriptionResult(transcript, isFinal) {
     console.log(`📝 displayLiveTranscriptionResult called with transcript: "${transcript}", isFinal: ${isFinal}`);
     
-    const targetContainer = document.getElementById('liveTranscriptionContent') || document.getElementById('sessionLiveTranscriptionContent');
+    const targetContainer = document.getElementById('liveTranscriptionContent');
     if (!targetContainer) {
         console.error('❌ liveTranscriptionContent container not found!');
         return;
@@ -8004,12 +8771,8 @@ function displayLiveTranscriptionResult(transcript, isFinal) {
 
     console.log(`📝 Target container found:`, targetContainer);
 
-    const emptyState = targetContainer.id === 'liveTranscriptionContent'
-        ? document.getElementById('emptyTranscriptionState')
-        : document.getElementById('sessionEmptyTranscriptionState');
-    const displayDiv = targetContainer.id === 'liveTranscriptionContent'
-        ? document.getElementById('transcriptionDisplay')
-        : document.getElementById('sessionTranscriptionDisplay');
+    const emptyState = document.getElementById('emptyTranscriptionState');
+    const displayDiv = document.getElementById('transcriptionDisplay');
 
     if (emptyState) {
         hideElement(emptyState);
@@ -8019,15 +8782,52 @@ function displayLiveTranscriptionResult(transcript, isFinal) {
     }
 
     if (isFinal) {
-        // Final transcript - clean up interim bubble only (diarized bubbles already created)
+        const trimmedTranscript = typeof transcript === 'string' ? transcript.trim() : '';
+
+        const hasExistingWords = Array.isArray(window.currentLiveWords) && window.currentLiveWords.length > 0;
+
         if (currentInterimBubble) {
-            // Replace interim bubble with final result
-            currentInterimBubble.remove();
+            const textElement = currentInterimBubble.querySelector('.transcript-text');
+            if (textElement && trimmedTranscript) {
+                textElement.textContent = trimmedTranscript;
+            }
+
+            const statusElement = currentInterimBubble.querySelector('.interim-status');
+            if (statusElement) {
+                statusElement.remove();
+            }
+
+            currentInterimBubble.style.animation = 'none';
+            currentInterimBubble.style.opacity = '1';
+            currentInterimBubble.style.border = '1px solid #d1d5db';
+            currentInterimBubble.style.background = '#ffffff';
             currentInterimBubble = null;
+        } else if (!hasExistingWords && trimmedTranscript) {
+            const finalBubble = createLiveChatBubble(0, targetContainer);
+            const textElement = finalBubble.querySelector('.bubble-text');
+            if (textElement) {
+                textElement.textContent = trimmedTranscript;
+            }
+            finalBubble.style.background = '#ffffff';
+            finalBubble.style.border = '1px solid #d1d5db';
+            finalBubble.style.boxShadow = '0 2px 6px rgba(0,0,0,0.08)';
         }
-        
-        console.log('📝 Final live transcription result processed (already displayed via diarization)');
-        
+
+        if (!hasExistingWords && trimmedTranscript) {
+            window.currentLiveWords = window.currentLiveWords || [];
+            window.currentLiveWords.push({
+                speaker: 0,
+                word: trimmedTranscript,
+                timestamp: Date.now()
+            });
+        }
+
+        try {
+            updateTranscriptionTabCounts();
+        } catch (error) {
+            console.warn('Error updating counts on final transcript:', error);
+        }
+
     } else {
         // Interim transcript - update or create temporary bubble
         if (currentInterimBubble) {
@@ -8058,7 +8858,7 @@ function displayLiveTranscriptionResult(transcript, isFinal) {
                     </div>
                     <div style="flex: 1; min-width: 0;">
                         <div class="transcript-text" style="color: #2c3e50; line-height: 1.5; font-size: 15px; margin-bottom: 4px;">${transcript}</div>
-                        <div style="color: #6c757d; font-size: 12px; font-style: italic;">Listening...</div>
+                        <div class="interim-status" style="color: #6c757d; font-size: 12px; font-style: italic;">Listening...</div>
                     </div>
                 </div>
             `;
@@ -8159,17 +8959,59 @@ function stopAudioWaveVisualization() {
     
     if (audioContext) {
         audioContext.close();
-        audioContext = null;
     }
-    
-    // Hide wave container
+    audioContext = null;
+}
+
+function resetLiveTranscriptionState({ silent = false, keepBuffers = false, skipRecorderStop = false } = {}) {
+    if (!skipRecorderStop && mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+            mediaRecorder.stop();
+        } catch (error) {
+            console.warn('⚠️ MediaRecorder stop warning during reset:', error);
+        }
+    }
+    mediaRecorder = null;
+
+    if (window.liveTranscriptionStream) {
+        window.liveTranscriptionStream.getTracks().forEach(track => track.stop());
+        window.liveTranscriptionStream = null;
+    }
+
+    stopAudioWaveVisualization();
+    isRecording = false;
+    recordingStartTime = null;
+
+    if (!keepBuffers) {
+        window.liveAudioChunks = [];
+        window.currentLiveWords = [];
+        liveTranscriptionSegments = [];
+    }
+
+    currentLiveSpeaker = null;
+    currentLiveBubble = null;
+
+    if (currentInterimBubble) {
+        currentInterimBubble.remove();
+        currentInterimBubble = null;
+    }
+
+    applyToElements(LIVE_TRANSCRIPTION_UI_IDS.startButtons, showElement);
+    applyToElements(LIVE_TRANSCRIPTION_UI_IDS.stopButtons, hideElement);
+
     const waveContainer = document.getElementById(LIVE_TRANSCRIPTION_UI_IDS.audioWaveContainer);
     if (waveContainer) {
         hideElement(waveContainer);
     }
-    
+
     analyser = null;
     dataArray = null;
+    liveRecorderMimeType = null;
+    liveRecorderStopResolver = null;
+
+    if (!silent) {
+        showToast('Live transcription session ended', 'info');
+    }
 }
 
 // Process audio chunks for live transcription (simulated real-time)
@@ -8353,5 +9195,11 @@ function createChatBubble(speaker, text, source, container) {
     // Update transcription display for our simplified interface
     updateLiveTranscriptionDisplay(text);
 }
+
+// Expose selected helpers for other scripts
+window.switchTranscriptionTab = window.switchTranscriptionTab || switchTranscriptionTab;
+window.updateTranscriptionTabCounts = window.updateTranscriptionTabCounts || updateTranscriptionTabCounts;
+window.activateRecordingMethodTab = window.activateRecordingMethodTab || activateRecordingMethodTab;
+window.resetLiveTranscriptionState = window.resetLiveTranscriptionState || resetLiveTranscriptionState;
 
 // Note: Initialization already handled by the main DOMContentLoaded listener above

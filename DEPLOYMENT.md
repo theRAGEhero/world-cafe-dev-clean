@@ -107,7 +107,7 @@ When you clone the repository and run `docker-compose build`, each server create
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DEEPGRAM_API_KEY` | Deepgram API key for transcription | `c272ec5c15e5a24c...` |
+| `DEEPGRAM_API_KEY` | Deepgram API key for transcription | `your_deepgram_api_key` |
 | `GROQ_API_KEY` | Groq API key for analysis | `gsk_01IRhVHASIJix5...` |
 | `DB_HOST` | Database host (use `mysql` for Docker) | `mysql` |
 | `DB_USER` | Database username | `world_cafe_user` |
